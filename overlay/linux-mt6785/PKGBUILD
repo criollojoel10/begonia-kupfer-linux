@@ -1,0 +1,170 @@
+_mode=cross
+_kernelname=mt6785
+pkgbase="linux-$_kernelname"
+_desc="MediaTek MT6785 (begonia) kernel"
+pkgver=6.16.4
+pkgrel=1
+_arches=specific
+arch=(aarch64)
+license=(GPL2)
+url=https://gitlab.postmarketos.org/minorum/linux
+makedepends=(
+    xmlto
+    docbook-xsl
+    kmod
+    inetutils
+    bc
+    dtc
+    cpio
+    python
+)
+options=(!strip)
+_commit=3a1ea7694219eb2fd513f0e630f2a882eab5c86f
+_pmos_commit=019b4284b1834caf0b0d9ac44ae8cbe9e31d23b1
+_srcname="linux-${_commit}"
+source=(
+    "$_srcname.tar.gz::$url/-/archive/$_commit/$_srcname.tar.gz"
+    "https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/${_pmos_commit}/device/testing/linux-postmarketos-mediatek-mt6785/config-postmarketos-mediatek-mt6785.aarch64"
+    extra_config
+    linux.preset
+    60-linux.hook
+    90-linux.hook
+)
+sha256sums=(
+    d1aa741cea0cc1d7728bf4b6c8f2a2a3ffd0ce3c5fd4993516d596779186b2b8
+    98b3274eda22859550148c8df8e5e9806032335675ca21a2b60e8b9a73d2c7cb
+    SKIP
+    SKIP
+    SKIP
+    SKIP
+)
+
+pkgver() {
+    cd "${_srcname}"
+    make kernelversion | cut -d "-" -f 1
+}
+
+prepare() {
+    cd "$srcdir/${_srcname}"
+
+    cp "$srcdir/config-postmarketos-mediatek-mt6785.aarch64" .config
+    cat "$srcdir/extra_config" >>.config
+    make olddefconfig
+
+    # don't run depmod on "make install". We'll do this ourselves in packaging
+    sed -i "2iexit 0" scripts/depmod.sh
+}
+
+build() {
+    cd ${_srcname}
+    unset LDFLAGS
+    # shellcheck disable=SC2086
+    make ${MAKEFLAGS} Image.gz modules
+    # shellcheck disable=SC2086
+    make ${MAKEFLAGS} DTC_FLAGS="-@" dtbs
+}
+
+_package() {
+    pkgdesc="The Linux Kernel and modules - ${_desc}"
+    depends=(coreutils kmod mkinitcpio)
+    optdepends=("crda: to set the correct wireless channels of your country")
+    backup=(etc/mkinitcpio.d/linux.preset)
+    install=linux.install
+
+    cd ${_srcname}
+
+    KARCH=arm64
+
+    # get kernel version
+    _kernver="$(make kernelrelease)"
+    _basekernel=${_kernver%%-*}
+    _basekernel=${_basekernel%.*}
+
+    mkdir -p "${pkgdir}"/{boot,usr/lib/modules}
+    make INSTALL_MOD_PATH="${pkgdir}/usr" modules_install
+    mkdir -p "${pkgdir}/boot/dtbs/mediatek"
+    cp arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dtb \
+        "${pkgdir}/boot/dtbs/mediatek"
+    cp arch/$KARCH/boot/Image.gz "${pkgdir}/boot"
+
+    # make room for external modules
+    local _extramodules="extramodules-${_basekernel}${_kernelname}"
+    ln -s "../${_extramodules}" "${pkgdir}/usr/lib/modules/${_kernver}/extramodules"
+
+    # add real version for building modules and running depmod from hook
+    echo "${_kernver}" |
+        install -Dm644 /dev/stdin "${pkgdir}/usr/lib/modules/${_extramodules}/version"
+
+    # remove build and source links
+    [ -e "${pkgdir}/usr/lib/modules/${_kernver}/source" ] && rm "${pkgdir}/usr/lib/modules/${_kernver}/source"
+    [ -e "${pkgdir}/usr/lib/modules/${_kernver}/build" ] && rm "${pkgdir}/usr/lib/modules/${_kernver}/build"
+
+    # now we call depmod...
+    depmod -b "${pkgdir}/usr" -F System.map "${_kernver}"
+
+    # sed expression for following substitutions
+    local _subst="
+    s|%PKGBASE%|${pkgbase}|g
+    s|%KERNVER%|${_kernver}|g
+    s|%EXTRAMODULES%|${_extramodules}|g
+  "
+
+    # install mkinitcpio preset file
+    sed "${_subst}" ../linux.preset |
+        install -Dm644 /dev/stdin "${pkgdir}/etc/mkinitcpio.d/linux.preset"
+
+    # install pacman hooks
+    sed "${_subst}" ../60-linux.hook |
+        install -Dm644 /dev/stdin "${pkgdir}/usr/share/libalpm/hooks/60-${pkgbase}.hook"
+    sed "${_subst}" ../90-linux.hook |
+        install -Dm644 /dev/stdin "${pkgdir}/usr/share/libalpm/hooks/90-${pkgbase}.hook"
+}
+
+_package-headers() {
+    pkgdesc="Header files and scripts for building modules for linux kernel - ${_desc}"
+    provides=("linux-headers=${pkgver}")
+    conflicts=(linux-headers linux-aarch64-headers)
+
+    cd ${_srcname}
+    local _builddir="${pkgdir}/usr/lib/modules/${_kernver}/build"
+
+    install -Dt "${_builddir}" -m644 Makefile .config Module.symvers
+    install -Dt "${_builddir}/kernel" -m644 kernel/Makefile
+
+    mkdir "${_builddir}/.tmp_versions"
+
+    cp -t "${_builddir}" -a include scripts
+
+    install -Dt "${_builddir}/arch/${KARCH}" -m644 arch/${KARCH}/Makefile
+    install -Dt "${_builddir}/arch/${KARCH}/kernel" -m644 arch/${KARCH}/kernel/asm-offsets.s
+
+    cp -t "${_builddir}/arch/${KARCH}" -a arch/${KARCH}/include
+    mkdir -p "${_builddir}/arch/arm"
+    cp -t "${_builddir}/arch/arm" -a arch/arm/include
+
+    # copy in Kconfig files
+    find . -name Kconfig\* -exec install -Dm644 {} "${_builddir}/{}" \;
+
+    # remove unneeded architectures
+    local _arch
+    for _arch in "${_builddir}"/arch/*/; do
+        [[ ${_arch} == */${KARCH}/ || ${_arch} == */arm/ ]] && continue
+        rm -r "${_arch}"
+    done
+
+    # remove files already in linux-docs package
+    rm -r "${_builddir}/Documentation"
+
+    # remove now broken symlinks
+    find -L "${_builddir}" -type l -printf "Removing %P\n" -delete
+
+    # Fix permissions
+    chmod -R u=rwX,go=rX "${_builddir}"
+}
+
+pkgname=("${pkgbase}" "${pkgbase}-headers")
+for _p in "${pkgname[@]}"; do
+    eval "package_${_p}() {
+    _package${_p#${pkgbase}}
+  }"
+done

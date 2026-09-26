@@ -1,0 +1,26 @@
+_mode=cross
+pkgname=firmware-mediatek-mt6785
+pkgver=0.1
+pkgrel=1
+_arches=specific
+arch=(aarch64)
+license=(custom:Proprietary)
+options=(!strip !emptydirs)
+depends=(linux-firmware)
+_commit=33aa9fe1db0079945fa272e42f04db732489319d
+source=(
+    "git+https://gitlab.postmarketos.org/mt6785-mainline/firmware.git#commit=$_commit"
+)
+sha256sums=(SKIP)
+
+build() {
+    cd "$srcdir"/firmware
+    mkdir -p usr
+    mv mediatek novatek usr/
+}
+
+package() {
+    cd "$srcdir"/firmware
+    cp -av usr "$pkgdir"/
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE" 2>/dev/null || true
+}

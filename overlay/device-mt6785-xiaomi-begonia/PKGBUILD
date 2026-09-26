@@ -1,0 +1,48 @@
+_mode=cross
+pkgname=device-mt6785-xiaomi-begonia
+pkgver=0.1
+pkgrel=1
+_arches=specific
+arch=(aarch64)
+license=(MIT)
+depends=(
+    boot-android-common
+    firmware-mediatek-mt6785
+    linux-mt6785
+)
+_commit=6c223d3
+source=(
+    https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/${_commit}/device/testing/device-xiaomi-begonia/deviceinfo
+    xiaomi-begonia.conf
+    machine-info
+)
+sha256sums=(
+    SKIP
+    SKIP
+    SKIP
+)
+
+package() {
+    cp "$srcdir"/deviceinfo "$srcdir"/deviceinfo_
+    sed -i "s/deviceinfo_codename=\"xiaomi-begonia\"/&/" "$srcdir"/deviceinfo_ || true
+    cat >>"$srcdir"/deviceinfo_ <<EOF
+
+deviceinfo_header_version="2"
+deviceinfo_dtb="mediatek/mt6785-xiaomi-begonia"
+deviceinfo_kernel_cmdline="bootopt=64S3,32N2,64N2"
+deviceinfo_recovery_dtbo="/boot/empty.dtbo"
+deviceinfo_partitions_data="/dev/disk/by-partlabel/userdata"
+deviceinfo_partitions_microsd="/dev/mmcblk0"
+EOF
+    curl -sSL "https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/6c223d3/device/testing/device-xiaomi-begonia/modules-initfs" \
+        > "$srcdir"/modules-initfs
+    cat >>"$srcdir"/deviceinfo_ <<EOF
+
+deviceinfo_modules_initfs="$(cat "$srcdir"/modules-initfs | tr '\n' ' ')"
+EOF
+    install -Dm644 "$srcdir"/deviceinfo_ "$pkgdir"/etc/kupfer/deviceinfo
+
+    install -Dm644 "$srcdir"/xiaomi-begonia.conf "$pkgdir"/etc/kupfer/mkinitcpio.conf.d/xiaomi-begonia.conf
+
+    install -Dm644 "$srcdir"/machine-info "$pkgdir"/etc/machine-info
+}
