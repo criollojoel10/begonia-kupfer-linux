@@ -342,11 +342,38 @@ que escribe el hook `50-mkinitcpio-overwrite` (el paquete `mkinitcpio-kupfer-hoo
 ==> Initcpio image generation successful
 ```
 
-Por eso el guard del workflow **no** puede buscar `error: command failed to execute correctly`:
-aparece 4 veces por motivos benignos y saltaría en falso. Busca señales positivas
-(`Initcpio image generation successful`, `Generating new aboot.img`) y solo un patrón inconfundible
-(`struct.error`, que es nuestro bug de `mkbootimg`). Los cinco módulos de panel y táctil se
-comprueban sobre el initramfs extraído, no sobre el log.
+Por eso el paso de *Build image* busca señales positivas (`Initcpio image generation successful`,
+`Generating new aboot.img`) y solo un patrón inconfundible (`struct.error`, que es nuestro bug de
+`mkbootimg`). Los cinco módulos de panel y táctil se comprueban sobre el initramfs extraído, no
+sobre el log.
+
+## El initramfs no es un fichero comprimido: es dos segmentos
+
+`gzip -dc /boot/initramfs-linux.img` responde `not in gzip format` sobre un initramfs
+**perfectamente bueno**, y por eso el check de módulos daba por ausentes cinco módulos que sí
+estaban dentro (run `36253998953`).
+
+La causa está en el `mkinitcpio` que instala Arch: si hay ficheros ya comprimidos dentro
+(`.gz`, `.xz`, `.zst`…), los mueve al *early root* para no comprimirlos dos veces
+(`mkinitcpio:340-358`) y luego concatena ese CPIO **sin comprimir** delante del archivo comprimido
+(`mkinitcpio:385-399`):
+
+```
+[ CPIO temprano sin comprimir ][ flujo gzip con el resto ]
+```
+
+Es el formato que espera el desempaquetador del kernel (acepta varios segmentos seguidos), y el
+log lo delata con una línea que parece menor:
+
+```
+==> Creating gzip-compressed initcpio image: '/boot/initramfs-linux.img'
+  -> Early uncompressed CPIO image generation successful
+```
+
+El check del workflow salta el CPIO temprano (buscando su entrada `TRAILER!!!`), localiza la
+firma gzip a partir de ahí y descomprime con `zlib`, en vez de `gzip -dc`. Es lo mismo que hace
+`lsinitcpio --early` / `skip_early_img`, pero sin depender de `bsdtar` ni de instalar `mkinitcpio`
+en el runner (que es Ubuntu, no Arch).
 
 ## La tabla de particiones vive en sectores de 4096 bytes
 

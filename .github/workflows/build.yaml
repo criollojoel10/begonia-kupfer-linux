@@ -423,27 +423,52 @@ jobs:
             "${{ steps.paths.outputs.images_dir }}/initramfs-linux.img"
           ls -l "${{ steps.paths.outputs.images_dir }}"/aboot.img \
                  "${{ steps.paths.outputs.images_dir }}"/initramfs-linux.img
-          # El initramfs es gzip de un CPIO newc: los nombres de los ficheros
-          # aparecen en claro, asi que se puede comprobar sin cpio ni
-          # lsinitcpio. Estos 5 modulos son los del panel y el tactil, y sin
-          # ellos la pantalla no se enciende en el primer arranque (por eso
-          # van en deviceinfo_modules_initfs).
-          # Se descomprime una sola vez a un fichero: si gzip no puede leer la
-          # imagen, el fallo sale con su propio mensaje en vez de disfrazarse
-          # de "modulos que faltan".
-          gzip -dc "${{ steps.paths.outputs.images_dir }}/initramfs-linux.img" \
-            > /tmp/initrd.cpio
-          ls -l /tmp/initrd.cpio
-          MISSING=""
-          for m in novatek-nvt-ts-spi ti-lmu lm363x-regulator \
-                   panel-novatek-nt36672a lm36274_bl; do
-            grep -aq "$m" /tmp/initrd.cpio || MISSING="$MISSING $m"
-          done
-          if [ -n "$MISSING" ]; then
-            echo "::error::faltan modulos en el initramfs:$MISSING"
-            exit 1
-          fi
-          echo "initramfs ok: los 5 modulos de panel/tactil estan dentro"
+          # El initramfs de mkinitcpio NO es un unico fichero comprimido. El
+          # mkinitcpio que trae Arch concatena un CPIO temprano SIN comprimir
+          # delante del archivo comprimido (mkinitcpio:385-399, para no
+          # comprimir dos veces los ficheros que ya vienen comprimidos), y el
+          # kernel acepta los dos segmentos seguidos. Por eso
+          #   gzip -dc initramfs-linux.img
+          # responde "not in gzip format" con un initramfs perfectamente
+          # bueno (asi fallo el run 36253998953).
+          #
+          # Estos 5 modulos son los del panel y el tactil: sin ellos la
+          # pantalla no se enciende en el primer arranque, por eso van en
+          # deviceinfo_modules_initfs. Se comprueban sobre el contenido
+          # descomprimido, porque los nombres de fichero del CPIO newc van
+          # en claro.
+          python3 - "${{ steps.paths.outputs.images_dir }}/initramfs-linux.img" <<'PY'
+          import sys, zlib
+
+          MODS = ["novatek-nvt-ts-spi", "ti-lmu", "lm363x-regulator",
+                  "panel-novatek-nt36672a", "lm36274_bl"]
+
+          data = open(sys.argv[1], "rb").read()
+          # el CPIO temprano, si lo hay, termina con su entrada TRAILER!!!
+          trailer = data.find(b"TRAILER!!!")
+          head = data[:trailer] if trailer >= 0 else b""
+          # y a partir de ahi, saltando el relleno, empieza el flujo comprimido
+          start = trailer if trailer >= 0 else 0
+          body = b""
+          gz = data.find(b"\x1f\x8b\x08", start)
+          if gz >= 0:
+              try:
+                  body = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(data[gz:])
+              except zlib.error as e:
+                  print("::error::no se ha podido descomprimir el initramfs: %s" % e)
+                  sys.exit(1)
+          else:
+              print("::warning::el initramfs no tiene un flujo gzip detectable")
+              body = data[start:]
+
+          print("initramfs: %d bytes | cpio temprano: %d | cuerpo: %d"
+                % (len(data), len(head), len(body)))
+          missing = [m for m in MODS if m.encode() not in head + body]
+          if missing:
+              print("::error::faltan modulos en el initramfs: %s" % " ".join(missing))
+              sys.exit(1)
+          print("initramfs ok: los %d modulos de panel/tactil estan dentro" % len(MODS))
+          PY
 
       - name: List images
         run: |
