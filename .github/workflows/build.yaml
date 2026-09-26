@@ -81,31 +81,6 @@ jobs:
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install -e .
 
-      - name: Disable signature checks in generated chroots
-        working-directory: kupferbootstrap
-        run: |
-          # kupferbootstrap genera el /etc/pacman.conf de cada chroot con
-          # "SigLevel = Required DatabaseOptional" (generator.py), pero nunca
-          # puebla el keyring de esos chroots: el unico .INSTALL que lo hace es
-          # el de archlinux-keyring (pacman-key --populate archlinux), y
-          # archlinuxarm-keyring no se instala en ningun chroot. En cuanto un
-          # paquete del repo alarm aparece, libalpm no encuentra la clave,
-          # --noconfirm contesta "si" por nosotros y dirmngr se va a WKD y al
-          # keyserver: en los runners de GHA eso se cuelga (el run 36244913341
-          # lleva 40+ min clavado en "(218/756) checking keys in keyring" con
-          # el kernel ya compilado). Los repos de Kupfer ya son SigLevel: Never
-          # en repos.yml, asi que esto solo afecta a core/extra/alarm/aur, que
-          # seguimos entrando por HTTPS. El parche va en el clon local porque el
-          # Dockerfile hace ADD src (el source acaba dentro de la imagen).
-          set -euo pipefail
-          GEN=src/kupferbootstrap/generator.py
-          test -f "$GEN" || { echo "::error::no encuentro $GEN"; exit 1; }
-          sed -i 's/^SigLevel    = Required DatabaseOptional$/SigLevel = Never/' "$GEN"
-          grep -q '^SigLevel = Never$' "$GEN" || {
-            echo "::error::el parche de SigLevel no se aplico (puede que upstream lo haya reformateado)";
-            exit 1; }
-          grep -n '^SigLevel' "$GEN"
-
       - name: Prepare cache dirs
         run: |
           mkdir -p "${{ steps.paths.outputs.cache_dir }}"
@@ -282,13 +257,15 @@ jobs:
           cp -r "$OVERLAY_DIR/device-mt6785-xiaomi-begonia" "$PDIR/device/"
           cp -r "$OVERLAY_DIR/firmware-mediatek-mt6785" "$PDIR/firmware/"
           cp -r "$OVERLAY_DIR/linux-mt6785" "$PDIR/linux/"
+          cp -r "$OVERLAY_DIR/main/mkbootimg-git" "$PDIR/main/"
           # Sin esto los overlays se perderían en silencio y el build usaría stock.
           for f in device/device-mt6785-xiaomi-begonia/PKGBUILD \
                    device/device-mt6785-xiaomi-begonia/empty.dtbo \
                    linux/linux-mt6785/PKGBUILD \
                    firmware/firmware-mediatek-mt6785/PKGBUILD \
                    boot/android-bootimg-updater/PKGBUILD \
-                   boot/android-bootimg-updater/update-bootimg.sh; do
+                   boot/android-bootimg-updater/update-bootimg.sh \
+                   main/mkbootimg-git/PKGBUILD; do
             test -f "$PDIR/$f" || { echo "::error::overlay ausente: $f"; exit 1; }
             echo "overlay ok: $f"
           done
@@ -307,6 +284,16 @@ jobs:
           grep -qE '^pkgrel=2$' "$PDIR/boot/android-bootimg-updater/PKGBUILD" \
             || { echo "::error::pkgrel del boot updater debe ser 2 para ganar al prebuilt"; exit 1; }
           echo "boot updater: se construira localmente (pkgrel=2 != prebuilt 0.5-1)"
+          # El parche de la division entera de mkbootimg-git es lo que permite que
+          # --recovery_dtbo escriba una cabecera de boot v2 utilizable. Sin el, el
+          # hook 91-android-bootimg-updater falla con "struct.error: required
+          # argument is not an integer" y la imagen sale sin aboot.img.
+          grep -qF '(image_size + page_size - 1) // page_size' \
+            "$PDIR/main/mkbootimg-git/PKGBUILD" \
+            || { echo "::error::el overlay de mkbootimg-git no lleva el fix de la division"; exit 1; }
+          grep -qE '^pkgrel=3$' "$PDIR/main/mkbootimg-git/PKGBUILD" \
+            || { echo "::error::pkgrel de mkbootimg-git debe ser 3 para ganar al prebuilt (2)"; exit 1; }
+          echo "mkbootimg-git: se construira localmente (pkgrel=3 != prebuilt 2)"
 
       - name: Build cross toolchain (x86_64)
         working-directory: kupferbootstrap
@@ -343,7 +330,48 @@ jobs:
       - name: Build image
         working-directory: kupferbootstrap
         run: |
-          script -qec ".venv/bin/kupferbootstrap image build --sector-size 4096" /dev/null
+          # kupferbootstrap/net/ssh.py:115 copy_ssh_keys() hace
+          #   if len(keys) == 0: click.confirm("Do you want me to generate an ssh key for you?", True)
+          # y click.confirm LEE DE STDIN. En un runner de GHA no hay nadie
+          # tecleando, asi que el proceso se queda bloqueado para siempre: el
+          # run 36244913341 se paso 45 minutos asi, despues de compilar kernel e
+          # instalar los 756 paquetes, colgado justo en
+          #   WARNING: Could not find any ssh key to copy
+          # En local nadie lo ve porque cualquier dev tiene ya un ~/.ssh/id_*.
+          # Creando una clave aqui, find_ssh_keys() la encuentra y nunca se llega
+          # al confirm. De regalo, la publica acaba en el authorized_keys del
+          # usuario de la imagen.
+          command -v ssh-keygen >/dev/null || {
+            echo "::error::ssh-keygen no esta disponible (falta openssh-client)"; exit 1; }
+          mkdir -p ~/.ssh
+          [ -f ~/.ssh/id_ed25519_kupfer ] || \
+            ssh-keygen -t ed25519 -N '' -C 'kupfer-begonia-build' -f ~/.ssh/id_ed25519_kupfer
+          ls -l ~/.ssh/id_ed25519_kupfer*
+          set -o pipefail
+          script -qec ".venv/bin/kupferbootstrap -v image build --sector-size 4096" /dev/null \
+            | tee build-image.log
+          # El hook 91-android-bootimg-updater se come sus errores: pacman
+          # registra un aviso, sigue con los 31 hooks y el build termina "bien"
+          # con una imagen sin aboot.img, que no arranca. El unico sitio donde se
+          # ve es el log, asi que se comprueba aqui.
+          if grep -qE 'struct\.error|error: command failed to execute correctly' build-image.log; then
+            echo "::error::mkbootimg ha fallado generando aboot.img (traza mas arriba)"
+            exit 1
+          fi
+          ls -l "${{ steps.paths.outputs.images_dir }}"
+          # Mejorable: sacar aboot.img de la particion boot para subirlo como
+          # artifact y poder flashearla. No es critico, asi que si algo falla
+          # (debugfs, permisos) se avisa y se sigue.
+          IMG=$(ls -1 "${{ steps.paths.outputs.images_dir }}"/*-full.img 2>/dev/null | head -1)
+          if [ -n "$IMG" ]; then
+            START=$(sfdisk -J -o Start "$IMG" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["partitiontable"]["partitions"][0]["start"])')
+            SECTORS=$(( $(sfdisk -J -o Size "$IMG" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["partitiontable"]["partitions"][0]["size"])') - 1 ))
+            dd if="$IMG" of=/tmp/p1.img bs=512 skip="$START" count="$SECTORS" status=none
+            (cd /tmp && sudo debugfs -R 'dump /aboot.img aboot.img' p1.img) >/dev/null 2>&1 \
+              && sudo mv /tmp/aboot.img "${{ steps.paths.outputs.images_dir }}/aboot.img" \
+              && echo "aboot.img extraido: $(stat -c%s "${{ steps.paths.outputs.images_dir }}/aboot.img") bytes" \
+              || echo "::warning::no se ha podido extraer aboot.img de $IMG"
+          fi
 
       - name: List images
         run: |

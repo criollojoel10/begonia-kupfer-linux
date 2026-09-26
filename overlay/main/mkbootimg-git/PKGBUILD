@@ -1,0 +1,66 @@
+# Overlay identico al de upstream (main/mkbootimg-git) salvo por dos cosas:
+#
+#  1. pkgrel=3 en vez de 2. El prebuilt publicado (r254.ba2684e-2) contiene el
+#     bug de abajo; sin subir el pkgrel kupferbootstrap se lo descarga tal cual
+#     y el fix nunca llega a la imagen.
+#
+#  2. El fix de la division. El commit fijado por upstream
+#     (ba2684e38651df5784be5eaa8260baade15a2c5d, r254) es un mkbootimg escrito
+#     para Python 2: get_number_of_pages() usa "/" en vez de "//", asi que bajo
+#     Python 3 devuelve un float. get_recovery_dtbo_offset() multiplica ese float
+#     por el pagesize y write_header() lo mete en struct.pack('Q', ...), que
+#     rechaza floats -> "struct.error: required argument is not an integer".
+#     Solo se nota cuando se pasa --recovery_dtbo, que es justo lo que begonia
+#     necesita, y solo si header_version >= 1.
+#
+#     El fallo real del run 36244913341, con su traza entera:
+#       (21/31) Updating aboot.img...
+#       File "/usr/bin/mkbootimg", line 152, in write_header
+#         args.output.write(pack('Q', get_recovery_dtbo_offset(args)))
+#       struct.error: required argument is not an integer
+#
+#     AOSP ya lo corrigio hace tiempo (las versiones actuales de mkbootimg usan
+#     "//"), asi que esto no es un parche nuestro: es un bug de la instantanea
+#     que upstream tiene fijada. Lo correcto a medio plazo es subir el _commit
+#     de upstream; mientras tanto parcheamos la linea, que es una sola y no
+#     cambia el comportamiento en ningun otro caso.
+_mode=cross
+_nodeps=true
+pkgname=mkbootimg-git
+pkgver=r254.ba2684e
+pkgrel=3
+_arches=specific
+arch=(aarch64)
+license=(
+    Apache
+    MIT
+)
+url=https://android.googlesource.com/platform/system/tools/mkbootimg
+provides=(mkbootimg)
+depends=(
+    python
+)
+_commit=ba2684e38651df5784be5eaa8260baade15a2c5d
+source=("git+$url#commit=$_commit")
+sha256sums=(SKIP)
+
+pkgver() {
+    cd "$srcdir"/mkbootimg
+    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+package() {
+    install -m755 -d "$pkgdir"/usr/bin
+    # Si upstream cambia el _commit y la linea ya no esta, que falle el build en
+    # vez de dejar un mkbootimg roto en silencio dentro de la imagen.
+    if ! grep -qF 'return (image_size + page_size - 1) / page_size' \
+      mkbootimg/mkbootimg.py; then
+        echo "mkbootimg.py ya no tiene la division entera rota: revisa si hace falta el fix" >&2
+        return 1
+    fi
+    sed -i \
+        's|return (image_size + page_size - 1) / page_size|return (image_size + page_size - 1) // page_size|' \
+        mkbootimg/mkbootimg.py
+    install -Dm 755 mkbootimg/mkbootimg.py "$pkgdir"/usr/bin/mkbootimg
+    install -Dm 755 mkbootimg/unpack_bootimg.py "$pkgdir"/usr/bin/unpack_bootimg
+}

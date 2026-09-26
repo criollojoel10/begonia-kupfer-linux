@@ -22,6 +22,8 @@ comunidad.mergea primero.
 | Investigación de precedentes MTK / no-Qualcomm en Kupfer | ✅ |
 | PKGBUILDs de device / kernel / firmware | ✅ |
 | Parche `update-bootimg.sh` (header v2 + recovery_dtbo) | ✅ |
+| Toolchain de cruce en el build (lo que faltaba) | ✅ |
+| `mkbootimg` con la división entera arreglada (sin esto no sale `aboot.img`) | ✅ |
 | Build imagen Plasma Mobile (GHA, base `dev`) | ⏳ en curso |
 | Flasheo y verificación en device | ⏳ pendiente |
 
@@ -127,7 +129,8 @@ de recovery. pmaports lo resuelve generando el dtbo en su APKBUILD con
 `mkdtboimg create`, que viene del subpackage de Alpine `android-tools-mkdtboimg`. En Arch no
 existe `mkdtboimg` ni en los repos ni en la AUR, y el prebuilt de Kupfer `mkbootimg-git-r254…`
 solo trae `mkbootimg` y `unpack_bootimg`. `mkbootimg` sí acepta `--recovery_dtbo <path>`; lo que
-faltaba era el fichero.
+faltaba era el fichero — y que ese `mkbootimg` no reventara al usarlo, que es un segundo bug; ver
+[§2 de "Los dos cuelgues del port"](#2-mkbootimg---recovery_dtbo-y-la-división-entera-de-python-2).
 
 Así que el binario de 136 bytes va versionado en el overlay del device. Es el que genera
 pmaports, con el magic **MediaTek** `0xd7b7ab1e` (AOSP usa `0xd7b7caf1`) — de ahí que se
@@ -207,6 +210,110 @@ initramfs no tiene que descomprimir `.ko.zst` en un UFS lentísimo. Si alguna ve
 comprimir, el sitio es `makedepends`, no el config.
 
 `perl` también está en `makedepends` por `scripts/` y por `objtool`.
+
+## Los dos cuelgues del port, y por qué el log no dice nada
+
+El run `36244913341` es el primero que llegó al final: kernel compilado (`Image.gz` a las 13:46:03,
+`mt6785-xiaomi-begonia.dtb` a las 13:46:39), initramfs generado, 756 paquetes instalados. Y aun así
+se pasó **45 minutos sin una sola línea de log** antes de que lo cancelaran. La causa no era la que
+parecía, y el log de GHA tampoco ayuda: mientras el job está `in_progress`, el endpoint
+`/actions/jobs/<id>/logs` devuelve un parcial **congelado** (byte a byte idéntico entre llamadas) y
+`/actions/runs/<id>/logs` da 404 hasta que el run termina. Para diagnosticar estos dos cuelgues
+hubo que cancelar y leer el ZIP completo.
+
+### 1. `click.confirm` de la clave SSH: el cuelgue de verdad
+
+`kupferbootstrap/src/kupferbootstrap/net/ssh.py:115`, en `copy_ssh_keys()`:
+
+```python
+keys = find_ssh_keys()          # ~/.ssh/id_*
+if len(keys) == 0:
+    logging.warning("Could not find any ssh key to copy")
+    create = click.confirm("Do you want me to generate an ssh key for you?", True)
+```
+
+`click.confirm` **lee de stdin**. En un runner de GHA no hay nadie tecleando, así que el proceso se
+queda bloqueado para siempre. En local es imposible verlo: cualquier dev tiene ya un `~/.ssh/id_*`,
+así que nunca se llega al `confirm`. El log lo dice con todas las letras:
+
+```
+(31/31) Updating the vlc plugin cache...
+WARNING: Could not find any ssh key to copy
+##[error]The operation was canceled.        <- 45 minutos después
+```
+
+Detrás de esa línea debería venir el `Running post-install CMDs` de `install_rootfs`
+(`image/image.py:441`), y no viene.
+
+**Arreglo** (`build.yaml`, paso *Build image*): generar una clave ed25519 sin passphrase antes de
+invocar kupferbootstrap, con `find_ssh_keys()` dar con ella y no pisar nunca el `confirm`. Como
+efecto secundario, la clave pública acaba en el `authorized_keys` del usuario de la imagen, que es
+justo lo que se quiere.
+
+El `if [ -f ... ]` hace el paso idempotente, por si algún día se cachea el `~/.ssh`.
+
+### 2. `mkbootimg`: `--recovery_dtbo` y la división entera de Python 2
+
+Este no fue un cuelgue sino un **fallo silencioso**, y es el más importante de los dos: sin
+`aboot.img` la imagen no arranca, y pacman se come el error del hook y sigue como si nada.
+
+```
+(21/31) Updating aboot.img...
+Generating new aboot.img with initramfs /boot/initramfs-linux.img
+Traceback (most recent call last):
+  File "/usr/bin/mkbootimg", line 303, in main
+    img_id = write_header(args)
+  File "/usr/bin/mkbootimg", line 152, in write_header
+    args.output.write(pack('Q', get_recovery_dtbo_offset(args)))
+struct.error: required argument is not an integer
+error: command failed to execute correctly
+```
+
+El paquete que trae `mkbootimg` no es `android-tools`, sino **`mkbootimg-git`**, un pkgbuild de Kupfer
+(`main/mkbootimg-git`) fijado al commit `ba2684e` (r254) de
+`android.googlesource.com/platform/system/tools/mkbootimg`. Ese commit es anterior al porteo a Python
+3, y su `get_number_of_pages()` sigue usando `/`:
+
+```python
+def get_number_of_pages(image_size, page_size):
+    return (image_size + page_size - 1) / page_size        # float en Python 3
+```
+
+`get_recovery_dtbo_offset()` multiplica eso por el `pagesize` y lo pasa a `struct.pack('Q', …)`, que
+rechaza floats. O sea: **cualquier device que pase `--recovery_dtbo` con este `mkbootimg` revienta**,
+y begonia es el primero que lo pasa. Las versiones actuales de AOSP ya usan `//`, así que no es un
+bug de Copper sino de la instantánea que upstream tiene fijada.
+
+Obsérvese el detalle del encadenado: `write_header()` falla **antes** de `write_data()`, así que el
+error salta con el `aboot.img` sin escribir. Nada en el log de pacman indica que la imagen esté
+incompleta; los 31 hooks salen como `success`.
+
+**Arreglo** (`overlay/main/mkbootimg-git/PKGBUILD`): el mismo PKGBUILD que upstream más dos cambios,
+`pkgrel=3` (para ganar al prebuilt publicado, que es `-2`) y un `sed` de esa única línea, con un
+`grep -qF` de guarda que hace fallar el build si upstream cambia el `_commit` y la línea ya no está.
+El `sed` no cambia el comportamiento en ningún otro caso: `get_number_of_pages()` no se usa en
+ningún otro sitio de ese fichero.
+
+Lo correcto a medio plazo es subir el `_commit` de upstream a una revisión ya portada; no se ha
+hecho aquí porque no se puede comprobar el contenido de una revisión concreta sin acceso a
+`android.googlesource.com` (desde este entorno responde 503), y en vez de subir el pin a ciegas se
+parchea la línea, que es verificable.
+
+## Una nota sobre las firmas (investigado, luego descartado)
+
+Estaba sobre la mesa parchear el `SigLevel` de los chroots a `Never` (el `generator.py:257` pone
+`SigLevel = Required DatabaseOptional` y el keyring de los chroots solo lo puebla el `.INSTALL` de
+`archlinux-keyring`; `archlinuxarm-keyring` no se instala en ninguno). Con `--noconfirm`, que
+kupferbootstrap pasa siempre, un prompt `Import PGP key …?` se respondería solo y libalpm se
+iría a WKD por HTTPS. **Era una hipótesis razonable y equivocada**: la fase `checking keys in keyring`
+del run tardó ~2 minutos para los 756 paquetes y terminó sin Drama. El cuelgue de 45 minutos
+empezaba *después*, en `install_rootfs`, y era el `click.confirm` de arriba.
+
+Se deja el dato porque sigue siendo un riesgo latente real para quien componga un repo con claves
+expiradas, no porque haga falta parchear nada aquí. La solución de upstream sería exponer `siglevel`
+en el TOML o hacer `pacman-key --populate` al crear los chroots; hoy la `PacmanSection` del esquema
+solo tiene `parallel_downloads`, `check_space` y `repo_branch`. Para el que se lo pregunte: los repos de Kupfer
+ya son `SigLevel: Never` en `repos.yml` y sus prebuilts van sin firmar (su `.sig` da 404).
 
 ## Notas de CI
 
