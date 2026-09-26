@@ -107,6 +107,7 @@ jobs:
 
       - name: Generate kupferbootstrap config
         run: |
+          mkdir -p $HOME/.config/kupfer
           cat > $HOME/.config/kupfer/kupferbootstrap.toml <<'TOML'
           [wrapper]
           type = "none"
@@ -147,23 +148,31 @@ jobs:
           password = "1234"
           size_extra_mb = ${{ inputs.size_extra_mb }}
           TOML
-          mkdir -p $HOME/.config/kupfer
-
-      - name: Apply overlays (port repo)
-        run: |
-          set -e
-          OVERLAY_DIR="${{ github.workspace }}/overlay"
-          PDIR="${{ steps.paths.outputs.pkgbuilds_dir }}"
-          # Copy overlays preserving structure
-          cp -r "$OVERLAY_DIR/boot-android-bootimg-updater" "$PDIR/boot/" 2>/dev/null || true
-          cp -r "$OVERLAY_DIR/device-mt6785-xiaomi-begonia" "$PDIR/device/" 2>/dev/null || true
-          cp -r "$OVERLAY_DIR/firmware-mediatek-mt6785" "$PDIR/firmware/" 2>/dev/null || true
-          cp -r "$OVERLAY_DIR/linux-mt6785" "$PDIR/linux/" 2>/dev/null || true
 
       - name: Initialize pkgbuilds (dev)
         working-directory: kupferbootstrap
         run: |
           .venv/bin/kupferbootstrap packages init --lazy
+
+      - name: Apply overlays (port repo)
+        run: |
+          set -euo pipefail
+          OVERLAY_DIR="${{ github.workspace }}/overlay"
+          PDIR="${{ steps.paths.outputs.pkgbuilds_dir }}"
+          # El repo pkgbuilds debe existir antes de sobrecribir (verificado en run previo).
+          test -d "$PDIR/.git" || { echo "::error::pkgbuilds no clonado en $PDIR"; exit 1; }
+          cp -r "$OVERLAY_DIR/boot-android-bootimg-updater" "$PDIR/boot/"
+          cp -r "$OVERLAY_DIR/device-mt6785-xiaomi-begonia" "$PDIR/device/"
+          cp -r "$OVERLAY_DIR/firmware-mediatek-mt6785" "$PDIR/firmware/"
+          cp -r "$OVERLAY_DIR/linux-mt6785" "$PDIR/linux/"
+          # Sin esto los overlays se perderían en silencio y el build usaría stock.
+          for f in device/device-mt6785-xiaomi-begonia/PKGBUILD \
+                   linux/linux-mt6785/PKGBUILD \
+                   firmware/firmware-mediatek-mt6785/PKGBUILD \
+                   boot/boot-android-bootimg-updater/update-bootimg.sh; do
+            test -f "$PDIR/$f" || { echo "::error::overlay ausente: $f"; exit 1; }
+            echo "overlay ok: $f"
+          done
 
       - name: Build image
         working-directory: kupferbootstrap
