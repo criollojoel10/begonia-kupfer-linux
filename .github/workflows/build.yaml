@@ -133,7 +133,10 @@ jobs:
           git_branch = "dev"
 
           [pacman]
-          parallel_downloads = true
+          # int, no bool: el esquema declara parallel_downloads como int y
+          # pacman.conf rechaza un booleano con
+          # "invalid value for 'ParallelDownloads' : 'True'".
+          parallel_downloads = 5
           check_space = false
 
           [paths]
@@ -172,12 +175,53 @@ jobs:
           else:
               import tomli as toml_reader
           from kupferbootstrap.config.scheme import Config
+
           with open("/home/runner/.config/kupfer/kupferbootstrap.toml", "rb") as f:
               d = toml_reader.load(f)
+
+          # El gate de esquema NO alcanza para detectar bool-vs-int: en Python
+          # True es un int valido, asi que "clean_mode = true" y
+          # "parallel_downloads = true" pasaban la validacion y rompian mas
+          # tarde (pacman.conf: invalid value for 'ParallelDownloads').
+          # Estos campos los interpola el workflow, asi que son los que pueden
+          # cambiar de tipo sin avisar. type() y no isinstance() a proposito.
+          STRICT = {
+              ("build", "clean_mode"): bool,
+              ("build", "crosscompile"): bool,
+              ("build", "crossdirect"): bool,
+              ("build", "ccache"): bool,
+              ("build", "threads"): int,
+              ("pacman", "parallel_downloads"): int,
+              ("pacman", "check_space"): bool,
+              ("profiles", "default", "size_extra_mb"): int,
+          }
+          bad = []
+          for path, want in STRICT.items():
+              cur = d
+              for part in path:
+                  if not isinstance(cur, dict) or part not in cur:
+                      cur = None
+                      break
+                  cur = cur[part]
+              if cur is None:
+                  bad.append(f"{'.'.join(path)}: ausente")
+              elif type(cur) is not want:
+                  bad.append(
+                      f"{'.'.join(path)}: es {type(cur).__name__} ({cur!r}), "
+                      f"se esperaba {want.__name__}"
+                  )
+          if bad:
+              print("::error::tipos incorrectos en kupferbootstrap.toml:")
+              for line in bad:
+                  print("  -", line)
+              sys.exit(1)
+
           c = Config.fromDict(d, validate=True, allow_extra=True)
           p = c.profiles.default
           print("config ok:", c.profiles.current, p.device, p.flavour)
           assert p.device == "mt6785-xiaomi-begonia", p.device
+          assert type(c.pacman.parallel_downloads) is int, c.pacman.parallel_downloads
+          assert type(c.build.clean_mode) is bool, c.build.clean_mode
           PY
 
       - name: Build kupferbootstrap image
