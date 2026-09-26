@@ -1,0 +1,189 @@
+name: Build Kupfer Linux (begonia - Plasma Mobile)
+
+on:
+  workflow_dispatch:
+    inputs:
+      flavour:
+        description: 'Flavour (plasma-mobile, phosh, etc.)'
+        required: false
+        default: 'plasma-mobile'
+      size_extra_mb:
+        description: 'Extra size MB for rootfs'
+        required: false
+        default: '2048'
+      crosscompile:
+        description: 'Crosscompile'
+        type: boolean
+        required: false
+        default: true
+      crossdirect:
+        description: 'Crossdirect'
+        type: boolean
+        required: false
+        default: true
+      clean_mode:
+        description: 'Clean mode (none|deps|alldeps)'
+        required: false
+        default: 'none'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+
+    steps:
+      - name: Checkout port repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up paths
+        id: paths
+        run: |
+          echo "cache_dir=$HOME/.cache/kupferbootstrap" >> $GITHUB_OUTPUT
+          echo "pkgbuilds_dir=$HOME/.cache/kupferbootstrap/pkgbuilds" >> $GITHUB_OUTPUT
+          echo "images_dir=$HOME/.cache/kupferbootstrap/images" >> $GITHUB_OUTPUT
+
+      - name: Free up disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3 python3-venv python3-pip git rsync parted \
+            android-tools-adb android-tools-fastboot
+
+      - name: Checkout kupferbootstrap
+        uses: actions/checkout@v4
+        with:
+          repository: kupfer/kupferbootstrap
+          ref: dev
+          path: kupferbootstrap
+          fetch-depth: 1
+
+      - name: Setup Python venv for kupferbootstrap
+        working-directory: kupferbootstrap
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e .
+
+      - name: Prepare cache dirs
+        run: |
+          mkdir -p "${{ steps.paths.outputs.cache_dir }}"
+          mkdir -p "${{ steps.paths.outputs.cache_dir }}/ccache"
+          mkdir -p "${{ steps.paths.outputs.cache_dir }}/rust"
+          mkdir -p "${{ steps.paths.outputs.cache_dir }}/chroots"
+          mkdir -p "${{ steps.paths.outputs.cache_dir }}/jumpdrive"
+          mkdir -p "${{ steps.paths.outputs.cache_dir }}/pacman"
+          mkdir -p "${{ steps.paths.outputs.cache_dir }}/packages"
+          mkdir -p "${{ steps.paths.outputs.pkgbuilds_dir }}"
+          mkdir -p "${{ steps.paths.outputs.images_dir }}"
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.paths.outputs.cache_dir }}/ccache
+          key: ccache-kupfer-begonia-${{ inputs.flavour }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-kupfer-begonia-${{ inputs.flavour }}-
+            ccache-kupfer-begonia-
+
+      - name: Cache packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.paths.outputs.cache_dir }}/packages
+          key: pkg-kupfer-begonia-${{ inputs.flavour }}-${{ github.run_id }}
+          restore-keys: |
+            pkg-kupfer-begonia-${{ inputs.flavour }}-
+            pkg-kupfer-begonia-
+
+      - name: Generate kupferbootstrap config
+        run: |
+          cat > $HOME/.config/kupfer/kupferbootstrap.toml <<'TOML'
+          [wrapper]
+          type = "none"
+
+          [build]
+          ccache = true
+          clean_mode = "${{ inputs.clean_mode }}"
+          crosscompile = ${{ inputs.crosscompile }}
+          crossdirect = ${{ inputs.crossdirect }}
+          threads = 0
+
+          [pkgbuilds]
+          git_repo = "https://gitlab.com/kupfer/packages/pkgbuilds.git"
+          git_branch = "dev"
+
+          [pacman]
+          parallel_downloads = true
+          check_space = false
+
+          [paths]
+          cache_dir = "${{ steps.paths.outputs.cache_dir }}"
+          chroots = "${{ steps.paths.outputs.cache_dir }}/chroots"
+          jumpdrive = "${{ steps.paths.outputs.cache_dir }}/jumpdrive"
+          pacman = "${{ steps.paths.outputs.cache_dir }}/pacman"
+          packages = "${{ steps.paths.outputs.cache_dir }}/packages"
+          pkgbuilds = "${{ steps.paths.outputs.pkgbuilds_dir }}"
+          images = "${{ steps.paths.outputs.images_dir }}"
+          ccache = "${{ steps.paths.outputs.cache_dir }}/ccache"
+          rust = "${{ steps.paths.outputs.cache_dir }}/rust"
+
+          [profiles.current]
+          device = "mt6785-xiaomi-begonia"
+          flavour = "${{ inputs.flavour }}"
+          pkgs_include = []
+          pkgs_exclude = []
+          hostname = "begonia"
+          username = "joel"
+          password = "1234"
+          size_extra_mb = ${{ inputs.size_extra_mb }}
+          TOML
+          mkdir -p $HOME/.config/kupfer
+
+      - name: Apply overlays (port repo)
+        run: |
+          set -e
+          OVERLAY_DIR="${{ github.workspace }}/overlay"
+          PDIR="${{ steps.paths.outputs.pkgbuilds_dir }}"
+          # Copy overlays preserving structure
+          cp -r "$OVERLAY_DIR/boot-android-bootimg-updater" "$PDIR/boot/" 2>/dev/null || true
+          cp -r "$OVERLAY_DIR/device-mt6785-xiaomi-begonia" "$PDIR/device/" 2>/dev/null || true
+          cp -r "$OVERLAY_DIR/firmware-mediatek-mt6785" "$PDIR/firmware/" 2>/dev/null || true
+          cp -r "$OVERLAY_DIR/linux-mt6785" "$PDIR/linux/" 2>/dev/null || true
+
+      - name: Initialize pkgbuilds (dev)
+        working-directory: kupferbootstrap
+        run: |
+          .venv/bin/kupferbootstrap packages init --lazy
+
+      - name: Build image
+        working-directory: kupferbootstrap
+        run: |
+          .venv/bin/kupferbootstrap image build --sector-size 4096
+
+      - name: List images
+        run: |
+          ls -lh ${{ steps.paths.outputs.images_dir }} || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kupfer-begonia-${{ inputs.flavour }}
+          path: |
+            ${{ steps.paths.outputs.images_dir }}/*.img
+            ${{ steps.paths.outputs.images_dir }}/*.img.xz
+            ${{ steps.paths.outputs.images_dir }}/aboot.img
+            ${{ steps.paths.outputs.images_dir }}/aboot.bin
+          retention-days: 7
+          if-no-files-found: warn
