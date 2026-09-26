@@ -1,0 +1,50 @@
+# Overlay: identico al PKGBUILD de upstream (kupfer/packages/pkgbuilds, rama dev)
+# con dos cambios deliberados.
+#
+# 1) pkgrel=2 (upstream: 1).
+#    El paquete no esta en BASE_LOCAL_PACKAGES ni en la lista de cmd_build, asi
+#    que llega por --syncdeps. kupferbootstrap image build pasa
+#    try_download=True a check_package_version_built(), que compara el nombre
+#    "pkgver-pkgrel" contra lo que hay en disco/repo y, si no esta, descarga el
+#    prebuilt de
+#      https://gitlab.com/kupfer/packages/prebuilts/-/raw/dev/aarch64/boot/
+#    Ese prebuilt es boot-android-bootimg-updater-0.5-1-aarch64.pkg.tar.xz y su
+#    usr/bin/update-bootimg NO soporta --recovery_dtbo, asi que begonia se
+#    quedaria sin el empty.dtbo que su bootloader exige. Bump de pkgrel => el
+#    nombre ya no coincide con el prebuilt => se construye desde este overlay.
+#
+# 2) sha256sums del update-bootimg.sh parcheado (upstream: a86f11bf...).
+#    El script añade --recovery_dtbo, imprescindible para begonia: su
+#    bootloader arranca con header_version 2 y sin un recovery dtbo vacio no
+#    encuentra el dtbo de recovery.
+#
+# El resto de ficheros del directorio (91-android-bootimg-updater.hook,
+# android-bootimg-updater.install) los aporta el checkout de upstream: el paso
+# "Apply overlays" hace `cp -r` sobre el directorio, que fusiona en vez de
+# reemplazar.
+_mode=cross
+_nodeps=true
+pkgname=boot-android-bootimg-updater
+pkgver=0.5
+pkgrel=2
+_arches=all
+arch=(
+    aarch64
+    x86_64
+)
+license=(MIT)
+depends=(mkbootimg-git)
+install=android-bootimg-updater.install
+source=(
+    91-android-bootimg-updater.hook
+    update-bootimg.sh
+)
+sha256sums=(
+    01419bd235d098402fa78bf8127d229d2f8e4fb6f09ce9bc76b5df9e35e52479
+    29f6c01ebb11c8e040bec6ab0e51bdc6cd6fe2c209a159f33f2cd2e1b0bc1689
+)
+
+package() {
+    install -Dm644 "$srcdir"/91-android-bootimg-updater.hook "${pkgdir}/usr/share/libalpm/hooks/91-android-bootimg-updater.hook"
+    install -Dm755 "$srcdir"/update-bootimg.sh "${pkgdir}/usr/bin/update-bootimg"
+}

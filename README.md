@@ -74,8 +74,10 @@ silencio.
 
 ### Gaps detectados (todo el detalle en `docs/PORT.md`)
 
-1. Begonia exige **header v2** (DTB separado + `--recovery_dtbo /boot/empty.dtbo`). Resuelto con
-   `deviceinfo_header_version="2"` y `deviceinfo_recovery_dtbo`, apoyándose en el soporte de `dev`.
+1. Begonia exige **header v2** (DTB separado + `--recovery_dtbo /boot/empty.dtbo`).
+   `dev` sí trae el branching por `header_version` en `update-bootimg.sh`, pero **no soporta
+   `--recovery_dtbo` en absoluto** (0 coincidencias de `dtbo` en todo el repo). Hace falta parche,
+   y además hace falta el fichero `empty.dtbo`. Ver "El overlay del boot updater" más abajo.
 2. Kernel cmdline `bootopt=64S3,32N2,64N2` → `deviceinfo_kernel_cmdline`.
 3. DTB path → `deviceinfo_dtb="mediatek/mt6785-xiaomi-begonia"`.
 4. Módulos de display/táctil en initramfs real → `mkinitcpio.conf.d` del device
@@ -89,6 +91,49 @@ silencio.
    modpost aborta el kernel con `ERROR: modpost: "wireless_send_event" [...] undefined!`.
    El WiFi del hub (`rtl8xxxu`, `mt76`) no depende de ese stack, así que la imagen no debe
    depender de él. Ver `overlay/linux-mt6785/extra_config` para reactivarlo.
+   Comprobado: con `CONFIG_WEXT_CORE=y` el símbolo resuelve y el kernel compila entero.
+
+### El overlay del boot updater: dos trampas, y ninguna era visible
+
+Sin esto begonia no arranca, y los dos fallos son silenciosos por construcción:
+
+**a) La ruta del overlay estaba mal.** `cp -r src dst/` crea `dst/<basename de src>`. Con el
+directorio del overlay llamado `boot-android-bootimg-updater` el fichero aterrizaba en
+`boot/boot-android-bootimg-updater/`, una ruta que kupferbootstrap no conoce. El overlay
+*parecía* aplicado y no lo estaba. Renombrado a `boot/android-bootimg-updater`, que es como se
+llama en `kupfer/packages/pkgbuilds`, donde el `cp` fusiona encima del paquete real (y conserva
+el `.hook` y el `.install` de upstream).
+
+**b) El prebuilt le ganaba.** `boot-android-bootimg-updater` no está en `BASE_LOCAL_PACKAGES`
+ni en la lista de `cmd_build`: llega por `--syncdeps`. `image build` pasa `try_download=True` a
+`check_package_version_built()`, que compara `pkgver-pkgrel` contra disco/repo y, si no está,
+**descarga el prebuilt** `boot-android-bootimg-updater-0.5-1-aarch64.pkg.tar.xz` de
+`prebuilts/…/aarch64/boot/`. Descargado y verificado: su `update-bootimg` **no** trae el
+`--recovery_dtbo`. El overlay nunca se construía.
+
+Solución: subir `pkgrel` a `2` en el PKGBUILD overlaid. El nombre deja de coincidir con el del
+prebuilt, así que se construye localmente. El paso de overlays verifica además que el
+`pkgrel=2` sigue ahí, que el script contiene `recovery_dtbo`, y que el `empty.dtbo` tiene el
+sha256 esperado — porque un overlay que se pierde en silencio no falla, y es exactamente lo que
+pasó.
+
+### `empty.dtbo`: por qué va versionado y no se genera
+
+El bootloader de begonia arranca con header v2 y sin un recovery dtbo vacío no localiza el dtbo
+de recovery. pmaports lo resuelve generando el dtbo en su APKBUILD con
+`mkdtboimg create`, que viene del subpackage de Alpine `android-tools-mkdtboimg`. En Arch no
+existe `mkdtboimg` ni en los repos ni en la AUR, y el prebuilt de Kupfer `mkbootimg-git-r254…`
+solo trae `mkbootimg` y `unpack_bootimg`. `mkbootimg` sí acepta `--recovery_dtbo <path>`; lo que
+faltaba era el fichero.
+
+Así que el binario de 136 bytes va versionado en el overlay del device. Es el que genera
+pmaports, con el magic **MediaTek** `0xd7b7ab1e` (AOSP usa `0xd7b7caf1`) — de ahí que se
+reutilicen los bytes exactos en vez de reinventar el formato. Se regenera con:
+
+```sh
+echo '/dts-v1/; / {};' | dtc -I dts -O dtb -o empty.dtb
+mkdtboimg create empty.dtbo empty.dtb   # -> 136 bytes, sha256 f72e1df5…
+```
 
 ## Notas de CI
 

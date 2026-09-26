@@ -247,18 +247,41 @@ jobs:
           PDIR="${{ steps.paths.outputs.pkgbuilds_dir }}"
           # El repo pkgbuilds debe existir antes de sobrecribir (verificado en run previo).
           test -d "$PDIR/.git" || { echo "::error::pkgbuilds no clonado en $PDIR"; exit 1; }
-          cp -r "$OVERLAY_DIR/boot-android-bootimg-updater" "$PDIR/boot/"
+          # Ojo al basename: `cp -r src dst/` crea dst/<basename de src>. Con el
+          # nombre plano "boot-android-bootimg-updater" el overlay aterrizaba en
+          # boot/boot-android-bootimg-updater/, una ruta que kupferbootstrap no
+          # conoce, asi que se perdia en silencio. El directorio debe llamarse
+          # igual que el del repo pkgbuilds (boot/android-bootimg-updater) para
+          # que el cp fusione encima del paquete real.
+          cp -r "$OVERLAY_DIR/boot/android-bootimg-updater" "$PDIR/boot/"
           cp -r "$OVERLAY_DIR/device-mt6785-xiaomi-begonia" "$PDIR/device/"
           cp -r "$OVERLAY_DIR/firmware-mediatek-mt6785" "$PDIR/firmware/"
           cp -r "$OVERLAY_DIR/linux-mt6785" "$PDIR/linux/"
           # Sin esto los overlays se perderían en silencio y el build usaría stock.
           for f in device/device-mt6785-xiaomi-begonia/PKGBUILD \
+                   device/device-mt6785-xiaomi-begonia/empty.dtbo \
                    linux/linux-mt6785/PKGBUILD \
                    firmware/firmware-mediatek-mt6785/PKGBUILD \
-                   boot/boot-android-bootimg-updater/update-bootimg.sh; do
+                   boot/android-bootimg-updater/PKGBUILD \
+                   boot/android-bootimg-updater/update-bootimg.sh; do
             test -f "$PDIR/$f" || { echo "::error::overlay ausente: $f"; exit 1; }
             echo "overlay ok: $f"
           done
+          # El parche de --recovery_dtbo y el binario empty.dtbo son los dos
+          # motivos por los que existe este port; si uno se pierde, begonia no
+          # arranca. Se comprueba aqui y no confiar en el diff.
+          grep -q 'recovery_dtbo' "$PDIR/boot/android-bootimg-updater/update-bootimg.sh" \
+            || { echo "::error::el update-bootimg overlay no soporta --recovery_dtbo"; exit 1; }
+          echo "empty.dtbo: $(sha256sum "$PDIR/device/device-mt6785-xiaomi-begonia/empty.dtbo" | cut -d' ' -f1)"
+          test "$(sha256sum "$PDIR/device/device-mt6785-xiaomi-begonia/empty.dtbo" | cut -d' ' -f1)" \
+               = f72e1df52c33bde1676863a21b3e7f8c3cb9a21b8ed7addefe2ac0eb8cce0635 \
+            || { echo "::error::empty.dtbo no es el de pmaports (136 bytes, magic MTK)"; exit 1; }
+          # El prebuilt de boot-android-bootimg-updater no trae el parche, asi que
+          # el pkgrel del PKGBUILD overlaid tiene que seguir siendo distinto al
+          # del prebuilt (0.5-1) para que se construya localmente.
+          grep -qE '^pkgrel=2$' "$PDIR/boot/android-bootimg-updater/PKGBUILD" \
+            || { echo "::error::pkgrel del boot updater debe ser 2 para ganar al prebuilt"; exit 1; }
+          echo "boot updater: se construira localmente (pkgrel=2 != prebuilt 0.5-1)"
 
       - name: Build image
         working-directory: kupferbootstrap

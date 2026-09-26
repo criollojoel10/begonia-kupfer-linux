@@ -1,3 +1,23 @@
+# Overlay del device para begonia (Xiaomi Redmi Note 8 Pro, MT6785).
+#
+# Base: deviceinfo de pmaports (gitlab.postmarketos.org, commit 6c223d3) tal cual,
+# mas las variables que Kupfer necesita y pmaports no usa.
+#
+# Sobre el recovery dtbo: el bootloader de begonia arranca con header_version 2
+# y sin un recovery dtbo vacio no localiza el dtbo de recovery. pmaports lo
+# resuelve en su APKBUILD generando el dtbo con `mkdtboimg create`, que viene
+# del subpackage de Alpine `android-tools-mkdtboimg`. En Arch no existe
+# mkdtboimg ni en los repos ni en la AUR, y el prebuilt de Kupfer
+# `mkbootimg-git-r254...` solo trae mkbootimg/unpack_bootimg. Por eso se
+# versiona aqui el binario ya construido (136 bytes) en lugar de depender de una
+# herramienta que no hay.
+#
+#   $ mkdtboimg create empty.dtbo empty.dtb      # vacio.dtb = /dts-v1/; / {};
+#   # magic 0xd7b7ab1e = variante MediaTek (AOSP usa 0xd7b7caf1), por eso se
+#   # reutilizan los bytes exactos de pmaports en vez de reinventar el formato.
+#
+# Si se quiere regenerar, basta con ese par de comandos sobre un empty.dtb
+# trivial; el resultado debe dar 136 bytes y este mismo sha256.
 _mode=cross
 pkgname=device-mt6785-xiaomi-begonia
 pkgver=0.1
@@ -15,22 +35,31 @@ source=(
     https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/${_commit}/device/testing/device-xiaomi-begonia/deviceinfo
     xiaomi-begonia.conf
     machine-info
+    empty.dtbo
 )
 sha256sums=(
-    SKIP
-    SKIP
-    SKIP
+    e951e23dda716ab7ef25f41eac6f7368d0d69ab423442ca9aba0c833556af41e
+    ef6618c08e7eed7170b46441109f32d68e006a3a42fb89f8d86db15b70a8e4e6
+    7b7f69c23f35c956b628ef6eedc6fd59f0688b8c310ed0429a24a89bfac43ae7
+    f72e1df52c33bde1676863a21b3e7f8c3cb9a21b8ed7addefe2ac0eb8cce0635
 )
 
 package() {
     cp "$srcdir"/deviceinfo "$srcdir"/deviceinfo_
-    sed -i "s/deviceinfo_codename=\"xiaomi-begonia\"/&/" "$srcdir"/deviceinfo_ || true
     cat >>"$srcdir"/deviceinfo_ <<EOF
 
+# --- anadido por el port a Kupfer (overlay/device-mt6785-xiaomi-begonia) ---
+# header_version 2 hace que update-bootimg.sh use la ruta --kernel/--dtb/--dtb_offset
+# en vez de concatenar Image.gz y el dtb.
 deviceinfo_header_version="2"
 deviceinfo_dtb="mediatek/mt6785-xiaomi-begonia"
+# deviceinfo_flash_offset_dtb (0x0bc08000) ya viene de pmaports mas arriba.
+# El bootloader MTK aborta el arranque sin esto en la linea de comandos.
 deviceinfo_kernel_cmdline="bootopt=64S3,32N2,64N2"
+# update-bootimg.sh lo pasa a mkbootimg --recovery_dtbo. El fichero lo instala
+# este mismo paquete en /boot/empty.dtbo.
 deviceinfo_recovery_dtbo="/boot/empty.dtbo"
+# begonia guarda datos en UFS, no en particiones de eMMC.
 deviceinfo_partitions_data="/dev/disk/by-partlabel/userdata"
 deviceinfo_partitions_microsd="/dev/mmcblk0"
 EOF
@@ -38,9 +67,13 @@ EOF
         > "$srcdir"/modules-initfs
     cat >>"$srcdir"/deviceinfo_ <<EOF
 
+# Panel y tactil: sin esto en el initramfs no hay imagen en absoluto.
 deviceinfo_modules_initfs="$(cat "$srcdir"/modules-initfs | tr '\n' ' ')"
 EOF
     install -Dm644 "$srcdir"/deviceinfo_ "$pkgdir"/etc/kupfer/deviceinfo
+
+    # Sin este fichero, el --recovery_dtbo de arriba apuntaria a la nada.
+    install -Dm644 "$srcdir"/empty.dtbo "$pkgdir"/boot/empty.dtbo
 
     install -Dm644 "$srcdir"/xiaomi-begonia.conf "$pkgdir"/etc/kupfer/mkinitcpio.conf.d/xiaomi-begonia.conf
 
