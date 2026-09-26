@@ -57,6 +57,11 @@ CONFIG_MT76x0U=m
 CONFIG_MT76x2U=m
 CONFIG_MT7921U=m
 # Dongles AC de 20-30 EUR (MT8812AU/MT8821AU/MT8822BU) via rtw88.
+# RTW88 es el menuconfig padre (tristate, depends on MAC80211) y los drivers de
+# la familia viven dentro de `if RTW88`: sin el padre activado, olddefconfig
+# descarta los cinco simbolos siguientes en silencio y no sale ningun
+# rtw88_*.ko. Es el mismo fallo que en el lado postmarketOS (run 36277664585).
+CONFIG_RTW88=m
 CONFIG_RTW88_CORE=m
 CONFIG_RTW88_USB=m
 CONFIG_RTW88_8812AU=m
@@ -65,10 +70,16 @@ CONFIG_RTW88_8822BU=m
 # Modem 3G/4G USB (el nombre del modulo es sierra_net).
 CONFIG_USB_SIERRA_NET=m
 
-# Bluetooth USB (Realtek RTL8821C / CSR)
-CONFIG_BT=y
+# Bluetooth USB (Realtek RTL8821C / CSR / MT8812A)
+# BT se queda en =m: BT_HCIBTUSB=m hace `select BT`, y un select con valor m
+# baja el simbolo a m aunque se pida =y. Se escribe =m para que el config diga
+# la verdad. BT_BREDR y BT_LE son BOOL (no admiten =m: kconfig los pone a y).
+# RFCOMM y BNEP los usan los perfiles utiles (-envio de ficheros, tethering).
+CONFIG_BT=m
 CONFIG_BT_BREDR=y
 CONFIG_BT_LE=y
+CONFIG_BT_RFCOMM=m
+CONFIG_BT_BNEP=m
 CONFIG_BT_HCIBTUSB=m
 CONFIG_BT_HCIUART=m
 
