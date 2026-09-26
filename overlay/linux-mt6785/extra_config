@@ -1,8 +1,16 @@
-# STEPS for begonia-conn-wifi (MediaTek WMT/connsys/BTIF forward-ported stack)
-CONFIG_MTK_WMT_FWPORT=m
-CONFIG_MTK_WMT_DRV=m
-CONFIG_MTK_WLAN_GEN4M=m
-CONFIG_MTK_WMT_FWPORT_BTIF=m
+# Stack WiFi/BT interno MediaTek (begonia-conn-wifi).
+#
+# DESACTIVADO a proposito: wlan_gen4m.ko llama a wireless_send_event(), que solo
+# se compila con CONFIG_WEXT_CORE. Sin esa opcion modpost aborta el kernel con
+#   ERROR: modpost: "wireless_send_event" [.../wlan_gen4m.ko] undefined!
+# El wifi del hub (TP-Link RTL8192EU via rtl8xxxu, MT7921U via mt76) no depende
+# de este stack, asi que el build de la imagen no debe depender de el.
+# Para experimentally habilitarlo, descomentar y anadir CONFIG_WEXT_CORE=y:
+# CONFIG_WEXT_CORE=y
+# CONFIG_MTK_WMT_FWPORT=m
+# CONFIG_MTK_WMT_DRV=m
+# CONFIG_MTK_WLAN_GEN4M=m
+# CONFIG_MTK_WMT_FWPORT_BTIF=m
 # no dual-define for mediatek,btif node
 # CONFIG_MTK_BTIF is not set
 

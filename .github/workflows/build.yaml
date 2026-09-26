@@ -30,7 +30,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 240
+    timeout-minutes: 300
+
+    env:
+      # El Dockerfile de kupferbootstrap usa sintaxis labs: RUN --mount=type=bind
+      # y ADD --link, que requieren BuildKit. Sin esto `docker build` falla.
+      DOCKER_BUILDKIT: "1"
 
     steps:
       - name: Checkout port repo
@@ -111,7 +116,10 @@ jobs:
           mkdir -p $HOME/.config/kupfer
           cat > $HOME/.config/kupfer/kupferbootstrap.toml <<'TOML'
           [wrapper]
-          type = "none"
+          # kupferbootstrap construye Arch packages con makepkg: no se puede
+          # usar type="none" sobre un runner Ubuntu (makepkg: command not found).
+          # type="docker" usa la imagen oficial (archlinux:base-devel + toolchain).
+          type = "docker"
 
           [build]
           ccache = true
@@ -172,10 +180,21 @@ jobs:
           assert p.device == "mt6785-xiaomi-begonia", p.device
           PY
 
+      - name: Build kupferbootstrap image
+        working-directory: kupferbootstrap
+        run: |
+          # Precalentar la imagen aqui: falla de forma legible y deja las capas
+          # en la cache de BuildKit, para que el wrapper no reconstruya desde cero.
+          docker build --pull --network host -t registry.gitlab.com/kupfer/kupferbootstrap:BUILD .
+          docker run --rm registry.gitlab.com/kupfer/kupferbootstrap:BUILD kupferbootstrap --help >/dev/null
+          echo "kupferbootstrap image lista"
+
       - name: Initialize pkgbuilds (dev)
         working-directory: kupferbootstrap
         run: |
-          .venv/bin/kupferbootstrap packages init --non-interactive
+          # El wrapper ejecuta `docker run -it`; sin TTY real docker aborta con
+          # "the input device is not a TTY". `script` aporta una pseudotty.
+          script -qec ".venv/bin/kupferbootstrap packages init --non-interactive" /dev/null
 
       - name: Apply overlays (port repo)
         run: |
@@ -200,11 +219,12 @@ jobs:
       - name: Build image
         working-directory: kupferbootstrap
         run: |
-          .venv/bin/kupferbootstrap image build --sector-size 4096
+          script -qec ".venv/bin/kupferbootstrap image build --sector-size 4096" /dev/null
 
       - name: List images
         run: |
           ls -lh ${{ steps.paths.outputs.images_dir }} || true
+          df -h / | tail -1
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

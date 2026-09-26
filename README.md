@@ -65,6 +65,21 @@ Parche a paquete existente:
 6. Primer SoC MTK: no hay stack modem (igual que pmOS mainline, sin modem funcional).
 7. Firmwares: `mediatek/` conectividad (7 blobs), `novatek/nt36672a_begonia_tianma.bin`, y
    `rtl_bt/rtl8821c_*` + `rtlwifi/rtl8192eu_nic.bin` para los dongles del hub.
+8. **WiFi interno MediaTek (gen4m) desactivado a propósito.** `wlan_gen4m.ko` llama a
+   `wireless_send_event()`, que solo se compila con `CONFIG_WEXT_CORE`; sin esa opción
+   modpost aborta el kernel con `ERROR: modpost: "wireless_send_event" [...] undefined!`.
+   El WiFi del hub (`rtl8xxxu`, `mt76`) no depende de ese stack, así que la imagen no debe
+   depender de él. Ver `overlay/linux-mt6785/extra_config` para reactivarlo.
+
+## Notas de CI
+
+- El build usa el wrapper **Docker** de kupferbootstrap (`type = "docker"`): construye
+  Arch packages con `makepkg`, que no existe en el runner Ubuntu (`type = "none"` →
+  `makepkg: command not found`).
+- `DOCKER_BUILDKIT=1` es obligatorio: el `Dockerfile` upstream usa `RUN --mount=type=bind`
+  y `ADD --link`, que requieren BuildKit.
+- Las invocaciones van envueltas en `script -qec` porque el wrapper hace `docker run -it`
+  y los runners de Actions no tienen TTY (`the input device is not a TTY`).
 
 ## Artefactos del build
 
