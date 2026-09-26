@@ -79,7 +79,7 @@ Sobre el parche a `boot/android-bootimg-updater`: hace falta, y hace falta más 
 absoluto** (0 coincidencias en todo el repo), así que la rama header v2 construye el bootimg sin
 `--recovery_dtbo`. El overlay añade ese flag. Detalle en "El overlay del boot updater" más abajo.
 
-### Gaps detectados (todo el detalle en `docs/PORT.md`)
+### Gaps detectados
 
 1. Begonia exige **header v2** (DTB separado + `--recovery_dtbo /boot/empty.dtbo`).
    `dev` sí trae el branching por `header_version` en `update-bootimg.sh`, pero **no soporta
@@ -589,7 +589,7 @@ nada.
 
 ## Build en GitHub Actions
 
-Ver `.github/workflows/build.yaml` + `docs/CI.md`. Runs bajo demanda (`workflow_dispatch`).
+Ver `.github/workflows/build.yaml`. Runs bajo demanda (`workflow_dispatch`).
 Los builds pesados van a GHA (evita OOM en la máquina local).
 
 ## Roadmap
