@@ -22,9 +22,10 @@ on:
         required: false
         default: true
       clean_mode:
-        description: 'Clean mode (none|deps|alldeps)'
+        description: 'Reset chroot before building (slow, use only when suspecting a broken chroot)'
+        type: boolean
         required: false
-        default: 'none'
+        default: false
 
 jobs:
   build:
@@ -114,7 +115,7 @@ jobs:
 
           [build]
           ccache = true
-          clean_mode = "${{ inputs.clean_mode }}"
+          clean_mode = ${{ inputs.clean_mode }}
           crosscompile = ${{ inputs.crosscompile }}
           crossdirect = ${{ inputs.crossdirect }}
           threads = 0
@@ -138,7 +139,10 @@ jobs:
           ccache = "${{ steps.paths.outputs.cache_dir }}/ccache"
           rust = "${{ steps.paths.outputs.cache_dir }}/rust"
 
-          [profiles.current]
+          [profiles]
+          current = "default"
+
+          [profiles.default]
           device = "mt6785-xiaomi-begonia"
           flavour = "${{ inputs.flavour }}"
           pkgs_include = []
@@ -152,7 +156,7 @@ jobs:
       - name: Initialize pkgbuilds (dev)
         working-directory: kupferbootstrap
         run: |
-          .venv/bin/kupferbootstrap packages init --lazy
+          .venv/bin/kupferbootstrap packages init --non-interactive
 
       - name: Apply overlays (port repo)
         run: |

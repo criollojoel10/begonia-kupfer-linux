@@ -5,7 +5,10 @@ pkgrel=1
 _arches=specific
 arch=(aarch64)
 license=(custom:Proprietary)
-options=(!strip !emptydirs)
+options=(
+    !strip
+    !emptydirs
+)
 depends=(linux-firmware)
 _commit=33aa9fe1db0079945fa272e42f04db732489319d
 source=(
