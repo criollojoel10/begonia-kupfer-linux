@@ -51,6 +51,10 @@ package() {
     # mediatek/ = blobs de wifi+BT, novatek/ = firmware del panel y del tactil.
     cp -a "$srcdir"/firmware/mediatek "$srcdir"/firmware/novatek \
         "$pkgdir/usr/lib/firmware/"
-    install -Dm644 "$srcdir"/firmware/LICENSE \
-        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    # El repo no trae LICENSE (solo los dos directorios), asi que esto es
+    # opcional: si algun dia lo anaden, se copia sin romper nada.
+    if [ -f "$srcdir"/firmware/LICENSE ]; then
+        install -Dm644 "$srcdir"/firmware/LICENSE \
+            "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    fi
 }
