@@ -27,6 +27,11 @@ comunidad.mergea primero.
 | Build de la imagen en GHA (base `dev`, 19 steps, 44 min) | ✅ run `36249822052` |
 | `aboot.img` generado con el initramfs completo | ✅ |
 | Los 5 módulos de panel/táctil dentro del initramfs | ✅ comprobado en CI |
+| Firmware de novatek dentro del initramfs (faltaba) | ✅ |
+| Stack MediaTek interno compilando (`wmt_drv`, `wlan_gen4m`, `mtk-vendor-btif`) | ✅ |
+| Firmware MediaTek en `/usr/lib/firmware` (estaba en `/usr/mediatek/`) | ✅ |
+| Encendido automático del wifi interno (`mediatek-wifi.service`) | ✅ |
+| Bluetooth interno | ❌ no viable: BTIF no registra HCI ([detalle](#el-bluetooth-no-es-viable-con-este-port)) |
 | Flasheo y verificación en device | ⏳ pendiente |
 
 ## Investigación: no hay ningún port MediaTek que nos preceda
@@ -387,6 +392,102 @@ Por eso el paso de *Build image* monta con `losetup -f --show -b 4096 -P`, y de 
 `aboot.img` (94 MB) e `initramfs-linux.img` como artefactos propios: permiten reflashear solo el
 boot sin volver a bajar 7 GB.
 
+## El wifi interno de MediaTek (wmt_drv + wlan_gen4m) y por qué el BT no
+
+El Note 8 Pro no necesita dongle para el wifi: el MT6785 tiene su propio stack (`gen4m` + `wmt`),
+que en pmOS ya compila y en Kupfer quedó **apagado a propósito** por un símbolo mal puesto. Esta
+sección explica el estado real de esa parte.
+
+### El símbolo que lo apagaba era invisible
+
+`wlan_gen4m.ko` llama a `wireless_send_event()`, y `cfg80211` solo lo exporta con
+`CONFIG_CFG80211_WEXT`. Lo que se había puesto era `CONFIG_WEXT_CORE=y`, que **no existe como
+símbolo de kconfig**: es un símbolo *oculto* (`def_bool y depends on CFG80211_WEXT || WIRELESS_EXT`).
+`make olddefconfig` lo borra sin decir nada, y el build del kernel muere mucho después, en `modpost`:
+
+```
+ERROR: modpost: "wireless_send_event" [.../wlan_gen4m.ko] undefined!
+```
+
+`CONFIG_CFG80211_WEXT=y` es el fix (idéntico al que hizo falta en pmOS). Con eso el stack se
+compila: `wmt_drv.ko`, `wlan_gen4m.ko` y `mtk-vendor-btif.ko`.
+
+De paso, el `extra_config` tenía los mismos símbolos mal escritos que en pmOS, y kconfig los
+descartaba en silencio: `CONFIG_MT76` no existe (es `MT76_CORE`, y `MT76_USB` depende de él, así que
+se caía en cascada), y `MT76X0U`/`MT76X2U` van con la `x` en minúscula.
+
+### El firmware estaba en `/usr/mediatek/`, donde nadie lo ve
+
+`firmware-mediatek-mt6785` movía los directorios del repo a `$pkgdir/usr/`, así que los blobs
+acababan en `/usr/mediatek/`. `request_firmware()` solo busca en `/usr/lib/firmware`, con lo que
+`func_on(WIFI)` no iba a encontrar nada. Ahora van a `/usr/lib/firmware/{mediatek,novatek}/`.
+
+El inventario que pide el driver está completo en ese repo (`mt6785-mainline/firmware`, el mismo
+commit que usa pmaports):
+
+| Fichero | Quién lo pide |
+|---|---|
+| `WMT_SOC.cfg` | `wmt_conf.h` (fallback `WMT.cfg`) |
+| `soc1_0_patch_mcu_2a_1_hdr.bin` | `wmt_dev.c` |
+| `soc1_0_ram_mcu_2a_1_hdr.bin` | `wmt_ctrl.c` |
+| `soc1_0_ram_wifi_2a_1_hdr.bin` | `wmt_ctrl.c` |
+| `soc1_0_ram_bt_2a_1_hdr.bin` | `wmt_ctrl.c` |
+| `WIFI_RAM_CODE_soc1_0_2a_1.bin` | `connacConstructFirmwarePrio()` (gen4m) |
+
+El `2a` del nombre no es casualidad: se compone como `<prefijo>_<CFG_WIFI_IP_SET=2><flavor><eco>.bin`
+y `kalGetFwFlavor()` en `os/linux/plat/mt6785/plat_priv.c` devuelve `'a'`. Si el kernel pidiera otro,
+se prueban en orden `..._2a_1.bin`, `..._2a_1`, `WIFI_RAM_CODE_soc1_0`, `WIFI_RAM_CODE_soc1_0.bin`.
+
+Dos ficheros que **no** hacen falta: `wifi.cfg` y `txpowerctrl.cfg` son opcionales (el driver
+prueba rutas de Android y sigue sin error), y el EEPROM (`EEPROM_MT<chip_id>.bin`) no se
+proporciona a propósito, porque si no lo encuentra cae al **modo eFuse**, que es lo normal en un
+móvil: la calibración está en el eFuse del SoC, no en un fichero.
+
+Los `.zst` no hay que descomprimirlos: el config base del kernel es el de pmaports y ya trae
+`CONFIG_FW_LOADER_COMPRESS_ZSTD=y`.
+
+### Encenderlo: no hay "starter", hay que escribir en un nodo
+
+El kernel vendor arranca el wifi desde userspace con un launcher que no existe en ningún árbol de
+fuentes. Lo que sí hay es `/dev/wmtWifi`, un nodo misc que crea `wmt_drv` (dentro,
+`wmt_wifi_trigger.c`): escribir `'1'` llama a `mtk_wcn_wmt_func_on(WMTDRV_TYPE_WIFI)`, que enciende
+connsys, arma el WFSYS y lanza el probe del gen4m → aparece `wlan0`. El propio autor del fichero lo
+marca como **RUNTIME-UNPROVEN**.
+
+`device-mt6785-xiaomi-begonia` instala ahora `mediatek-wifi.service` (habilitada por symlink en
+`multi-user.target.wants`) con este orden, que **importa**:
+
+1. `mtk-vendor-btif` → su `platform_driver` enlaza con `btif@1100c000`
+2. `wmt_drv` → crea `/dev/wmtWifi`
+3. `wlan_gen4m` → registra el probe del WLAN
+4. `printf 1 > /dev/wmtWifi` → `wmt_dev_set_hif_btif()` y luego `func_on(WIFI)`
+
+El btif va primero porque el propio write llama a `wmt_dev_set_hif_btif()` para registrar el BTIF
+como transporte STP: sin el módulo cargado, `stp_init` se queda sin hif info. Y es `printf` y no
+`echo` porque el nodo lee **un** carácter.
+
+Los `platform_device` (`wifi@18000000`, `consys@18002000`, `btif@1100c000`) ya existen desde
+`of_platform_populate`, así que con `modprobe` basta. En el DTS de pmaports ya está todo (los 12
+`reg` de consys en el orden que espera `consys_read_reg_from_dts`, la memoria reservada
+`consys_reserved` de 4 MB y el `shared-dma-pool` `wifi_mem` de 3 MB); lo único que hay que
+mantener apagado es `wmac@18000000`, porque colisiona con el stack.
+
+`mtk-wifi-test.sh` (en la raíz del repo) es el script de diagnóstico para el móvil: comprueba
+módulos, firmware, nodos, carga en ese orden, dispara el trigger y vuelca el `dmesg` relevante.
+
+### El Bluetooth no es viable con este port
+
+`mtk-vendor-btif.ko` compila y enlaza, pero **no registra ningún HCI**: no hay `hci_register_dev`
+en `drivers/misc/mediatek/btif/`. Ese módulo solo transporta el tráfico de control del WMT al
+MCU de conectividad, igual que haría un HIF. Para tener un `hci0` haría falta un driver HCI nuevo
+que hable por BTIF; el único driver HCI de MediaTek del árbol, `btmtkuart.c`, es para el UART de
+routers (MT7622, MT7663u, MT7668u) y begonia no tiene UART con el MCU de BT. La otra vía sería el
+userspace vendor `mtk_bt_stack`, que no está disponible.
+
+**Lo que sí funciona para BT: un dongle USB** (`btusb` con RTL8821C o similar), igual que el wifi
+por dongle: los drivers de USB están en el `extra_config` y el soporte de BT (`CONFIG_BT_HCIBTUSB`)
+está compilado.
+
 ## Notas de CI
 
 - El build usa el wrapper **Docker** de kupferbootstrap (`type = "docker"`): construye
@@ -448,6 +549,43 @@ fastboot reboot
 
 > Kupfer no gestiona vbmeta/dtbo: los pasos extra son obligatorios y estándar en begonia.
 > `vbmeta.img` = `avbtool make_vbmeta_image --flags 2 --padding_size 2048`.
+
+### `fastboot` se carga la imagen entera en RAM: no flashees los 6,7 GB en crudo
+
+El `fastboot` de AOSP (`load_sparse_file()`) hace `malloc(total_sz)` y lee el fichero **completo**
+en memoria, tanto si es sparse como si no. En una máquina normal esto mata el proceso:
+
+```
+kupfer-flash.service: systemd-oomd killed 4 process(es) in this unit.
+Main process exited, code=killed, status=9/KILL
+Failed with result 'oom-kill'.
+Consumed 22.790s CPU time over 27.175s wall clock time, 4.7G memory peak, 3.9G memory swap peak.
+```
+
+No es el OOM killer del kernel ni un límite de cgroup, es **`systemd-oomd`**, que mata por presión
+de memoria en el slice del usuario aunque el cgroup tenga `memory.max=max`. Pasa igual con y sin
+`-S 100M` (y `ManagedOOMPreference=avoid` tampoco lo evita), así que el culpable es el `malloc`, no
+el flag. Por eso en pmOS nunca pasa: su imagen es de 1-2 GB y cabe de sobra.
+
+La solución es **preconvertir la imagen** y flashear el `.simg`: con un fichero ya en formato sparse,
+`fastboot` solo lee la cabecera e itera chunks, con lo que la memoria se queda en megabytes.
+
+```sh
+img2simg run2/mt6785-xiaomi-begonia-plasma-mobile-root.img root.simg   # 7,18 GB -> 6,02 GB
+fastboot flash userdata root.simg        # SIN -S
+```
+
+Además, si el proceso te muere a mitad, lánzalo **fuera del cgroup de la terminal** (la pestaña de
+Konsole mata sus hijos cuando se reinicia):
+
+```sh
+systemd-run --user --unit=kupfer-flash --collect \
+  bash -lc './flash-final.sh --yes > flash-final.log 2>&1; echo "EXIT=$?" >> flash-final.log'
+```
+
+`flash-final.sh` valida tamaños y hashes, comprueba `LABEL=kupfer_root` (con `blkid`, que no
+entiende sparse, sobre la imagen cruda) y, sin `--yes`, solo imprime el plan y sale con 0 sin tocar
+nada.
 
 ## Build en GitHub Actions
 
