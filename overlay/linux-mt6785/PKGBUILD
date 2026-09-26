@@ -17,6 +17,11 @@ makedepends=(
     dtc
     cpio
     python
+    # objtool lo necesita para CONFIG_UNWINDER_ORC (=y en defconfig de arm64):
+    # tools/objtool compila <gelf.h> y enlaza -lelf, y base-devel no trae elfutils.
+    # El APKBUILD de pmaports equivalente lleva elfutils-dev por el mismo motivo.
+    libelf
+    perl
     # El config de pmaports deja CONFIG_MODULE_SIG=y con
     # MODULE_SIG_KEY="certs/signing_key.pem", asi que el kernel genera una clave
     # RSA al vuelo y firma cada modulo con scripts/sign-file. Sin openssl el
