@@ -7,7 +7,10 @@ dispositivos son Qualcomm: msm8916/8953/sdm670/sdm845).
 Kupfer: *"to Arch what postmarketOS is to Alpine"* — derivada de Arch Linux ARM, infraestructura
 heredada de pmOS (`deviceinfo`, `kupferbootstrap`), boot vía Android boot.img (`aboot`).
 
-Base elegida: rama **`main`** (estable) del repo oficial `kupfer/packages/pkgbuilds`.
+Base elegida: rama **`dev`** de `gitlab.com/kupfer/packages/pkgbuilds`, no `main`. Motivo: `main` no
+tiene el flavour `flavour-plasma-mobile` ni el split de paneles, que es justamente lo que se quiere
+flashar. `dev` es la rama donde upstream desarrolla, así que este port va a corde con lo que la
+comunidad.mergea primero.
 
 ---
 
@@ -16,10 +19,26 @@ Base elegida: rama **`main`** (estable) del repo oficial `kupfer/packages/pkgbui
 | Etapa | Estado |
 |---|---|
 | Investigación (arquitectura Kupfer + datos del device) | ✅ |
-| PKGBUILDs de device / kernel / firmware | 🔨 en progreso |
-| Parche `update-bootimg.sh` (header v2 + recovery_dtbo) | 🔨 en progreso |
-| Build imagen Plasma Mobile (GHA, base `main`) | ⏳ pendiente |
+| Investigación de precedentes MTK / no-Qualcomm en Kupfer | ✅ |
+| PKGBUILDs de device / kernel / firmware | ✅ |
+| Parche `update-bootimg.sh` (header v2 + recovery_dtbo) | ✅ |
+| Build imagen Plasma Mobile (GHA, base `dev`) | ⏳ en curso |
 | Flasheo y verificación en device | ⏳ pendiente |
+
+## Investigación: no hay ningún port MediaTek que nos preceda
+
+Se revisó el estado real del proyecto antes de escribir nada, para saber si existía una guía:
+
+- **24 dispositivos** en `dev`, **todos Qualcomm** (msm8916, msm8953, sdm670, sdm845).
+- De ~100 merge requests, **cero de MediaTek**.
+- De ~61 branches del repo de pkgbuilds, **ninguna de MediaTek**.
+- Lo único no-Qualcomm son 2 drafts de **Exynos** (MR 159 / 162, Nexus 10), **cerrados sin
+  mergear**. El motivo declarado en el hilo son problemas de **armv7h**, no el SoC: begonia es
+  `aarch64`, así que esa razón no aplica.
+
+Conclusión: **no hay guía previa, somos de verdad el primer port MTK de Kupfer.** El build con más
+probabilidad de fallar es este, no por culpa del MediaTek en sí sino porque nadie recorrió antes
+los mismos pasos. Contacto para dudas: Matrix, espacio `#kupfer-community`.
 
 ## Contexto del device
 
@@ -36,7 +55,7 @@ Base elegida: rama **`main`** (estable) del repo oficial `kupfer/packages/pkgbui
   (`nt36672a_begonia_tianma.bin.zst` bajo el nombre csot) — ver commit del port.
 - WiFi/BT SoC: precisa rebuild con rama `begonia-conn-wifi`.
 
-## Dependencias del port (rama `main`)
+## Dependencias del port (rama `dev`)
 
 PKGBUILDs nuevos (repos de Kupfer):
 
@@ -46,17 +65,17 @@ PKGBUILDs nuevos (repos de Kupfer):
 | `linux/linux-mt6785` | `linux/` | kernel `mt6785-mainline/linux`, Image.gz + dtbs |
 | `firmware/firmware-mediatek-mt6785` | `firmware/` | blobs conectividad MTK + novatek + rtl |
 
-Parche a paquete existente:
-
-| PKGBUILD | Cambio |
-|---|---|
-| `boot/boot-android-bootimg-updater` | añadir soporte header_version ≥ 2 (ya en `dev`, backport a `main`) y `--recovery_dtbo` |
+Sobre el parche a `boot/boot-android-bootimg-updater`: **ya no hace falta.** Se escribió cuando la
+base era `main`, que generaba header v0 con el DTB concatenado. Al cambiar a `dev` se comprobó que
+`dev` ya trae el branching por `header_version` y el soporte de `--recovery_dtbo`, y que el
+`update-bootimg.sh` de nuestro overlay es **byte a byte idéntico** al de `dev` @ `3df1d56`. Se deja
+el overlay igualmente, como copia de seguridad: si upstream lo revierte, el port no se rompe en
+silencio.
 
 ### Gaps detectados (todo el detalle en `docs/PORT.md`)
 
-1. `update-bootimg.sh` en `main` genera header v0 + DTB appended (concatenado). Begonia exige
-   **header v2** (DTB separado + `--recovery_dtbo /boot/empty.dtbo`). → backport del branching
-   por `header_version` desde `dev` + parámetro custom args.
+1. Begonia exige **header v2** (DTB separado + `--recovery_dtbo /boot/empty.dtbo`). Resuelto con
+   `deviceinfo_header_version="2"` y `deviceinfo_recovery_dtbo`, apoyándose en el soporte de `dev`.
 2. Kernel cmdline `bootopt=64S3,32N2,64N2` → `deviceinfo_kernel_cmdline`.
 3. DTB path → `deviceinfo_dtb="mediatek/mt6785-xiaomi-begonia"`.
 4. Módulos de display/táctil en initramfs real → `mkinitcpio.conf.d` del device
@@ -78,8 +97,16 @@ Parche a paquete existente:
   `makepkg: command not found`).
 - `DOCKER_BUILDKIT=1` es obligatorio: el `Dockerfile` upstream usa `RUN --mount=type=bind`
   y `ADD --link`, que requieren BuildKit.
+- `registry.gitlab.com/kupfer/kupferbootstrap` **no es pullable anónimamente** (302 → sign_in), así
+  que el workflow construye la imagen antes de usarla. Eso calienta además las capas en la cache
+  de BuildKit.
 - Las invocaciones van envueltas en `script -qec` porque el wrapper hace `docker run -it`
   y los runners de Actions no tienen TTY (`the input device is not a TTY`).
+- El TOML se valida contra el esquema de kupferbootstrap **antes** de arrancar el build, y con un
+  chequeo de tipos extra: `Config.fromDict(validate=True)` no distingue `True` de `1` porque en
+  Python `True` es un `int` válido, y ese agujero dejó pasar dos bugs de tipo seguidos
+  (`clean_mode` como string, `parallel_downloads` como bool) que rompieron más tarde, dentro de
+  pacman, con `invalid value for 'ParallelDownloads' : 'True'`.
 
 ## Artefactos del build
 
@@ -108,10 +135,11 @@ Los builds pesados van a GHA (evita OOM en la máquina local).
 
 ## Roadmap
 
-- [ ] Port PKGBUILDs y parche boot-img (branch `begonia` del fork pkgbuilds)
-- [ ] Build imagen Plasma Mobile en GHA (base `main`)
+- [ ] Port PKGBUILDs y overlay de boot-img (rama `begonia` del fork pkgbuilds)
+- [ ] Build imagen Plasma Mobile en GHA (base `dev`)
 - [ ] Flasheo + verificación (panel Tianma, touch, WiFi/Bluetooth dongles, Plasma)
-- [ ] MR upstream a `kupfer/packages/pkgbuilds` (rama main/dev)
+- [ ] MR upstream a `kupfer/packages/pkgbuilds` (rama `dev`) — **con informe de qué funciona, qué
+      no, y qué no se probó**, que es lo que pide la contribución
 - [ ] Replicar método táctil tianma (pmOS) documentado
 
 ## Referencias
