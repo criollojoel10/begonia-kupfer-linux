@@ -283,6 +283,38 @@ jobs:
             || { echo "::error::pkgrel del boot updater debe ser 2 para ganar al prebuilt"; exit 1; }
           echo "boot updater: se construira localmente (pkgrel=2 != prebuilt 0.5-1)"
 
+      - name: Build cross toolchain (x86_64)
+        working-directory: kupferbootstrap
+        run: |
+          # EL paso que faltaba, y que el CI de upstream hace explicitly:
+          #   kupferbootstrap -v packages build --arch 'x86_64' cross/*/PKGBUILD
+          # (primera linea de `script:` en kupfer/packages/pkgbuilds .gitlab-ci.yml).
+          #
+          # Por que es imprescindible: el toolchain de cruce no viene de Arch, lo
+          # aporta el pkgbuild local `cross/aarch64-unknown-linux-gnu-bin`
+          # (ALARM x-tools 14.1.1, arch=(x86_64)), que *proporciona* el nombre
+          # `aarch64-unknown-linux-gnu-gcc`. Ese pkgbuild no lo declara ningun
+          # paquete como dependencia, asi que la cadena de dependencias de
+          # `image build` nunca lo mete, y el repo local x86_64/cross queda
+          # vacio (init_local_repo() crea un db.tar.xz de cero).
+          # Al compilar un paquete `_mode=cross`, packages/build.py:735 hace
+          #   pacman -S ... aarch64-unknown-linux-gnu-gcc
+          # con allow_fail=True (default), asi que el "target not found" se
+          # come en silencio y solo revienta despues, en make olddefconfig, como
+          # `C compiler 'aarch64-unknown-linux-gnu-gcc' not found`.
+          # Upstream no lo nota porque todos sus paquetes aarch64 llegan como
+          # prebuilt de gitlab.com/kupfer/packages/prebuilts y no se compilan.
+          # Nosotros si compilamos (kernel, firmware, device, boot updater).
+          #
+          # `--arch x86_64` es obligatorio: sin el, packages/cli.py:116 usa la
+          # arch del device (aarch64) y el paquete se rechaza por arch.
+          script -qec ".venv/bin/kupferbootstrap -v packages build --arch x86_64 cross/aarch64-unknown-linux-gnu-bin" /dev/null
+          # Falla aqui y legible si el paquete no acaba en el repo local.
+          ls -l "${{ steps.paths.outputs.cache_dir }}/packages/x86_64/cross/" \
+            | grep -q 'aarch64-unknown-linux-gnu-bin-.*\.pkg\.tar' \
+            || { echo "::error::el toolchain aarch64 no esta en el repo local x86_64/cross"; exit 1; }
+          echo "toolchain aarch64 presente en el repo local"
+
       - name: Build image
         working-directory: kupferbootstrap
         run: |
