@@ -63,12 +63,10 @@ jobs:
             android-tools-adb android-tools-fastboot
 
       - name: Checkout kupferbootstrap
-        uses: actions/checkout@v4
-        with:
-          repository: kupfer/kupferbootstrap
-          ref: dev
-          path: kupferbootstrap
-          fetch-depth: 1
+        run: |
+          # kupferbootstrap vive en GitLab, no en GitHub: actions/checkout no sirve.
+          git clone --depth 1 --branch dev \
+            https://gitlab.com/kupfer/kupferbootstrap.git kupferbootstrap
 
       - name: Setup Python venv for kupferbootstrap
         working-directory: kupferbootstrap
