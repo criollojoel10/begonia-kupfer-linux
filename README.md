@@ -65,12 +65,10 @@ PKGBUILDs nuevos (repos de Kupfer):
 | `linux/linux-mt6785` | `linux/` | kernel `mt6785-mainline/linux`, Image.gz + dtbs |
 | `firmware/firmware-mediatek-mt6785` | `firmware/` | blobs conectividad MTK + novatek + rtl |
 
-Sobre el parche a `boot/boot-android-bootimg-updater`: **ya no hace falta.** Se escribió cuando la
-base era `main`, que generaba header v0 con el DTB concatenado. Al cambiar a `dev` se comprobó que
-`dev` ya trae el branching por `header_version` y el soporte de `--recovery_dtbo`, y que el
-`update-bootimg.sh` de nuestro overlay es **byte a byte idéntico** al de `dev` @ `3df1d56`. Se deja
-el overlay igualmente, como copia de seguridad: si upstream lo revierte, el port no se rompe en
-silencio.
+Sobre el parche a `boot/android-bootimg-updater`: hace falta, y hace falta más de lo que parecía.
+`dev` sí trae el branching por `header_version` en `update-bootimg.sh`, pero **no menciona `dtbo` en
+absoluto** (0 coincidencias en todo el repo), así que la rama header v2 construye el bootimg sin
+`--recovery_dtbo`. El overlay añade ese flag. Detalle en "El overlay del boot updater" más abajo.
 
 ### Gaps detectados (todo el detalle en `docs/PORT.md`)
 
@@ -80,8 +78,13 @@ silencio.
    y además hace falta el fichero `empty.dtbo`. Ver "El overlay del boot updater" más abajo.
 2. Kernel cmdline `bootopt=64S3,32N2,64N2` → `deviceinfo_kernel_cmdline`.
 3. DTB path → `deviceinfo_dtb="mediatek/mt6785-xiaomi-begonia"`.
-4. Módulos de display/táctil en initramfs real → `mkinitcpio.conf.d` del device
-   (`lm36274_bl, lm363x-regulator, novatek-nvt-ts-spi, panel-novatek-nt36672a, ti-lmu`).
+4. Módulos de display/táctil en el initramfs. Los cinco existen como `=m` en el config de
+   pmaports, así que el initramfs los lleva solo con declarar
+   `deviceinfo_modules_initfs` (los tomamos del `modules-initfs` de pmaports, no los repetimos a
+   mano): `boot/mkinitcpio-kupfer-hooks/mkinitcpio-overwrite.sh` prepende
+   `deviceinfo_modules_initfs` a `MODULES=` de `/etc/mkinitcpio.conf` antes de que corra el
+   `mkinitcpio` del hook `90-linux.hook`. El `mkinitcpio.conf.d/xiaomi-begonia.conf` del device
+   se deja como red de seguridad, no como mecanismo.
 5. `vbmeta` (flags=2) + `erase dtbo`: Kupfer no los flashea — pasos fastboot manuales extra.
 6. Primer SoC MTK: no hay stack modem (igual que pmOS mainline, sin modem funcional).
 7. Firmwares: `mediatek/` conectividad (7 blobs), `novatek/nt36672a_begonia_tianma.bin`, y
@@ -135,6 +138,76 @@ echo '/dts-v1/; / {};' | dtc -I dts -O dtb -o empty.dtb
 mkdtboimg create empty.dtbo empty.dtb   # -> 136 bytes, sha256 f72e1df5…
 ```
 
+## El toolchain de cruce: el fallo que nobody de upstream se llega a ver
+
+Este es el hallazgo que rompió el build, y merece su propia sección porque **el error que sale no
+señala la causa**.
+
+Al compilar un paquete `_mode=cross` con `crosscompile=true`, `packages/build.py:729-737` calcula
+
+```python
+cross_deps = deps + CROSSDIRECT_PKGS + [f"{GCC_HOSTSPECS[native][arch]}-gcc"]
+native_chroot.try_install_packages(cross_deps)
+```
+
+y lo pasa **sin `allow_fail=False`**. El default de `try_install_packages`
+(`chroot/abstract.py:535-558`) es `allow_fail=True`, así que el `error: target not found:
+aarch64-unknown-linux-gnu-gcc` se traga en silencio y el build sigue sin compilador. Lo que sale,
+muchos minutos después, es:
+
+```
+make[1]: aarch64-unknown-linux-gnu-gcc: No such file or directory
+scripts/Kconfig.include:40: C compiler 'aarch64-unknown-linux-gnu-gcc' not found
+make[2]: *** [scripts/kconfig/Makefile:85: olddefconfig] Error 1
+```
+
+Tres cosas se suman para que ese nombre no exista:
+
+1. El paquete `aarch64-unknown-linux-gnu-gcc` **no existe**. Lo que existe es el pkgbuild local
+   `cross/aarch64-unknown-linux-gnu-bin` (los binarios x-tools de ArchlinuxARM, 14.1.1,
+   `arch=(x86_64)`), que lo *proporciona* vía `provides=`.
+2. **Ningún PKGBUILD de todo el repo lo declara como dependencia** (grep included), así que la
+   cadena de dependencias de `image build` nunca lo mete.
+3. El `pacman.conf` del chroot (`chroot/abstract.py:420-447`) solo lleva `kupfer_local` + los repos
+   de kupfer como `file://` + core/extra. El repo kupfer `cross` remoto no está, y el repo local
+   `x86_64/cross` lo crea `init_local_repo()` con un `db.tar.xz` **de cero**.
+
+Upstream no se entera porque **todos** sus paquetes aarch64 llegan como prebuilt de
+`gitlab.com/kupfer/packages/prebuilts` y no se compilan nunca. Nosotros sí compilamos cuatro
+(kernel, firmware, device, boot updater), y en cuanto uno es `_mode=cross` reventamos.
+
+El fix es el primer `script:` de la CI de upstream
+(`kupfer/packages/pkgbuilds/.gitlab-ci.yml`), que la documentación nunca menciona:
+
+```sh
+kupferbootstrap -v packages build --arch 'x86_64' $(echo cross/*/PKGBUILD | xargs -n1 dirname | xargs)
+```
+
+`--arch x86_64` es **obligatorio**: sin él `packages/cli.py:116` usa la arch del device (aarch64) y
+el paquete se rechaza por `arch=(x86_64)`. Con `--arch x86_64` y siendo el host x86_64,
+`foreign_arch=False` (`config.runtime.arch` es el arch del host, `os.uname().machine`, no el del
+device), así que se compila en el chroot x86_64 nativo: solo descarga y reempaqueta. El paso del
+workflow comprueba después que el `.pkg.tar.xz` ha aparecido en el repo local, porque un
+`try_install_packages` que falla en silencio no falla en ninguna parte.
+
+## Makedepends y config del kernel: lo que el entorno de build no trae
+
+El contenedor de kupferbootstrap es `FROM archlinux:base-devel` más lo que instala su Dockerfile
+(python, git, rsync, parted, android-tools, openssh…). `base-devel` no trae `zstd`, ni `openssl`,
+ni `libelf`. El config de pmaports usa tres cosas que los necesitan:
+
+| Qué | Por qué | Arreglo |
+|---|---|---|
+| `openssl` | `CONFIG_MODULE_SIG_ALL=y` genera una clave RSA al vuelo y firma cada módulo con `scripts/sign-file`, que llama a `openssl` | `openssl` en `makedepends` |
+| `libelf` | `CONFIG_UNWINDER_ORC=y` (defconfig de arm64) hace que `tools/objtool` compile `<gelf.h>` y enlace `-lelf`. El APKBUILD de pmaports equivalente lleva `elfutils-dev` por lo mismo | `libelf` en `makedepends` |
+| `CONFIG_MODULE_COMPRESS_ZSTD=y` | `modules_install` invoca el binario `zstd`; sin él, `Error 127` y el kernel no se empaqueta | desactivado en `extra_config` |
+
+No comprimir módulos es además lo que hace el propio kernel de Arch, y tiene una ventaja aquí: el
+initramfs no tiene que descomprimir `.ko.zst` en un UFS lentísimo. Si alguna vez se quiere volver a
+comprimir, el sitio es `makedepends`, no el config.
+
+`perl` también está en `makedepends` por `scripts/` y por `objtool`.
+
 ## Notas de CI
 
 - El build usa el wrapper **Docker** de kupferbootstrap (`type = "docker"`): construye
@@ -152,6 +225,30 @@ mkdtboimg create empty.dtbo empty.dtb   # -> 136 bytes, sha256 f72e1df5…
   Python `True` es un `int` válido, y ese agujero dejó pasar dos bugs de tipo seguidos
   (`clean_mode` como string, `parallel_downloads` como bool) que rompieron más tarde, dentro de
   pacman, con `invalid value for 'ParallelDownloads' : 'True'`.
+- La documentación oficial (`kupfer.gitlab.io/kupferbootstrap/main/usage/`) **no menciona el paso de
+  `cross/`**. La referencia de cómo se hace un build exitoso es el `.gitlab-ci.yml` de
+  `kupfer/packages/pkgbuilds`, que es lo que se ha seguido aquí. En la doc sí está `packages check`
+  como paso obligatorio de una contribución, y el MR debe decir qué funciona, qué no y qué no se
+  probó.
+
+## Lo que la doc oficial sí cubre (y lo que no)
+
+Revisada entera antes de escribir los PKGBUILDs, por si existía un camino ya trillado:
+
+- `usage/porting/` — device/kernel/firmware van en `device/`, `linux/`, `firmware/`. `_mode=host`
+  por defecto; `_mode=cross` solo para kernels. `_nodeps=true` para paquetes que no deben arrastrar
+  dependencias. `packages check` obligatorio. Solo hay bootloader `aboot`.
+- `usage/quickstart/` — `config init` → `packages update` → `image build` → `image flash abootimg`
+  && `image flash full userdata`.
+- `usage/faq/` — `packages build [--force] [--arch $target_arch] <repo>/<pkgbase>`.
+- `usage/install/` — wrapper `docker` si no estás en Arch (aquí obligatorio, no opcional).
+- `cli/kupferbootstrap.image/` — `image build` usa repos locales y, para lo que falte, "required
+  packages will be built or preferably downloaded from HTTPS repos". De ahí el `pkgrel=2` del boot
+  updater: mientras el nombre coincida con el del prebuilt, gana el prebuilt.
+
+De `usage/porting/` sale además que `packages build` acepta **rutas relativas al dir de
+pkgbuilds** (`cross/crossdirect` es el ejemplo que dan), que es justo la forma que necesita el paso
+del toolchain.
 
 ## Artefactos del build
 

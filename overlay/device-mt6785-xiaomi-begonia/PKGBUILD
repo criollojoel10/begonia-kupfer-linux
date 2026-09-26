@@ -33,12 +33,14 @@ depends=(
 _commit=6c223d3
 source=(
     https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/${_commit}/device/testing/device-xiaomi-begonia/deviceinfo
+    https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/${_commit}/device/testing/device-xiaomi-begonia/modules-initfs
     xiaomi-begonia.conf
     machine-info
     empty.dtbo
 )
 sha256sums=(
     e951e23dda716ab7ef25f41eac6f7368d0d69ab423442ca9aba0c833556af41e
+    7c42356f4d8963a925bf996d6dc44544146247c2cf8c30049f1740e931105913
     ef6618c08e7eed7170b46441109f32d68e006a3a42fb89f8d86db15b70a8e4e6
     7b7f69c23f35c956b628ef6eedc6fd59f0688b8c310ed0429a24a89bfac43ae7
     f72e1df52c33bde1676863a21b3e7f8c3cb9a21b8ed7addefe2ac0eb8cce0635
@@ -63,12 +65,20 @@ deviceinfo_recovery_dtbo="/boot/empty.dtbo"
 deviceinfo_partitions_data="/dev/disk/by-partlabel/userdata"
 deviceinfo_partitions_microsd="/dev/mmcblk0"
 EOF
-    curl -sSL "https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/6c223d3/device/testing/device-xiaomi-begonia/modules-initfs" \
-        > "$srcdir"/modules-initfs
+    # modules-initfs viene por source=() y con su sha256, no por curl dentro de
+    # package(): con `curl -sSL` y sin -f, un 404 guardaria el HTML de error en el
+    # fichero y la linea de abajo lo inyectaria tal cual en
+    # deviceinfo_modules_initfs, con lo que mkinitcpio pediria modulos que no
+    # existen. Asi el error sale aqui, en la descarga, y no en el arranque.
+    grep -q 'novatek-nvt-ts-spi' "$srcdir"/modules-initfs \
+        || { echo "modules-initfs de pmaports no contiene el stack de panel/tactil" >&2; return 1; }
+    # paste -sd' ' une las lineas con un unico espacio y sin dejar ninguno al
+    # final. Con `tr '\n' ' '` quedaria un espacio colgante que update-bootimg.sh
+    # convierte en una coma final en `earlymodules=` de la linea de comandos.
     cat >>"$srcdir"/deviceinfo_ <<EOF
 
 # Panel y tactil: sin esto en el initramfs no hay imagen en absoluto.
-deviceinfo_modules_initfs="$(cat "$srcdir"/modules-initfs | tr '\n' ' ')"
+deviceinfo_modules_initfs="$(paste -sd' ' "$srcdir"/modules-initfs)"
 EOF
     install -Dm644 "$srcdir"/deviceinfo_ "$pkgdir"/etc/kupfer/deviceinfo
 
