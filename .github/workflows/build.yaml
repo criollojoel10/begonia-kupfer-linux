@@ -410,6 +410,17 @@ jobs:
             "${{ steps.paths.outputs.images_dir }}/"
           sudo umount "$MNT"
           sudo losetup -d "$LOOP"
+          # mkinitcpio genera el initramfs con umask 077, de modo que el cp con
+          # sudo lo deja como root con modo 600 y el usuario del runner no
+          # puede ni leerlo. Sin esto, gzip responde "Permission denied" y el
+          # check de abajo da los 5 modulos por ausentes aunque esten dentro
+          # (falso positivo en el run 36252944105).
+          sudo chown "$(id -u):$(id -g)" \
+            "${{ steps.paths.outputs.images_dir }}/aboot.img" \
+            "${{ steps.paths.outputs.images_dir }}/initramfs-linux.img"
+          sudo chmod 0644 \
+            "${{ steps.paths.outputs.images_dir }}/aboot.img" \
+            "${{ steps.paths.outputs.images_dir }}/initramfs-linux.img"
           ls -l "${{ steps.paths.outputs.images_dir }}"/aboot.img \
                  "${{ steps.paths.outputs.images_dir }}"/initramfs-linux.img
           # El initramfs es gzip de un CPIO newc: los nombres de los ficheros
@@ -417,11 +428,16 @@ jobs:
           # lsinitcpio. Estos 5 modulos son los del panel y el tactil, y sin
           # ellos la pantalla no se enciende en el primer arranque (por eso
           # van en deviceinfo_modules_initfs).
+          # Se descomprime una sola vez a un fichero: si gzip no puede leer la
+          # imagen, el fallo sale con su propio mensaje en vez de disfrazarse
+          # de "modulos que faltan".
+          gzip -dc "${{ steps.paths.outputs.images_dir }}/initramfs-linux.img" \
+            > /tmp/initrd.cpio
+          ls -l /tmp/initrd.cpio
           MISSING=""
           for m in novatek-nvt-ts-spi ti-lmu lm363x-regulator \
                    panel-novatek-nt36672a lm36274_bl; do
-            gzip -dc "${{ steps.paths.outputs.images_dir }}/initramfs-linux.img" \
-              | grep -aq "$m" || MISSING="$MISSING $m"
+            grep -aq "$m" /tmp/initrd.cpio || MISSING="$MISSING $m"
           done
           if [ -n "$MISSING" ]; then
             echo "::error::faltan modulos en el initramfs:$MISSING"
