@@ -24,7 +24,9 @@ comunidad.mergea primero.
 | Parche `update-bootimg.sh` (header v2 + recovery_dtbo) | ✅ |
 | Toolchain de cruce en el build (lo que faltaba) | ✅ |
 | `mkbootimg` con la división entera arreglada (sin esto no sale `aboot.img`) | ✅ |
-| Build imagen Plasma Mobile (GHA, base `dev`) | ⏳ en curso |
+| Build de la imagen en GHA (base `dev`, 19 steps, 44 min) | ✅ run `36249822052` |
+| `aboot.img` generado con el initramfs completo | ✅ |
+| Los 5 módulos de panel/táctil dentro del initramfs | ✅ comprobado en CI |
 | Flasheo y verificación en device | ⏳ pendiente |
 
 ## Investigación: no hay ningún port MediaTek que nos preceda
@@ -314,6 +316,49 @@ expiradas, no porque haga falta parchear nada aquí. La solución de upstream se
 en el TOML o hacer `pacman-key --populate` al crear los chroots; hoy la `PacmanSection` del esquema
 solo tiene `parallel_downloads`, `check_space` y `repo_branch`. Para el que se lo pregunte: los repos de Kupfer
 ya son `SigLevel: Never` en `repos.yml` y sus prebuilts van sin firmar (su `.sig` da 404).
+
+## Los cuatro `error: command failed to execute correctly` que son ruido
+
+El build del run `36249822052` terminó en verde, pero el log tiene cuatro
+`error: command failed to execute correctly` y eso obliga a decidir si son ruido o no. Todos
+son del **build chroot** (`/chroots/build_aarch64`), ninguno del rootfs, y ninguno toca la imagen
+que se arranca:
+
+| Hook | Mensaje | Por qué es inocuo |
+| --- | --- | --- |
+| 6/8 y 7/8 | `==> ERROR: module not found: 'crypto_lz4'` | El `install/systemd` de mkinitcpio hace `map add_module 'crypto-lzo' 'crypto-lz4'`, y el config de pmaports trae `CONFIG_CRYPTO_LZO=y` pero `# CONFIG_CRYPTO_LZ4 is not set`. Aquí se usa el `/etc/mkinitcpio.conf` **de stock** (el que trae el paquete), no el de Kupfer. |
+| 8/8 | `No deviceinfo found at /etc/kupfer/deviceinfo` | En el build chroot todavía no está instalado el paquete `device`, que se construye después. |
+| 18/31 | `Error connecting: Could not connect` | PackageKit necesita D-Bus, que no existe en un chroot. |
+
+El initramfs que se mete en `aboot.img` es el de la **rootfs**, y ese sí sale limpio, con los hooks
+que escribe el hook `50-mkinitcpio-overwrite` (el paquete `mkinitcpio-kupfer-hooks` sustituye el
+`/etc/mkinitcpio.conf` de stock por uno que no incluye `systemd`):
+
+```
+(17/31) Updating linux initcpios...
+  -> Running build hook: [base] [firmwaresearchpath] [udev] [autodetect] [modconf]
+                         [block] [rootfsdetect] [filesystems] [keyboard] [rootfsresize] [fsck]
+  -> Early uncompressed CPIO image generation successful
+==> Initcpio image generation successful
+```
+
+Por eso el guard del workflow **no** puede buscar `error: command failed to execute correctly`:
+aparece 4 veces por motivos benignos y saltaría en falso. Busca señales positivas
+(`Initcpio image generation successful`, `Generating new aboot.img`) y solo un patrón inconfundible
+(`struct.error`, que es nuestro bug de `mkbootimg`). Los cinco módulos de panel y táctil se
+comprueban sobre el initramfs extraído, no sobre el log.
+
+## La tabla de particiones vive en sectores de 4096 bytes
+
+`image.py:losetup_rootfs_image()` crea el loop device con `losetup -f -b 4096 -P`, y `parted` escribe
+encima una tabla msdos **interpretada en 4096 bytes por sector**. Cualquiera que vuelva a abrir la
+imagen con los 512 por sector por defecto (un `losetup` normal, un `sfdisk`, un `dd` calculado con
+los offsets que devuelva) lee una tabla de particiones equivocada y no encuentra nada. En el primer
+run con éxito, la extracción de `aboot.img` con `dd` + `debugfs` falló por eso, no por permisos.
+
+Por eso el paso de *Build image* monta con `losetup -f --show -b 4096 -P`, y de ahí salen
+`aboot.img` (94 MB) e `initramfs-linux.img` como artefactos propios: permiten reflashear solo el
+boot sin volver a bajar 7 GB.
 
 ## Notas de CI
 

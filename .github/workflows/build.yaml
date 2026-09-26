@@ -295,6 +295,17 @@ jobs:
             || { echo "::error::pkgrel de mkbootimg-git debe ser 3 para ganar al prebuilt (2)"; exit 1; }
           echo "mkbootimg-git: se construira localmente (pkgrel=3 != prebuilt 2)"
 
+      - name: packages check (formato de los PKGBUILD)
+        working-directory: kupferbootstrap
+        run: |
+          # La guia de porting de Kupfer exige `kupferbootstrap packages check`
+          # limpio antes de abrir el MR, y el propio CI de upstream lo corre con
+          # --ci-mode. Son unos segundos (no compila nada) y evita que un
+          # PKGBUILD mal formado llegue a makepkg 20 minutos despues.
+          script -qec ".venv/bin/kupferbootstrap -v packages check --ci-mode \
+            device-mt6785-xiaomi-begonia linux-mt6785 firmware-mediatek-mt6785 \
+            boot-android-bootimg-updater mkbootimg-git" /dev/null
+
       - name: Build cross toolchain (x86_64)
         working-directory: kupferbootstrap
         run: |
@@ -348,30 +359,75 @@ jobs:
             ssh-keygen -t ed25519 -N '' -C 'kupfer-begonia-build' -f ~/.ssh/id_ed25519_kupfer
           ls -l ~/.ssh/id_ed25519_kupfer*
           set -o pipefail
-          script -qec ".venv/bin/kupferbootstrap -v image build --sector-size 4096" /dev/null \
+          script -qec ".venv/bin/kupferbootstrap -v image build --sector-size 4096" /dev/null 2>&1 \
             | tee build-image.log
+          test -s build-image.log || { echo "::error::build-image.log vacio"; exit 1; }
           # El hook 91-android-bootimg-updater se come sus errores: pacman
           # registra un aviso, sigue con los 31 hooks y el build termina "bien"
           # con una imagen sin aboot.img, que no arranca. El unico sitio donde se
-          # ve es el log, asi que se comprueba aqui.
-          if grep -qE 'struct\.error|error: command failed to execute correctly' build-image.log; then
+          # ve es el log.
+          #
+          # OJO: no se puede comprobar con "error: command failed to execute
+          # correctly", porque en el BUILD chroot (aarch64, antes de que existan
+          # el paquete device) salen 4 fallos BENIGNOS:
+          #   * hooks 6/8 y 7/8: mkinitcpio con el /etc/mkinitcpio.conf de stock
+          #     pide el modulo crypto_lz4 (hook systemd) y nuestro config del
+          #     kernel no lo trae -> "==> ERROR: module not found: crypto_lz4".
+          #     El initramfs que se arranca es el de la ROOTFS, que se genera
+          #     con el mkinitcpio.conf que pone kupfer (hooks sin systemd) y
+          #     sale limpio ("Initcpio image generation successful").
+          #   * hook 8/8: "No deviceinfo found at /etc/kupfer/deviceinfo" (aun
+          #     no esta instalado el paquete device en el build chroot).
+          #   * hook 18/31: PackageKit "Error connecting: Could not connect".
+          # Asi que se comprueba lo que TIENE que ser cierto, no lo que no.
+          if grep -aq 'struct\.error' build-image.log; then
             echo "::error::mkbootimg ha fallado generando aboot.img (traza mas arriba)"
             exit 1
           fi
+          grep -aq 'Initcpio image generation successful' build-image.log || {
+            echo "::error::el initramfs de la rootfs no se ha generado bien"; exit 1; }
+          grep -aq 'Generating new aboot.img' build-image.log || {
+            echo "::error::aboot.img no se ha generado"; exit 1; }
           ls -l "${{ steps.paths.outputs.images_dir }}"
-          # Mejorable: sacar aboot.img de la particion boot para subirlo como
-          # artifact y poder flashearla. No es critico, asi que si algo falla
-          # (debugfs, permisos) se avisa y se sigue.
+          # Extraer aboot.img (94 MB) de la particion boot y subirlo como
+          # artifact: permite reflashear solo el boot en segundos en vez de
+          # volver a bajar y flashear la imagen de 7 GB.
+          # IMPORTANTE: la tabla de particiones msdos se creo sobre un loop
+          # device con -b 4096 (image.py: losetup -f -b 4096 -P), asi que
+          # leerla con los 512 bytes por sector por defecto daria offsets
+          # erroneos. Por eso el -b 4096 tambien aqui.
           IMG=$(ls -1 "${{ steps.paths.outputs.images_dir }}"/*-full.img 2>/dev/null | head -1)
-          if [ -n "$IMG" ]; then
-            START=$(sfdisk -J -o Start "$IMG" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["partitiontable"]["partitions"][0]["start"])')
-            SECTORS=$(( $(sfdisk -J -o Size "$IMG" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["partitiontable"]["partitions"][0]["size"])') - 1 ))
-            dd if="$IMG" of=/tmp/p1.img bs=512 skip="$START" count="$SECTORS" status=none
-            (cd /tmp && sudo debugfs -R 'dump /aboot.img aboot.img' p1.img) >/dev/null 2>&1 \
-              && sudo mv /tmp/aboot.img "${{ steps.paths.outputs.images_dir }}/aboot.img" \
-              && echo "aboot.img extraido: $(stat -c%s "${{ steps.paths.outputs.images_dir }}/aboot.img") bytes" \
-              || echo "::warning::no se ha podido extraer aboot.img de $IMG"
+          if [ -z "$IMG" ]; then
+            echo "::error::no se encuentra la imagen full"; exit 1
           fi
+          MNT=/tmp/kupfer-boot
+          sudo mkdir -p "$MNT"
+          LOOP=$(sudo losetup -f --show -b 4096 -P "$IMG")
+          sudo partprobe "$LOOP" || true
+          for i in $(seq 1 30); do [ -e "${LOOP}p1" ] && break; sleep 0.5; done
+          sudo mount -o ro "${LOOP}p1" "$MNT"
+          sudo cp "$MNT/aboot.img" "$MNT/initramfs-linux.img" \
+            "${{ steps.paths.outputs.images_dir }}/"
+          sudo umount "$MNT"
+          sudo losetup -d "$LOOP"
+          ls -l "${{ steps.paths.outputs.images_dir }}"/aboot.img \
+                 "${{ steps.paths.outputs.images_dir }}"/initramfs-linux.img
+          # El initramfs es gzip de un CPIO newc: los nombres de los ficheros
+          # aparecen en claro, asi que se puede comprobar sin cpio ni
+          # lsinitcpio. Estos 5 modulos son los del panel y el tactil, y sin
+          # ellos la pantalla no se enciende en el primer arranque (por eso
+          # van en deviceinfo_modules_initfs).
+          MISSING=""
+          for m in novatek-nvt-ts-spi ti-lmu lm363x-regulator \
+                   panel-novatek-nt36672a lm36274_bl; do
+            gzip -dc "${{ steps.paths.outputs.images_dir }}/initramfs-linux.img" \
+              | grep -aq "$m" || MISSING="$MISSING $m"
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::faltan modulos en el initramfs:$MISSING"
+            exit 1
+          fi
+          echo "initramfs ok: los 5 modulos de panel/tactil estan dentro"
 
       - name: List images
         run: |
