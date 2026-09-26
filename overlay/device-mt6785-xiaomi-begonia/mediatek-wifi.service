@@ -1,0 +1,20 @@
+[Unit]
+Description=MediaTek internal WiFi (begonia, MT6785: wmt_drv + wlan_gen4m)
+# Los modulos los carga el propio script con modprobe, asi que basta con ir
+# detras de systemd-modules-load. Se deja en multi-user.target para no atar el
+# arranque a la red.
+After=systemd-modules-load.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/device-mt6785-xiaomi-begonia/mediatek-wifi.sh
+TimeoutStartSec=120
+# Si falla, reintenta: al arrancar el nodo puede no existir todavia porque el
+# UFS acaba de despertar y el firmware se pide del disco.
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

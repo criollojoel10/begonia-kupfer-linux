@@ -1,7 +1,37 @@
+# Firmware de conectividad y panel del Xiaomi Redmi Note 8 Pro (MT6785).
+#
+# El repositorio es el mismo que usa pmaports (mt6785-mainline/firmware) y ya
+# trae los blobs de conectividad del stack WMT/gen4m, que son los que pide el
+# driver por request_firmware():
+#
+#   WMT_SOC.cfg                    configuracion del WMT (fallback: WMT.cfg)
+#   soc1_0_patch_mcu_2a_1_hdr.bin  parche del firmware del MCU
+#   soc1_0_ram_mcu_2a_1_hdr.bin    firmware del MCU
+#   soc1_0_ram_wifi_2a_1_hdr.bin   firmware de la RAM de wifi
+#   soc1_0_ram_bt_2a_1_hdr.bin     firmware de la RAM de BT
+#   WIFI_RAM_CODE_soc1_0_2a_1.bin  firmware principal del WLAN (connac)
+#   wifi.cfg                       parametros de calibracion (opcional: si no
+#                                  esta, el driver prueba rutas de Android y
+#                                  sigue sin error)
+#
+# El nombre del firmware del WLAN lo construye connacConstructFirmwarePrio() con
+# "%s_%u%s_%u.bin" = <prefijo>_<CFG_WIFI_IP_SET=2><kalGetFwFlavor()><eco>.bin, y
+# kalGetFwFlavor() en os/linux/plat/mt6785/plat_priv.c devuelve 'a'. Por eso el
+# 2a del nombre. Si el kernel askhara otro nombre, se prueban en este orden:
+# ..._2a_1.bin, ..._2a_1, WIFI_RAM_CODE_soc1_0, WIFI_RAM_CODE_soc1_0.bin.
+#
+# El EEPROM (EEPROM_MT<chip_id>.bin) NO hace falta: si el driver no lo encuentra
+# cae al modo eFuse, que es lo normal en un movil (la calibracion esta en el
+# eFuse del SoC, no en un fichero).
+#
+# Importante: los ficheros van a /usr/lib/firmware/, NO a /usr/<vendor>/. El
+# cargador de firmware del kernel solo busca en /usr/lib/firmware (y sus
+# subdirectorios), asi que antes de este cambio el firmware estaba en
+# /usr/mediatek/ y era invisible para el driver.
 _mode=cross
 pkgname=firmware-mediatek-mt6785
 pkgver=0.1
-pkgrel=1
+pkgrel=2
 _arches=specific
 arch=(aarch64)
 license=(custom:Proprietary)
@@ -16,14 +46,11 @@ source=(
 )
 sha256sums=(SKIP)
 
-build() {
-    cd "$srcdir"/firmware
-    mkdir -p usr
-    mv mediatek novatek usr/
-}
-
 package() {
-    cd "$srcdir"/firmware
-    cp -av usr "$pkgdir"/
-    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE" 2>/dev/null || true
+    mkdir -p "$pkgdir/usr/lib/firmware"
+    # mediatek/ = blobs de wifi+BT, novatek/ = firmware del panel y del tactil.
+    cp -a "$srcdir"/firmware/mediatek "$srcdir"/firmware/novatek \
+        "$pkgdir/usr/lib/firmware/"
+    install -Dm644 "$srcdir"/firmware/LICENSE \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

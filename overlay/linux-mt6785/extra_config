@@ -1,24 +1,38 @@
-# Stack WiFi/BT interno MediaTek (begonia-conn-wifi).
+# Stack WiFi/BT interno MediaTek (begonia-conn-wifi, rama del kernel de Dinolek).
 #
-# DESACTIVADO a proposito: wlan_gen4m.ko llama a wireless_send_event(), que solo
-# se compila con CONFIG_WEXT_CORE. Sin esa opcion modpost aborta el kernel con
+# Modulos que produce:
+#   wmt_drv.ko          (connectivity/common)  -> /dev/wmtWifi
+#   wlan_gen4m.ko       (connectivity/wlan/gen4m)
+#   mtk-vendor-btif.ko  (btif, platform_driver "mediatek,btif")
+#
+# wlan_gen4m.ko llama a wireless_send_event(), que cfg80211 solo exporta con
+# CONFIG_CFG80211_WEXT. OJO: el simbolo de kconfig es CFG80211_WEXT, no
+# WEXT_CORE. WEXT_CORE es un simbolo OCULTO (def_bool y depends on CFG80211_WEXT
+# || WIRELESS_EXT), asi que ponerlo a mano no sirve de nada: olddefconfig lo
+# borra y modpost aborta con
 #   ERROR: modpost: "wireless_send_event" [.../wlan_gen4m.ko] undefined!
-# El wifi del hub (TP-Link RTL8192EU via rtl8xxxu, MT7921U via mt76) no depende
-# de este stack, asi que el build de la imagen no debe depender de el.
-# Para experimentally habilitarlo, descomentar y anadir CONFIG_WEXT_CORE=y:
-# CONFIG_WEXT_CORE=y
-# CONFIG_MTK_WMT_FWPORT=m
-# CONFIG_MTK_WMT_DRV=m
-# CONFIG_MTK_WLAN_GEN4M=m
-# CONFIG_MTK_WMT_FWPORT_BTIF=m
-# no dual-define for mediatek,btif node
+# Esto es exactamente lo que se arreglo en el lado postmarketOS (commit 0a7763a).
+CONFIG_CFG80211_WEXT=y
+CONFIG_MTK_WMT_FWPORT=m
+CONFIG_MTK_WMT_DRV=m
+CONFIG_MTK_WLAN_GEN4M=m
+CONFIG_MTK_WMT_FWPORT_BTIF=m
+# El driver BTIF viejo (MTK_BTIF) se deja fuera a proposito: los dos declaran
+# platform_driver con el mismo compatible ("mediatek,btif") y el DT avisa de
+# "no dual-define for mediatek,btif node".
 # CONFIG_MTK_BTIF is not set
+#
+# Limitacion conocida: mtk-vendor-btif.ko NO registra un HCI (no hay
+# hci_register_dev en drivers/misc/mediatek/btif/), solo transporta trafico de
+# control WMT al conn-MCU. El Bluetooth de verdad necesita el userspace vendor
+# mtk_bt_stack, que no esta en el port, asi que BT por BTIF no es viable.
 
 # USB Ethernet dongles (hub begins to device)
 CONFIG_USB_NET_DRIVERS=y
 CONFIG_USB_USBNET=y
 CONFIG_USB_NET_AX8817X=m
 CONFIG_USB_NET_AX88179_178A=m
+# USB_RTL8150 produce el modulo rtl8150.ko (no r8150.ko: el fuente es rtl8150.c).
 CONFIG_USB_RTL8150=m
 CONFIG_USB_RTL8152=m
 CONFIG_USB_NET_CDCETHER=m
@@ -30,14 +44,26 @@ CONFIG_USB_NET_SR9700=m
 CONFIG_USB_NET_SR9800=m
 
 # USB WiFi dongles
+# OJO con las mayusculas: kconfig distingue mayusculas de minusculas y descarta
+# en silencio los simbolos que no existen cuando se hace `make olddefconfig`.
+# El simbolo correcto es MT76_CORE (no existe CONFIG_MT76), y los drivers se
+# llaman MT76x0U / MT76x2U con la x en minuscula.
 CONFIG_WLAN_VENDOR_REALTEK=y
 CONFIG_RTL8XXXU=m
 CONFIG_WLAN_VENDOR_MEDIATEK=y
-CONFIG_MT76=m
+CONFIG_MT76_CORE=m
 CONFIG_MT76_USB=m
-CONFIG_MT76X0U=m
-CONFIG_MT76X2U=m
+CONFIG_MT76x0U=m
+CONFIG_MT76x2U=m
 CONFIG_MT7921U=m
+# Dongles AC de 20-30 EUR (MT8812AU/MT8821AU/MT8822BU) via rtw88.
+CONFIG_RTW88_CORE=m
+CONFIG_RTW88_USB=m
+CONFIG_RTW88_8812AU=m
+CONFIG_RTW88_8821AU=m
+CONFIG_RTW88_8822BU=m
+# Modem 3G/4G USB (el nombre del modulo es sierra_net).
+CONFIG_USB_SIERRA_NET=m
 
 # Bluetooth USB (Realtek RTL8821C / CSR)
 CONFIG_BT=y
