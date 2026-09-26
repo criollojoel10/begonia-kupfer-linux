@@ -17,6 +17,12 @@ makedepends=(
     dtc
     cpio
     python
+    # El config de pmaports deja CONFIG_MODULE_SIG=y con
+    # MODULE_SIG_KEY="certs/signing_key.pem", asi que el kernel genera una clave
+    # RSA al vuelo y firma cada modulo con scripts/sign-file. Sin openssl el
+    # build muere en certs/ con "openssl: command not found". No viene en
+    # base-devel ni en el Dockerfile de kupferbootstrap, hay que declararlo.
+    openssl
 )
 options=(!strip)
 _commit=3a1ea7694219eb2fd513f0e630f2a882eab5c86f
