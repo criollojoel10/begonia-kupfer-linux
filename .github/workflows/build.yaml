@@ -153,6 +153,25 @@ jobs:
           size_extra_mb = ${{ inputs.size_extra_mb }}
           TOML
 
+      - name: Validate config against kupferbootstrap schema
+        working-directory: kupferbootstrap
+        run: |
+          # Falla aqui y no 4 minutos despues si el TOML no encaja con el esquema.
+          .venv/bin/python - <<'PY'
+          import sys
+          if sys.version_info >= (3, 11):
+              import tomllib as toml_reader
+          else:
+              import tomli as toml_reader
+          from kupferbootstrap.config.scheme import Config
+          with open("/home/runner/.config/kupfer/kupferbootstrap.toml", "rb") as f:
+              d = toml_reader.load(f)
+          c = Config.fromDict(d, validate=True, allow_extra=True)
+          p = c.profiles.default
+          print("config ok:", c.profiles.current, p.device, p.flavour)
+          assert p.device == "mt6785-xiaomi-begonia", p.device
+          PY
+
       - name: Initialize pkgbuilds (dev)
         working-directory: kupferbootstrap
         run: |
