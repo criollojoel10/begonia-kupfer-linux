@@ -81,6 +81,31 @@ jobs:
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install -e .
 
+      - name: Disable signature checks in generated chroots
+        working-directory: kupferbootstrap
+        run: |
+          # kupferbootstrap genera el /etc/pacman.conf de cada chroot con
+          # "SigLevel = Required DatabaseOptional" (generator.py), pero nunca
+          # puebla el keyring de esos chroots: el unico .INSTALL que lo hace es
+          # el de archlinux-keyring (pacman-key --populate archlinux), y
+          # archlinuxarm-keyring no se instala en ningun chroot. En cuanto un
+          # paquete del repo alarm aparece, libalpm no encuentra la clave,
+          # --noconfirm contesta "si" por nosotros y dirmngr se va a WKD y al
+          # keyserver: en los runners de GHA eso se cuelga (el run 36244913341
+          # lleva 40+ min clavado en "(218/756) checking keys in keyring" con
+          # el kernel ya compilado). Los repos de Kupfer ya son SigLevel: Never
+          # en repos.yml, asi que esto solo afecta a core/extra/alarm/aur, que
+          # seguimos entrando por HTTPS. El parche va en el clon local porque el
+          # Dockerfile hace ADD src (el source acaba dentro de la imagen).
+          set -euo pipefail
+          GEN=src/kupferbootstrap/generator.py
+          test -f "$GEN" || { echo "::error::no encuentro $GEN"; exit 1; }
+          sed -i 's/^SigLevel    = Required DatabaseOptional$/SigLevel = Never/' "$GEN"
+          grep -q '^SigLevel = Never$' "$GEN" || {
+            echo "::error::el parche de SigLevel no se aplico (puede que upstream lo haya reformateado)";
+            exit 1; }
+          grep -n '^SigLevel' "$GEN"
+
       - name: Prepare cache dirs
         run: |
           mkdir -p "${{ steps.paths.outputs.cache_dir }}"
