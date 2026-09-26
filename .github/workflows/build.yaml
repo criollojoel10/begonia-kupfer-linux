@@ -74,6 +74,29 @@ jobs:
           git clone --depth 1 --branch dev \
             https://gitlab.com/kupfer/kupferbootstrap.git kupferbootstrap
 
+      - name: Fit the boot image in begonia's 64 MiB boot partition
+        working-directory: kupferbootstrap
+        run: |
+          # begonia guarda el kernel en la particion hardware `boot`, que en el
+          # device real es sdc34 = 64 MiB. kupferbootstrap dimensiona el
+          # filesystem de boot con IMG_FILE_BOOT_DEFAULT_SIZE, fijo a "90M" y sin
+          # ninguna clave de deviceinfo para cambiarlo, asi que el boot.img que
+          # produce no cabe y `fastboot flash boot` falla con "too large".
+          #
+          # Nuestro contenido real (medido sobre la imagen del run 36254913777):
+          #   aboot.img 27.7 MiB + initramfs-linux.img 17.0 MiB
+          #   + Image.gz 10.6 MiB + dtb 0.06 MiB + empty.dtbo = 52.8 MiB
+          # 60M deja ~6 MiB de holgura para la metadata de ext2 y para que el
+          # initramfs crezca un poco sin reventar. El patch se aplica al clon
+          # local, que es a la vez el contexto de `docker build` (el Dockerfile
+          # hace ADD src + pip install -e) y el source del venv local, asi que
+          # vale para los dos caminos.
+          sed -i 's/^IMG_FILE_BOOT_DEFAULT_SIZE = "90M"$/IMG_FILE_BOOT_DEFAULT_SIZE = "60M"/' \
+            src/kupferbootstrap/image/image.py
+          grep -q '^IMG_FILE_BOOT_DEFAULT_SIZE = "60M"$' src/kupferbootstrap/image/image.py \
+            || { echo "::error::no se ha podido ajustar IMG_FILE_BOOT_DEFAULT_SIZE"; exit 1; }
+          grep -n 'IMG_FILE_BOOT_DEFAULT_SIZE' src/kupferbootstrap/image/image.py
+
       - name: Setup Python venv for kupferbootstrap
         working-directory: kupferbootstrap
         run: |
@@ -474,6 +497,28 @@ jobs:
         run: |
           ls -lh ${{ steps.paths.outputs.images_dir }} || true
           df -h / | tail -1
+          # La particion `boot` de begonia es 64 MiB: si el boot.img no cabe,
+          # el flasheo falla en el ultimo momento, con el device ya en fastboot.
+          set -euo pipefail
+          IMG_DIR="${{ steps.paths.outputs.images_dir }}"
+          LIMIT=$((64 * 1024 * 1024))
+          for f in "$IMG_DIR"/*-boot.img; do
+            sz=$(stat -c%s "$f")
+            echo "::group::$(basename "$f") = $sz bytes (limite $LIMIT)"
+            [ "$sz" -le "$LIMIT" ] || { echo "::error::el boot.img no cabe en la particion boot de 64 MiB"; exit 1; }
+            echo "cabe ($(( LIMIT - sz )) bytes de margen)"
+            echo "::endgroup::"
+          done
+          # Y el filesystem de boot tiene que tener sitio de sobra para aboot.img.
+          BOOT=$(ls "$IMG_DIR"/*-boot.img | head -1)
+          MNT=/tmp/boot-check
+          sudo mkdir -p "$MNT"
+          sudo mount -o ro,loop "$BOOT" "$MNT"
+          sudo du -sb "$MNT" | awk '{printf "contenido del boot fs: %d bytes\n", $1}'
+          df -B1 --output=avail "$MNT" | tail -1 | awk '{printf "libre dentro del boot fs: %d bytes\n", $1}'
+          sudo test -s "$MNT/aboot.img" || { echo "::error::aboot.img no esta en el boot fs"; exit 1; }
+          sudo umount "$MNT"
+          rmdir "$MNT" || true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
