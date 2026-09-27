@@ -17,6 +17,10 @@ comunidad.mergea primero.
 
 ## Estado
 
+**Build verde.** Run `36310845797` (commit `df7e9c8`, 27-09-2026 09:53→10:34 UTC), flavour
+`plasma-mobile`, runner limpio sin cache: construye la imagen y pasa los 6 checks de
+verificación. Artifact `kupfer-begonia-plasma-mobile` (id `10929910559`).
+
 | Etapa | Estado |
 |---|---|
 | Investigación (arquitectura Kupfer + datos del device) | ✅ |
@@ -25,7 +29,7 @@ comunidad.mergea primero.
 | Parche `update-bootimg.sh` (header v2 + recovery_dtbo) | ✅ |
 | Toolchain de cruce en el build (lo que faltaba) | ✅ |
 | `mkbootimg` con la división entera arreglada (sin esto no sale `aboot.img`) | ✅ |
-| Build de la imagen en GHA (base `dev`, 19 steps, 44 min) | ✅ ver [Notas de CI](#notas-de-ci) |
+| Build de la imagen en GHA (base `dev`, 19 steps, ~50 min) | ✅ run `36310845797` verde, ver [Notas de CI](#notas-de-ci) |
 | `aboot.img` generado con el initramfs completo | ✅ |
 | Los 5 módulos de panel/táctil dentro del initramfs | ✅ comprobado en CI |
 | Firmware de novatek dentro del initramfs (faltaba) | ✅ |

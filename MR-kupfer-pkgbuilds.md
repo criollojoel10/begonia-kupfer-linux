@@ -3,8 +3,11 @@
 Ready to paste. Everything below was written before the first flash, so the "not tested"
 section is honest about what is still unverified on hardware.
 
-PENDIENTE ANTES DE ENVIAR: confirmar el run de CI verde y poner su número en la primera
-balanza de "What works".
+CI status: **green**. Run `36310845797` (commit `df7e9c8`) of
+`.github/workflows/build.yaml` in `criollojoel10/begonia-kupfer-linux`, flavour
+`plasma-mobile`, from a clean runner with no cache, produces the image and passes
+every check listed under "What works" below. Artifact:
+`kupfer-begonia-plasma-mobile` (id 10929910559).
 
 ---
 
@@ -37,8 +40,8 @@ part worth reviewing first.
 
 ### What works
 
-- **Builds green on `dev`**, Plasma Mobile flavour, from a clean runner, in GHA
-  (~45 min; the kernel is the slow part).
+- **Builds green**, Plasma Mobile flavour, from a clean runner, in GHA
+  (run `36310845797`, ~50 min; the kernel is the slow part).
 - **Boot image is correct for this bootloader**: `header_version=2` (DTB as a separate
   segment), `--recovery_dtbo` with a 136-byte `empty.dtbo`, the pmaports load addresses
   (base `0x40078000` + offsets), page size 2048. The aboot of begonia rejects a v0/v1
