@@ -72,7 +72,7 @@ PKGBUILDs nuevos (repos de Kupfer):
 |---|---|---|
 | `device/device-mt6785-xiaomi-begonia` | `device/` | cargo del deviceinfo pmOS a commit fijo |
 | `linux/linux-mt6785` | `linux/` | kernel `mt6785-mainline/linux`, Image.gz + dtbs |
-| `firmware/firmware-mediatek-mt6785` | `firmware/` | blobs conectividad MTK + novatek + rtl |
+| `firmware/mt6785-xiaomi-begonia` | `firmware/` | blobs conectividad MTK + novatek + rtl |
 
 Sobre el parche a `boot/android-bootimg-updater`: hace falta, y hace falta más de lo que parecía.
 `dev` sí trae el branching por `header_version` en `update-bootimg.sh`, pero **no menciona `dtbo` en
@@ -147,6 +147,38 @@ reutilicen los bytes exactos en vez de reinventar el formato. Se regenera con:
 echo '/dts-v1/; / {};' | dtc -I dts -O dtb -o empty.dtb
 mkdtboimg create empty.dtbo empty.dtb   # -> 136 bytes, sha256 f72e1df5…
 ```
+
+### El panel Tianma: el nombre CSOT del DTB tiene que contener el binario Tianma
+
+Este es el detalle que hace que el táctil funcione o no, y **no aparece en ningún log**: el panel
+enciende igual, la imagen se ve bien, y el touch responde con los ejes cruzados.
+
+El DTB de la rama 6.16 (la única que hay para begonia) solo conoce la variante CSOT:
+
+```
+panel@…        compatible = "xiaomi,begonia-csot-nt36672a", "novatek,nt36672a"
+touchscreen@0  firmware-name = "novatek/nt36672a_begonia_csot.bin"
+```
+
+El driver del táctil (`novatek-nvt-ts-spi`) lee `firmware-name` del device tree y se lo pasa tal
+cual a `request_firmware()`. No hay forma de que el kernel pida el otro binario. En una unidad
+**Tianma** hay que servir el binario Tianma bajo el nombre CSOT:
+
+```
+md5sum nt36672a_begonia_tianma.bin.zst = 7d67c2e9167f1a630576c177c1b831f7  (53321 B)
+md5sum nt36672a_begonia_csot.bin.zst  = 52f5e96f84fbdd6cbed2e98790a202df  (53731 B)
+```
+
+Por eso `firmware/mt6785-xiaomi-begonia` declara `_panel=tianma` y copia el binario Tianma encima
+del nombre CSOT al empaquetar. El `mkinitcpio.conf.d/xiaomi-begonia.conf` mete los dos ficheros en
+el initramfs, que es de donde los carga el driver (los módulos de panel y táctil van en
+`earlymodules`).
+
+Con `_panel=csot` se reconstruye para una unidad CSOT sin tocar nada más.
+
+El CI comprueba el **md5 del contenido** del fichero con nombre CSOT, no que el fichero exista:
+los dos nombres existen siempre, así que un `ls` no detectaría nada. En pmOS el mismo bug está
+documentado y la corrección manual está confirmada en hardware sobre este móvil.
 
 ## El toolchain de cruce: el fallo que nobody de upstream se llega a ver
 
@@ -418,7 +450,7 @@ se caía en cascada), y `MT76X0U`/`MT76X2U` van con la `x` en minúscula.
 
 ### El firmware estaba en `/usr/mediatek/`, donde nadie lo ve
 
-`firmware-mediatek-mt6785` movía los directorios del repo a `$pkgdir/usr/`, así que los blobs
+`firmware-mt6785-xiaomi-begonia` movía los directorios del repo a `$pkgdir/usr/`, así que los blobs
 acababan en `/usr/mediatek/`. `request_firmware()` solo busca en `/usr/lib/firmware`, con lo que
 `func_on(WIFI)` no iba a encontrar nada. Ahora van a `/usr/lib/firmware/{mediatek,novatek}/`.
 
@@ -599,8 +631,8 @@ del repo `gitlab.com/kupfer/packages/pkgbuilds` (rama `dev`):
 
 ```
 overlay/linux/mt6785/                    -> linux/mt6785/              (nuevo, kernel)
-overlay/firmware/mediatek-mt6785/        -> firmware/mediatek-mt6785/  (nuevo, blobs)
-overlay/device/mt6785-xiaomi-begonia/     -> device/mt6785-xiaomi-begonia/ (nuevo, device)
+overlay/firmware/mt6785-xiaomi-begonia/   -> firmware/mt6785-xiaomi-begonia/  (nuevo, blobs)
+overlay/device/device-mt6785-xiaomi-begonia/ -> device/device-mt6785-xiaomi-begonia/ (nuevo, device)
 overlay/boot/android-bootimg-updater/    -> boot/android-bootimg-updater/  (modifica upstream)
 overlay/main/mkbootimg-git/              -> main/mkbootimg-git/            (modifica upstream)
 ```
@@ -617,7 +649,7 @@ y no puede divergir de lo que se ha construido en el CI. Los dos directorios que
 (`PKGBUILD` y `update-bootimg.sh`); el resto lo aporta el checkout porque
 `cp -r` fusiona encima.
 
-Los paquetes que se añaden al repo son `linux-mt6785` (kernel), `firmware-mediatek-mt6785`
+Los paquetes que se añaden al repo son `linux-mt6785` (kernel), `firmware-mt6785-xiaomi-begonia`
 (conectividad + panel) y `device-mt6785-xiaomi-begonia` (deviceinfo, initramfs, autostart
 del stack MTK). Los otros dos son parches a paquetes que ya existen y que **necesitan un
 pkgrel más alto** para que se construyan en vez de cogerse el prebuilt:
@@ -627,18 +659,30 @@ pkgrel más alto** para que se construyan en vez de cogerse el prebuilt:
 | `boot-android-bootimg-updater` | `0.5-1` | `0.5-2` | su `update-bootimg.sh` no sabe pasar `--recovery_dtbo` |
 | `mkbootimg-git` | `r254.ba2684e-2` | `r254.ba2684e-3` | su `mkbootimg` calcula mal el tamaño en cabecera v2 (división entera) |
 
-`kupferbootstrap packages check --ci-mode` pasa limpio sobre los cinco paquetes en el
-CI (paso homónimo en `.github/workflows/build.yaml`), que es lo que exige la guía de
-porting.
+`kupferbootstrap packages check --ci-mode` pasa limpio sobre los cinco paquetes. El CI lo corre
+igual (paso homónimo en `.github/workflows/build.yaml`), que es lo que exige la guía de porting.
+El comprobador es un formateador estricto (orden de variables, comillas, indentación de listas) y
+no necesita el chroot, así que también se puede lanzar en local contra un checkout:
+
+```sh
+cp -r overlay/* /ruta/a/pkgbuilds/
+/ruta/a/kupferbootstrap/.venv/bin/kupferbootstrap -v packages check --ci-mode \
+    device-mt6785-xiaomi-begonia linux-mt6785 firmware-mt6785-xiaomi-begonia \
+    boot-android-bootimg-updater mkbootimg-git
+```
 
 ## Abrir el MR
 
-1. `git clone -b dev https://gitlab.com/kupfer/packages/pkgbuilds && cd packages/pkgbuilds`
+1. Fork de `gitlab.com/kupfer/packages/pkgbuilds` y `git clone -b dev <tu fork> && cd pkgbuilds`
 2. `cp -r /ruta/al/port/overlay/* .`
 3. `git checkout -b begonia` y commit con los tres paquetes nuevos y los dos parches.
 4. `kupferbootstrap packages check --ci-mode` (el CI de upstream lo corre también).
-5. MR contra la rama `dev` con **este README como cuerpo**: qué funciona, qué no, y qué
-   no se ha probado (wifi interno `RUNTIME-UNPROVEN`, BT interno inviable).
+5. Push al fork y MR contra la rama `dev` con **este README como cuerpo**: qué funciona, qué no,
+   y qué no se ha probado (wifi interno `RUNTIME-UNPROVEN`, BT interno inviable).
+
+El MR son exactamente cinco paquetes: tres nuevos (`linux/mt6785`, `firmware/mt6785-xiaomi-begonia`,
+`device/device-mt6785-xiaomi-begonia`) y dos parches a paquetes que ya existen
+(`boot/android-bootimg-updater`, `main/mkbootimg-git`).
 
 Los dos parches a paquetes compartidos son la parte que un maintainer querrá revisar
 primero: si se prefieren como cambios a `boot-android-bootimg-updater` y `mkbootimg-git`
@@ -652,7 +696,8 @@ en su propio MR, este port se queda solo con los tres paquetes nuevos y las mism
 - [ ] Flasheo + verificación en el móvil (panel Tianma, touch, WiFi interno MediaTek, dongles, Plasma)
 - [x] Informe de qué funciona / qué no / qué no se probó (este README)
 - [ ] MR upstream a `kupfer/packages/pkgbuilds` (rama `dev`)
-- [x] Replicar método táctil tianma (pmOS) documentado
+- [x] Táctil Tianma resuelto en la imagen (`_panel=tianma` en el paquete de firmware)
+- [x] `packages check --ci-mode` limpio sobre los cinco paquetes
 
 ## Referencias
 
