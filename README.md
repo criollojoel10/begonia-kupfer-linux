@@ -25,13 +25,14 @@ comunidad.mergea primero.
 | Parche `update-bootimg.sh` (header v2 + recovery_dtbo) | ✅ |
 | Toolchain de cruce en el build (lo que faltaba) | ✅ |
 | `mkbootimg` con la división entera arreglada (sin esto no sale `aboot.img`) | ✅ |
-| Build de la imagen en GHA (base `dev`, 19 steps, 44 min) | ✅ run `36249822052` |
+| Build de la imagen en GHA (base `dev`, 19 steps, 44 min) | ✅ ver [Notas de CI](#notas-de-ci) |
 | `aboot.img` generado con el initramfs completo | ✅ |
 | Los 5 módulos de panel/táctil dentro del initramfs | ✅ comprobado en CI |
 | Firmware de novatek dentro del initramfs (faltaba) | ✅ |
 | Stack MediaTek interno compilando (`wmt_drv`, `wlan_gen4m`, `mtk-vendor-btif`) | ✅ |
 | Firmware MediaTek en `/usr/lib/firmware` (estaba en `/usr/mediatek/`) | ✅ |
-| Encendido automático del wifi interno (`mediatek-wifi.service`) | ✅ |
+| Los 7 blobs MediaTek **dentro de la imagen**, no solo en el paquete | ✅ comprobado en CI |
+| Encendido automático del wifi interno (`mediatek-wifi.service`) | ✅ `ExecStart` y symlink comprobados en CI |
 | Bluetooth interno | ❌ no viable: BTIF no registra HCI ([detalle](#el-bluetooth-no-es-viable-con-este-port)) |
 | Flasheo y verificación en device | ⏳ pendiente |
 
@@ -545,11 +546,26 @@ pantalla.
    el layout AOSP a mano.
 3. **`Verify the rootfs`** — monta la partición de la imagen final y mira, por separado, (a) el
    `FILES` que dejó el `mkinitcpio-overwrite` en `/etc/mkinitcpio.conf`, (b) los `.zst` de novatek
-   en `/usr/lib/firmware/novatek/`, (c) el **md5** del que está bajo el nombre `csot` y (d) los
-   nombres de paquete instalados. Sin (d) el paso (b) no distingue "el paquete de firmware no
-   lleva los blobs" de "los blobs no llegaron al initramfs", y son fallos muy distintos.
+   en `/usr/lib/firmware/novatek/`, (c) el **md5** del que está bajo el nombre `csot`, (d) los
+   nombres de paquete instalados, (e) los **7 blobs MediaTek dentro de la imagen** y que
+   `firmware-mt6785-xiaomi-begonia` esté instalado, y (f) que la unidad del wifi interno esté en
+   la imagen, que su `ExecStart` apunte a un fichero que existe y es ejecutable **dentro de ella**,
+   y que el symlink de `multi-user.target.wants` esté.
 4. **`List images`** — el boot fs tiene que caber en la partición `boot` de 64 MiB y traer dentro
    un `aboot.img` no vacío.
+
+Los tres últimos existen por fallos reales, y los dos últimos por uno que es la razón de que este
+puerto no se pueda dar por bueno solo porque la imagen compila:
+
+- **(e)**: un paquete bien construido **no es lo mismo** que un paquete instalado. El subpaquete
+  de firmware de conectividad se construía (766 KB) y no llegaba a la rootfs, y el síntoma —cero
+  blobs en `/usr/lib/firmware/mediatek/`— solo se ve montando la imagen. Es el mismo fallo que
+  tumbó la imagen de pmOS del run `36304158010` (allí por culpa de apk; aquí por la cache de
+  `packages`).
+- **(f)**: `ExecStart=/usr/lib/device-mt6785-xiaomi-begonia/mediatek-wifi.sh` mientras el PKGBUILD
+  instalaba el script en `/usr/libexec/`. El servicio no podía arrancar jamás (`203/EXEC`), el wifi
+  interno no se encendía nunca, y **nada de eso rompía el build**. Un `ExecStart` mal escrito es
+  del todo invisible desde fuera: el paquete está, la unidad está, el symlink está.
 
 Dos trampas que costaron un run cada una y que conviene no volver a pisar:
 
