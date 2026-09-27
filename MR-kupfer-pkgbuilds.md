@@ -1,9 +1,11 @@
 # MR text — `kupfer/packages/pkgbuilds` (branch `dev`)
 
-Ready to paste. Everything below was written before the first flash, so the "not tested"
-section is honest about what is still unverified on hardware.
+Ready to paste. Everything below was written before the first flash. "What works" is what
+CI verifies by inspecting the packages and the generated boot image; the hardware status of
+the MediaTek WiFi gets its own section further down, because "it builds" and "it works" are
+different claims and it is worth not blurring them.
 
-CI status: **green**. Run `36310845797` (commit `df7e9c8`) of
+CI status: **green**. Run `36310845797` (commit `0497987`) of
 `.github/workflows/build.yaml` in `criollojoel10/begonia-kupfer-linux`, flavour
 `plasma-mobile`, from a clean runner with no cache, produces the image and passes
 every check listed under "What works" below. Artifact:
@@ -15,8 +17,9 @@ every check listed under "What works" below. Artifact:
 
 `mt6785: add Xiaomi Redmi Note 8 Pro (begonia) — first MediaTek device`
 
-Open it as `Draft:` while the internal WiFi is still unproven on hardware, per the porting
-guidelines; drop the prefix once it has been tested on the phone.
+Open it as `Draft:` while the port has not booted on the phone, per the porting guidelines;
+drop the prefix once it has been tested. The WiFi driver is not the reason for the prefix:
+its author verified it on this phone, see the WiFi verification section below.
 
 ## Body
 
@@ -34,7 +37,7 @@ part worth reviewing first.
 
 | Package | What it is |
 |---|---|
-| `linux/mt6785` | `pkgbase=linux-mt6785`, kernel `6.16.4` from the `mt6785-mainline/linux` fork, `Image.gz` + dtbs, `extra_config` on top of pmaports' config |
+| `linux/mt6785` | `pkgbase=linux-mt6785`, kernel `6.16.4` from the author's fork (`minorum/linux`) of `mt6785-mainline/linux`, pinned to `3a1ea76942` — the head of `begonia-conn-wifi`, i.e. the tip of the forward-port described below. The fork's own `6.16` branch is still at `203a993f`, which is the pmaports base tag, and that base has no MediaTek connectivity stack; hence the pin. `Image.gz` + dtbs, `extra_config` on top of pmaports' config. |
 | `firmware/mt6785-xiaomi-begonia` | MediaTek connectivity blobs, novatek panel/touch firmware, Realtek dongle firmware |
 | `device/device-mt6785-xiaomi-begonia` | the `deviceinfo` (taken from pmaports at a fixed commit, plus the few attributes Kupfer needs), `/etc/machine-info`, the `mkinitcpio.conf.d` snippet, `empty.dtbo`, `mediatek-wifi.service`, and one libalpm hook that re-asserts Kupfer's `mkinitcpio.conf` |
 
@@ -60,28 +63,79 @@ part worth reviewing first.
   vendor driver requires (`btif` → `wmt_drv` → `wlan_gen4m` → the `1` write to
   `/dev/wmtWifi`). This needed `CONFIG_CFG80211_WEXT=y`: `wlan_gen4m.ko` calls
   `wireless_send_event()`, and without wireless extensions modpost fails the whole kernel
-  with `"wireless_send_event" [...] undefined!`.
+  with `"wireless_send_event" [...] undefined!`. The driver itself does work on begonia, but
+  nobody has run it through this packaging; see the WiFi verification section below.
 - **USB dongles** (ethernet, WiFi, BT, serial) are all in the image, so a hub is a working
   fallback for anything the SoC does not do.
 
 ### What does not work
 
-- **Internal Bluetooth is not possible with this port.** There is no HCI transport under
-  `drivers/misc/mediatek/btif/` in this tree (`btmtkuart.c` is the only MTK HCI driver and
-  it is UART-only, for `mt7622`/`mt7663u`/`mt7668u`), and the vendor userspace
-  `mtk_bt_stack` is not redistributable. A USB BT dongle works (`btusb` is in the image).
+- **Internal Bluetooth: everything except the driver is already there, and the driver does
+  not exist.** This is not a packaging gap, so no firmware blob, service or `modprobe` fixes
+  it. The interesting part is *why*, because it is not a missing-config kind of failure.
+  - The phone carries the same BTIF block the working WiFi runs on. The connectivity MCU,
+    the WMT control channel and the STP transport are one stack, and on begonia the live
+    STP transport *is* BTIF (everything goes out through `mtk_wcn_btif_write`).
+  - The device tree node exists in mainline and is enabled by default: `btif@1100c000`
+    (`compatible = "mediatek,btif"`, three `reg` ranges, IRQs 138/155/154, clocks
+    `btifc`/`apdmac`) in `arch/arm64/boot/dts/mediatek/mt6785.dtsi`. Our
+    `mtk-vendor-btif.ko` binds it, the `bt` firmware blob the WiFi stack already loads
+    (`soc1_0_ram_bt_2a_1_hdr.bin.zst`) is the one for it, and `BGF_EINT` (`GIC_SPI 321`) is
+    wired in `mt6785-xiaomi-begonia.dts`.
+  - What is missing is the HCI layer, the driver that would hand this transport to BlueZ.
+    Nothing in `drivers/bluetooth/` consumes BTIF, and there is no `hci_register_dev()` call
+    anywhere under `drivers/misc/mediatek/`. So there is no `hci0`, and BlueZ has nothing to
+    bind to, no matter how the modules are ordered.
+  - The two plausible shortcuts both fail. `btmtkuart.c` is the only MTK HCI driver in the
+    tree and it drives a *separate* BT chip over a real UART (`mt7622`, `mt7663u`, `mt7668u`
+    — router SoCs; the phone has none on-die), and the vendor userspace `mtk_bt_stack` is
+    not redistributable. A vendor-style 8250-BTIF shim is not an option either: that
+    approach (`8250_btif` plus `btmtkuart_hci`) was proposed in 2017 and never upstreamed.
+  - A USB BT dongle works, `btusb` is in the image. The `bt` blob stays in the firmware
+    package because it is part of the set the WiFi bring-up loads.
+
 - **No modem**, same as pmOS mainline for this SoC.
+
+### Verification status of the internal WiFi
+
+Worth being precise here, because "it has never been run" and "nobody has run it" are very
+different statements for this driver.
+
+- **The driver works on this phone, verified by the person who wrote it.** The forward-port
+  is `mt6785-mainline/linux` MR !2, *"Draft: begonia (MT6785): conn/WiFi vendor
+  forward-port"*, which states that `wlan0` scans and associates on 2.4/5 GHz, with DHCP and
+  ping verified on hardware. Its history is consistent with that: commit `b8c1b8b5` ("Verified
+  on hardware: this clears the 'no hif info' gate; STP/BTIF now activates") and the live
+  register dumps in `0468921f` are bring-up records, not speculation. This package builds the
+  tip of that series (`3a1ea76942`).
+- **Nobody has run this stack on begonia outside that bring-up.** MR !2 has zero comments and
+  nobody has replied to it, so there is no second report to lean on. It is a cross-fork MR
+  (author's fork `minorum/linux` → `mt6785-mainline/linux`) and it has sat there since June
+  2026, which is a reasonable thing to expect for a ~545k-line vendor import labelled "not
+  proposing merge yet". We are the first to take it through Kupfer, and the first to try it
+  on pmOS with this packaging.
+- The `RUNTIME-UNPROVEN` marker that *is* in the tree is narrower and older than that: it
+  sits in `mediatek-wifi.sh` next to the `1` write to `/dev/wmtWifi` and concerns `func_on`
+  ordering (a bare `func_on` before BTIF registration does not take), which the author
+  resolved in the same session where he then got it working. It is not a verdict on the
+  driver as a whole.
+- One worry I checked and set aside: `WIFI_EINT` and the `gpio_combo_*` pins are missing from
+  the DTS. Those belong to the superseded reimplementation path (`MTK_CONNINFRA_MT6785`, which
+  MR !2 turns *off* on purpose because it conflicts with the vendor consys code), not to the
+  forward-port that actually runs. That reading is mine, not the author's.
+- So the open question is packaging, not silicon: whether the modules load in the order the
+  driver needs, whether the firmware lands where the driver looks for it, and whether the `1`
+  write behaves as it did in the author's bring-up. `mtk-wifi-test.sh` in the port repository
+  checks exactly those three things, and its step 8 dumps the driver's own WMT diagnostic
+  proc files if `wlan0` does not appear.
 
 ### Not tested on hardware
 
 The image has never been flashed yet: everything above is verified by inspecting the
 packages and the generated boot image in CI, not on the phone. Specifically unverified:
 
-- **The MediaTek internal WiFi itself.** The driver author marks the `wlan_gen4m` path
-  `RUNTIME-UNPROVEN`, `WIFI_EINT` is still a placeholder in the DTS, and the
-  `gpio_combo_*` pins are not in the DTS either. What is verified is that the modules build,
-  the firmware is in place and the load order is the vendor one. The USB WiFi dongles are
-  the fallback.
+- Whether the MediaTek internal WiFi comes up under Plasma Mobile, with the load order and
+  trigger described above. The USB WiFi dongles are the fallback.
 - Panel and touch on the device, and whether Plasma Mobile comes up.
 - Battery, suspend, camera, sensors.
 
@@ -158,3 +212,14 @@ swap), so convert with `img2simg` first and flash the `.simg` without `-S`. Kupf
   chroot with `module not found: 'crypto_lz4'`; the extra_config sets it.) If it is
   deemed general enough, it belongs in `boot/mkinitcpio-kupfer-hooks`.
 - Ask me anything, Matrix `#kupfer-community`.
+
+### Sources
+
+Credit where it is due: none of the MediaTek work here is ours.
+
+- **The connectivity stack** is `mt6785-mainline/linux` MR !2 and its companion firmware MR
+  `mt6785-mainline/firmware` MR !1, both by minorum, who wrote the forward-port and tested
+  it on his own begonia. We only package it.
+- **Everything else** (deviceinfo, panel/touch, kernel config) comes from pmaports
+  `device-xiaomi-begonia`, `firmware-xiaomi-begonia` and
+  `linux-postmarketos-mediatek-mt6785` at a fixed commit.
