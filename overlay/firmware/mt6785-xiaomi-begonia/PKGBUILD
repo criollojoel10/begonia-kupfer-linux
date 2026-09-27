@@ -36,6 +36,27 @@
 # subdirectorios), asi que antes de este cambio el firmware estaba en
 # /usr/mediatek/ y era invisible para el driver.
 #
+# Y los blobs de conectividad van en la RAIZ de /usr/lib/firmware/, NO en un
+# subdirectorio, porque el fwport los pide con nombres pelados:
+#
+#   wmt_conf.h:34        "WMT_SOC.cfg"
+#   wmt_dev.c:406,459,508 "soc1_0_patch_mcu_2a_1_hdr.bin"
+#   wmt_ctrl.c:654-656   "soc1_0_ram_{bt,wifi,mcu}_2a_1_hdr.bin"
+#   config.h:149         "WIFI_RAM_CODE" -> connacConstructFirmwarePrio()
+#                        genera "WIFI_RAM_CODE_soc1_0_2a_1.bin"
+#   gl_init.c:3322,3372  "wifi.cfg"
+#
+# El kernel resuelve un request_firmware() sin "/" en la raiz de cada ruta de
+# firmware_class, y en los subdirectorios solo si el nombre lleva la carpeta.
+# Comprobado en un begonia con pmOS: con los blobs en
+# /usr/lib/firmware/mediatek/, modprobe wmt_drv moria con
+#   (NULL device *): Direct firmware load for WMT_SOC.cfg failed with error -2
+# y wlan0 no aparecia nunca. Copiados a la raiz, escanea, se asocia y hay
+# internet.
+#
+# El firmware del panel SI lleva carpeta en el nombre, porque el DTB lo pide
+# como "novatek/nt36672a_begonia_csot.bin", asi que ese va en novatek/.
+#
 # --- variante de panel ---
 #
 # _panel dice que panel lleva ESTA unidad, y no es un detalle. El DTB de la
@@ -57,8 +78,9 @@ _panel=tianma
 _mode=cross
 pkgname=firmware-mt6785-xiaomi-begonia
 pkgver=0.1
-# 3: el nombre CSOT pasa a contener el binario Tianma (touch de esta unidad).
-pkgrel=4
+# 4: los blobs de conectividad pasan de firmware/mediatek/ a la raiz de
+#    firmware/, que es donde request_firmware() los busca.
+pkgrel=5
 _arches=specific
 arch=(aarch64)
 license=(custom:Proprietary)
@@ -75,9 +97,12 @@ sha256sums=(SKIP)
 
 package() {
     mkdir -p "$pkgdir/usr/lib/firmware"
-    # mediatek/ = blobs de wifi+BT, novatek/ = firmware del panel y del tactil.
-    cp -a "$srcdir"/firmware/mediatek "$srcdir"/firmware/novatek \
-        "$pkgdir/usr/lib/firmware/"
+    # Los blobs de wifi+BT van a la RAIZ: el driver los pide sin carpeta
+    # (ver la nota de cabecera).
+    cp -a "$srcdir"/firmware/mediatek/. "$pkgdir/usr/lib/firmware/"
+    # El firmware del panel y del tactil si lleva carpeta en el nombre, asi
+    # que ese se queda en su subdirectorio.
+    cp -a "$srcdir"/firmware/novatek "$pkgdir/usr/lib/firmware/"
     # El repo no trae LICENSE (solo los dos directorios), asi que esto es
     # opcional: si algun dia lo anaden, se copia sin romper nada.
     if [ -f "$srcdir"/firmware/LICENSE ]; then

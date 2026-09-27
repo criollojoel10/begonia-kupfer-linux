@@ -596,20 +596,39 @@ jobs:
           # un solo blob en /usr/lib/firmware/mediatek/, y entonces wlan_gen4m no
           # puede pedir firmware y wlan0 no aparece nunca. Es el mismo fallo que
           # se comio la imagen de pmOS del run 36304158010.
-          echo "--- /usr/lib/firmware/mediatek (en la imagen, no en el paquete) ---"
-          sudo ls -l "$MNT/usr/lib/firmware/mediatek/" || {
-            echo "::error::no hay /usr/lib/firmware/mediatek en la imagen"; miss=1; }
+          # OJO: en la RAIZ de /usr/lib/firmware/, no en un subdirectorio. El
+          # fwport pide los blobs con nombres pelados (wmt_conf.h:34,
+          # wmt_dev.c:406/459/508, wmt_ctrl.c:654-656, config.h:149), y el
+          # kernel solo busca en la raiz cuando el nombre no lleva carpeta. Con
+          # los blobs en firmware/mediatek/, modprobe wmt_drv moria con
+          # "Direct firmware load for WMT_SOC.cfg failed with error -2" y
+          # wlan0 no aparecia nunca: comprobado en un begonia con pmOS.
+          echo "--- /usr/lib/firmware (raiz, en la imagen, no en el paquete) ---"
           for f in WIFI_RAM_CODE_soc1_0_2a_1.bin.zst WMT_SOC.cfg.zst \
                    soc1_0_patch_mcu_2a_1_hdr.bin.zst soc1_0_ram_bt_2a_1_hdr.bin.zst \
                    soc1_0_ram_mcu_2a_1_hdr.bin.zst soc1_0_ram_wifi_2a_1_hdr.bin.zst \
                    wifi.cfg.zst; do
-            [ -s "$MNT/usr/lib/firmware/mediatek/$f" ] || {
-              echo "::error::falta o vacio /usr/lib/firmware/mediatek/$f en la imagen (el wifi interno no cargara firmware)"; miss=1; }
+            [ -s "$MNT/usr/lib/firmware/$f" ] || {
+              echo "::error::falta o vacio /usr/lib/firmware/$f en la imagen (el wifi interno no cargara firmware)"; miss=1; }
           done
+          # y que no esten solo en el subdirectorio, que es el bug que se
+          # acaba de arreglar en el PKGBUILD
+          for f in WIFI_RAM_CODE_soc1_0_2a_1.bin.zst WMT_SOC.cfg.zst; do
+            if [ -e "$MNT/usr/lib/firmware/mediatek/$f" ] && [ ! -e "$MNT/usr/lib/firmware/$f" ]; then
+              echo "::error::$f esta en firmware/mediatek/ y no en la raiz: request_firmware() no lo encontrara"; miss=1
+            fi
+          done
+          # y que el kernel sepa descomprimir los .zst solos
+          if [ -r "$MNT/proc/config.gz" ]; then
+            sudo zcat "$MNT/proc/config.gz" | grep -q "FW_LOADER_COMPRESS_ZSTD=y" \
+              || { echo "::error::CONFIG_FW_LOADER_COMPRESS_ZSTD no esta activo"; miss=1; }
+          else
+            echo "AVISO: sin /proc/config.gz, no se puede comprobar FW_LOADER_COMPRESS_ZSTD"
+          fi
           # Y que la version instalada del paquete de firmware sea la del
           # pkgrel actual, no una anterior que se hubiera quedado en la cache.
-          sudo ls "$MNT/var/lib/pacman/local/" | grep -E '^firmware-mt6785-xiaomi-begonia-' \
-            || { echo "::error::firmware-mt6785-xiaomi-begonia no esta instalado"; miss=1; }
+          sudo ls "$MNT/var/lib/pacman/local/" | grep -E '^firmware-mt6785-xiaomi-begonia-0.1-5' \
+            || { echo "::error::firmware-mt6785-xiaomi-begonia no esta en el pkgrel 5 (los blobs en la raiz)"; miss=1; }
 
           # (f) el ExecStart de la unidad del wifi interno tiene que existir DENTRO
           # de la imagen. Hace falta porque un ExecStart mal escrito no rompe nada
@@ -713,7 +732,7 @@ jobs:
           fi
           bsdtar -tf "$FPKG" > /tmp/kupfer-fw-files.txt
           echo "--- blobs de firmware ---"
-          grep -E 'mediatek/|novatek/' /tmp/kupfer-fw-files.txt | sort
+          grep -E '^usr/lib/firmware/' /tmp/kupfer-fw-files.txt | sort
 
           missing=0
           # Los tres modulos del stack WiFi/BT interno de MediaTek. Sin ellos el
@@ -746,14 +765,20 @@ jobs:
           # comprimidos (.zst) porque asi estan en el repo de blobs; el kernel
           # los descomprime solo con CONFIG_FW_LOADER_COMPRESS_ZSTD=y, que es lo
           # que trae el config (viene de pmaports).
+          #
+          # Con ^usr/lib/firmware/ y NO con /: el fwport los pide con nombres
+          # pelados (wmt_conf.h:34, wmt_dev.c:406/459/508, wmt_ctrl.c:654-656,
+          # config.h:149), y el kernel solo los busca en la raiz si el nombre
+          # no lleva carpeta. Un firmware/mediatek/$fDontaria el mismo grep que
+          # con /, y es justo lo que rompe el wifi.
           for f in WMT_SOC.cfg.zst soc1_0_patch_mcu_2a_1_hdr.bin.zst \
                    soc1_0_ram_mcu_2a_1_hdr.bin.zst soc1_0_ram_wifi_2a_1_hdr.bin.zst \
                    soc1_0_ram_bt_2a_1_hdr.bin.zst WIFI_RAM_CODE_soc1_0_2a_1.bin.zst \
                    wifi.cfg.zst; do
-            if grep -q "/${f}\$" /tmp/kupfer-fw-files.txt; then
-              echo "OK fw ${f}"
+            if grep -q "^usr/lib/firmware/${f}\$" /tmp/kupfer-fw-files.txt; then
+              echo "OK fw ${f} (raiz de firmware/)"
             else
-              echo "::error::falta el firmware ${f}"
+              echo "::error::falta el firmware ${f} en la raiz de usr/lib/firmware/"
               missing=1
             fi
           done
