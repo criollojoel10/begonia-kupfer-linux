@@ -146,9 +146,12 @@ swap), so convert with `img2simg` first and flash the `.simg` without `-S`. Kupf
   Arch's stock one, which silently produces an initramfs without `rootfsdetect`,
   `rootfsresize` or `firmwaresearchpath`. The device package here ships
   `80-mkinitcpio-begonia.hook` so this device does not depend on that happening to go
-  well. It runs *before* `90-linux.hook` and `91-android-bootimg-updater.hook` on
-  purpose: `aboot.img` embeds the initramfs, so regenerating the initramfs after
-  `update-bootimg` has run would leave a good `initramfs-linux.img` inside a stale
-  `aboot.img`, which still boots broken. If it is deemed general enough, it belongs
-  in `boot/mkinitcpio-kupfer-hooks`.
+  well. The number is not cosmetic: libalpm runs `PostTransaction` hooks in filename
+  order, and the boot image *embeds* the initramfs, so the hook has to run before
+  `91-android-bootimg-updater` rebuilds `aboot.img`; hence 80 and not 95. As a second
+  line of defence the hook calls `update-bootimg` itself, so the result does not depend
+  on the relative order at all. (The stock `systemd` hook also `add_module`s
+  `crypto_lz4`, so without `CONFIG_CRYPTO_LZ4=m` in the kernel the build fails in the
+  chroot with `module not found: 'crypto_lz4'`; the extra_config sets it.) If it is
+  deemed general enough, it belongs in `boot/mkinitcpio-kupfer-hooks`.
 - Ask me anything, Matrix `#kupfer-community`.
