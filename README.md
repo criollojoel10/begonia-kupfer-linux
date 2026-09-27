@@ -578,6 +578,31 @@ Dos trampas que costaron un run cada una y que conviene no volver a pisar:
   `/lib/firmware/qcom/...` en sus device confs por el mismo motivo. Y con rutas explícitas en vez
   de un glob, porque `mkinitcpio-overwrite` sourcea los `.conf` en un orden en el que el paquete de
   firmware puede todavía no estar instalado y el glob se quedaría literal.
+- **`ln -s` a `/etc/systemd/system/multi-user.target.wants/` no crea el directorio.** Es el fallo que
+  tumbó el run `36301882701`: el paquete device habilitaba `mediatek-wifi.service` con un `ln -s`
+  a un directorio que `install -Dm644` no había creado, y `package()` moría con
+  `ln: failed to create symbolic link ... No such file or directory` →
+  `==> ERROR: A failure occurred in package()`. Con `mkdir -p` antes, verde.
+- **Un `.install` de makepkg no arregla nada en la imagen final.** La primera hipótesis para el
+  `crypto_lz4` era regenerar el initramfs desde el `post_install` de `linux.install`, pero un
+  `.install` solo lo ejecuta `makepkg`, nunca pacman en el target: en el chroot de build, además,
+  no existen ni `/usr/bin/mkinitcpio-overwrite` ni `/etc/mkinitcpio.d/linux.preset` (el preset va a
+  `$pkgdir`), así que es un no-op silencioso. Para la imagen final hace falta un hook de libalpm.
+- **`/etc/mkinitcpio.conf` se degrada al de stock y nadie lo arregla.** `mkinitcpio` escribe su conf
+  de stock en su `post_install` siempre, y `50-mkinitcpio-overwrite.hook` (de
+  `mkinitcpio-kupfer-hooks`) solo corre si cambian `/etc/mkinitcpio.conf` o `/etc/kupfer/*`. Si la
+  fragmentación de transacciones de pacman hace que `mkinitcpio` se reinstale en una transacción
+  donde no se toca `/etc/kupfer/*`, el conf se queda con los hooks de Arch
+  (`systemd microcode kms sd-vconsole…`) y el initramfs sale sin `rootfsdetect`/`rootfsresize` (no
+  monta la rootfs), sin `firmwaresearchpath` y sin los módulos del panel ni el firmware del táctil de
+  `FILES` ⇒ pantalla en negro. De ahí el hook `95-mkinitcpio-begonia.hook` del paquete device: se
+  dispara en la transacción en la que entra el paquete, que es posterior al kernel porque es
+  dependencia suya, y como va en `95-` corre después de `90-mkinitcpio.hook` y deja el initramfs
+  final hecho con el conf de Kupfer. El check de CI "Verify the rootfs" lo verifica en la imagen.
+- El `hook systemd` de mkinitcpio hace `map add_module 'crypto-lzo' 'crypto-lz4'`, y el config base
+  de pmaports trae `CONFIG_CRYPTO_LZO=y` pero `CONFIG_CRYPTO_LZ4` apagado. Con el conf de stock eso
+  es un `==> ERROR: module not found: 'crypto_lz4'` cada vez que se construye un initramfs en el
+  chroot de build (no es fatal, pero grita). Por eso `CONFIG_CRYPTO_LZ4=m` en `extra_config`.
 
 El resto de notas de CI:
 

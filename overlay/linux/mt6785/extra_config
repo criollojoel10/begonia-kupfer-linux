@@ -62,6 +62,12 @@ CONFIG_MT7921U=m
 # descarta los cinco simbolos siguientes en silencio y no sale ningun
 # rtw88_*.ko. Es el mismo fallo que en el lado postmarketOS (run 36277664585).
 CONFIG_RTW88=m
+# El hook 'systemd' de mkinitcpio (install/systemd) hace map add_module 'crypto-lzo'
+# 'crypto-lz4'. El config base de pmaports trae CONFIG_CRYPTO_LZO=y pero deja
+# CRYPTO_LZ4 apagado, y si el initramfs llega a construirse con el
+# /etc/mkinitcpio.conf DE STOCK (no con el de Kupfer) eso es un ERROR que aborta
+# package(). Con el modulo presente el hook no protesta.
+CONFIG_CRYPTO_LZ4=m
 CONFIG_RTW88_CORE=m
 CONFIG_RTW88_USB=m
 CONFIG_RTW88_8812AU=m

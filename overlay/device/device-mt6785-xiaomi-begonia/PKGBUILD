@@ -21,7 +21,7 @@
 _mode=cross
 pkgname=device-mt6785-xiaomi-begonia
 pkgver=0.1
-pkgrel=2
+pkgrel=3
 _arches=specific
 arch=(aarch64)
 license=(MIT)
@@ -39,6 +39,7 @@ source=(
     empty.dtbo
     mediatek-wifi.sh
     mediatek-wifi.service
+    95-mkinitcpio-begonia.hook
 )
 # Ojo: los hash de abajo son de los ficheros de source=(). Al tocar uno de
 # ellos hay que rehacer el correspondiente, o el build muere aqui con
@@ -49,6 +50,7 @@ sha256sums=(
     eb2b3acb43b4f9d48ec3affb16b923c588e5583fde2bebf85303966bf0c90159
     7b7f69c23f35c956b628ef6eedc6fd59f0688b8c310ed0429a24a89bfac43ae7
     f72e1df52c33bde1676863a21b3e7f8c3cb9a21b8ed7addefe2ac0eb8cce0635
+    SKIP
     SKIP
     SKIP
 )
@@ -104,6 +106,15 @@ EOF
         "$pkgdir"/usr/libexec/mediatek-wifi.sh
     install -Dm644 "$srcdir"/mediatek-wifi.service \
         "$pkgdir"/usr/lib/systemd/system/mediatek-wifi.service
+    # ln no crea los directorios intermedios: sin este mkdir -p el symlink
+    # falla con "No such file or directory" y package() aborta.
+    mkdir -p "$pkgdir"/etc/systemd/system/multi-user.target.wants
     ln -s /usr/lib/systemd/system/mediatek-wifi.service \
         "$pkgdir"/etc/systemd/system/multi-user.target.wants/mediatek-wifi.service
+
+    # Hook que arregla /etc/mkinitcpio.conf y regenera el initramfs al final de
+    # la transaccion en la que entra este paquete. Ver el propio hook para el
+    # por que (fallo del run 36301882701).
+    install -Dm644 "$srcdir"/95-mkinitcpio-begonia.hook \
+        "$pkgdir"/usr/share/libalpm/hooks/95-mkinitcpio-begonia.hook
 }

@@ -1,0 +1,45 @@
+# Hook de libalpm del port a Kupfer para begonia.
+#
+# Que arregla (fallo real del run 36301882701, job 108570910979):
+#
+# El paquete mkinitcpio trae /etc/mkinitcpio.conf de stock. Su post_install lo
+# escribe siempre, y si se reinstala en una transaccion de construccion de
+# imagen el conf acaba siendo el de Arch:
+#
+#   HOOKS=(base systemd autodetect microcode modconf kms keyboard sd-vconsole
+#          block filesystems fsck)
+#
+# El conf de Kupfer (/etc/kupfer/mkinitcpio.conf) tiene en cambio
+#
+#   HOOKS=(base firmwaresearchpath udev autodetect modconf block rootfsdetect
+#          filesystems keyboard rootfsresize fsck)
+#
+# El hook 50-mkinitcpio-overwrite.hook de mkinitcpio-kupfer-hooks solo corre si
+# cambian /etc/mkinitcpio.conf o /etc/kupfer/*, asi que si el conf se degrada en
+# una transaccion donde no se toca /etc/kupfer/*, no vuelve a arreglarse. Con el
+# conf de stock el initramfs se queda SIN los hooks rootfsdetect/rootfsresize
+# (no monta la rootfs), SIN firmwaresearchpath (no encuentra el firmware) y SIN
+# los modulos del panel ni el firmware del tactil declarados en FILES: pantalla
+# en negro. Ademas el hook 'systemd' hace add_module 'crypto-lzo' 'crypto-lz4'
+# y aborta con "==> ERROR: module not found" si crypto_lz4 no esta.
+#
+# Este hook no depende de que se haya modificado nada: se dispara en la
+# transaccion en la que este paquete entra, y para entonces el kernel ya esta
+# instalado (es una dependencia), asi que da igual como se agrupen las
+# transacciones de pacman. Va en 95- a proposito, para ejecutarse el ultimo
+# despues de "90-mkinitcpio.hook" y dejar el initramfs final hecho con el
+# conf de Kupfer.
+#
+# El Exec es una sola linea y se autoprotege: si mkinitcpio-overwrite no esta
+# instalado (no es dependencia de este paquete) no se aborta la transaccion.
+
+[Trigger]
+Type = File
+Operation = Install
+Operation = Upgrade
+Target = etc/kupfer/deviceinfo
+
+[Action]
+Description = Rebuilding the initramfs with Kupfer's mkinitcpio.conf
+When = PostTransaction
+Exec = /bin/sh -c 'command -v mkinitcpio-overwrite >/dev/null 2>&1 && mkinitcpio-overwrite; [ -f /etc/mkinitcpio.d/linux.preset ] && mkinitcpio -p /etc/mkinitcpio.d/linux.preset; true'
