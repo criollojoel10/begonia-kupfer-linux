@@ -30,8 +30,10 @@
 # despues de "90-mkinitcpio.hook" y dejar el initramfs final hecho con el
 # conf de Kupfer.
 #
-# El Exec es una sola linea y se autoprotege: si mkinitcpio-overwrite no esta
-# instalado (no es dependencia de este paquete) no se aborta la transaccion.
+# El Exec es un script propio y no una linea de shell con comillas: libalpm
+# parsea el Exec a mano y partirlo en palabras es frágil. Ademas el script
+# autoprotege cada paso, porque un Exec que sale con error tumba la transaccion
+# entera y con ella el build.
 
 [Trigger]
 Type = File
@@ -42,4 +44,4 @@ Target = etc/kupfer/deviceinfo
 [Action]
 Description = Rebuilding the initramfs with Kupfer's mkinitcpio.conf
 When = PostTransaction
-Exec = /bin/sh -c 'command -v mkinitcpio-overwrite >/dev/null 2>&1 && mkinitcpio-overwrite; [ -f /etc/mkinitcpio.d/linux.preset ] && mkinitcpio -p /etc/mkinitcpio.d/linux.preset; true'
+Exec = /usr/libexec/regen-initramfs-begonia
