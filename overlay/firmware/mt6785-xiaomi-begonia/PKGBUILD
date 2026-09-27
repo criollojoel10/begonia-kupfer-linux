@@ -51,7 +51,7 @@ _mode=cross
 pkgname=firmware-mt6785-xiaomi-begonia
 pkgver=0.1
 # 3: el nombre CSOT pasa a contener el binario Tianma (touch de esta unidad).
-pkgrel=3
+pkgrel=4
 _arches=specific
 arch=(aarch64)
 license=(custom:Proprietary)

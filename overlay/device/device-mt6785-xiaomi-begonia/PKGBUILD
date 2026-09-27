@@ -21,7 +21,7 @@
 _mode=cross
 pkgname=device-mt6785-xiaomi-begonia
 pkgver=0.1
-pkgrel=1
+pkgrel=2
 _arches=specific
 arch=(aarch64)
 license=(MIT)
@@ -46,7 +46,7 @@ source=(
 sha256sums=(
     e951e23dda716ab7ef25f41eac6f7368d0d69ab423442ca9aba0c833556af41e
     7c42356f4d8963a925bf996d6dc44544146247c2cf8c30049f1740e931105913
-    d380668898268df3b3f0cc25febed4ee00ec59e16c2ba8c66f16a4cc48e20d3c
+    eb2b3acb43b4f9d48ec3affb16b923c588e5583fde2bebf85303966bf0c90159
     7b7f69c23f35c956b628ef6eedc6fd59f0688b8c310ed0429a24a89bfac43ae7
     f72e1df52c33bde1676863a21b3e7f8c3cb9a21b8ed7addefe2ac0eb8cce0635
     SKIP

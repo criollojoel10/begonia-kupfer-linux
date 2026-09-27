@@ -125,14 +125,26 @@ jobs:
             ccache-kupfer-begonia-${{ inputs.flavour }}-
             ccache-kupfer-begonia-
 
+      # OJO, sin restore-keys a proposito.
+      #
+      # kupferbootstrap NO reinstala desde cero: busca cada paquete en el repo
+      # local ($cache_dir/packages) y, si lo encuentra con el checksum que
+      # espera, lo da por bueno sin reconstruir. Con el restore-keys por prefijo
+      # de antes, cada run se colgaba los paquetes del ultimo run verde aunque
+      # hubiesen cambiado los PKGBUILD del overlay (el pkgver/pkgrel no siempre
+      # se tocan), y se acababa instalando en la imagen un paquete viejo. Asi
+      # paso: el build de 72ebbfd construyo firmware-mt6785-xiaomi-begonia-0.1-3
+      # pero instalo firmware-mediatek-mt6785-0.1-2, que es de antes del rename
+      # y no lleva el firmware del panel -> initramfs sin el .zst del tactil.
+      #
+      # Losing la cache solo obliga a recompilar el kernel propio; el
+      # cross-toolchain y los prebuilts de upstream se descargan igual de la red.
+      # ccache (que si tiene restore-keys) hace que esa recompilacion sea rapida.
       - name: Cache packages
         uses: actions/cache@v4
         with:
           path: ${{ steps.paths.outputs.cache_dir }}/packages
-          key: pkg-kupfer-begonia-${{ inputs.flavour }}-${{ github.run_id }}
-          restore-keys: |
-            pkg-kupfer-begonia-${{ inputs.flavour }}-
-            pkg-kupfer-begonia-
+          key: pkg-kupfer-begonia-${{ inputs.flavour }}-${{ hashFiles('overlay/**') }}
 
       - name: Generate kupferbootstrap config
         run: |
@@ -509,6 +521,74 @@ jobs:
           # CSOT, el touch sale con los ejes cruzados sin decir nada en el log.
           print("firmware del panel en el initramfs: %d ficheros" % len(FW))
           PY
+
+      # El initramfs se genera dentro de la imagen, asi que cuando el check de
+      # arriba falla no se sabe si el fallo es (a) que /etc/mkinitcpio.conf no
+      # trae los FILES, (b) que los .zst no estan en el rootfs o (c) que el
+      # nombre CSOT no contiene el binario Tianma. Este paso monta la rootfs de
+      # la imagen final y mira las tres cosas por separado, que es donde se ve
+      # la causa de verdad. En el run 36288864029 la causa fue (b): la cache de
+      # paquetes de GHA instalo un firmware-mediatek-mt6785 viejo (anterior al
+      # rename) que no lleva los blobs de novatek.
+      - name: Verify the rootfs (mkinitcpio.conf + panel firmware + package names)
+        run: |
+          set -o pipefail
+          IMG=$(ls -1 "${{ steps.paths.outputs.images_dir }}"/*-full.img 2>/dev/null | head -1)
+          [ -n "$IMG" ] || { echo "::error::no se encuentra la imagen full"; exit 1; }
+          LOOP=$(sudo losetup -f --show -b 4096 -P "$IMG")
+          sudo partprobe "$LOOP" || true
+          sleep 2
+          MNT=/tmp/kupfer-root
+          sudo mkdir -p "$MNT"
+          ROOTP=""
+          for p in "${LOOP}"p*; do
+            sudo mount -o ro "$p" "$MNT" 2>/dev/null || continue
+            if [ -f "$MNT/etc/kupfer/deviceinfo" ]; then ROOTP="$p"; break; fi
+            sudo umount "$MNT"
+          done
+          if [ -z "$ROOTP" ]; then
+            sudo umount "$MNT" 2>/dev/null || true
+            sudo losetup -d "$LOOP"
+            echo "::error::no se encuentra la particion con /etc/kupfer/deviceinfo"; exit 1
+          fi
+          echo "rootfs: $ROOTP"
+
+          # (a) el conf que mkinitcpio-overwrite genero
+          echo "--- /etc/mkinitcpio.conf (FILES/HOOKS) ---"
+          sudo grep -E '^(FILES|HOOKS|MODULES)=' "$MNT/etc/mkinitcpio.conf" || true
+          miss=0
+          for f in nt36672a_begonia_csot.bin.zst nt36672a_begonia_tianma.bin.zst; do
+            sudo grep -q "$f" "$MNT/etc/mkinitcpio.conf" || {
+              echo "::error::/etc/mkinitcpio.conf no menciona $f"; miss=1; }
+          done
+
+          # (b) los .zst en el rootfs
+          echo "--- /usr/lib/firmware/novatek ---"
+          sudo ls -l "$MNT/usr/lib/firmware/novatek/" || {
+            echo "::error::no hay /usr/lib/firmware/novatek en la imagen"; miss=1; }
+          for f in nt36672a_begonia_csot.bin.zst nt36672a_begonia_tianma.bin.zst; do
+            [ -f "$MNT/usr/lib/firmware/novatek/$f" ] || {
+              echo "::error::falta $f en el rootfs"; miss=1; }
+          done
+          # (c) el nombre CSOT debe contener el binario Tianma (md5 7d67c2e9...)
+          got=$(sudo md5sum "$MNT/usr/lib/firmware/novatek/nt36672a_begonia_csot.bin.zst" 2>/dev/null \
+                | cut -d' ' -f1 || true)
+          echo "md5 del nombre CSOT: ${got:-<none>}"
+          if [ "$got" != "7d67c2e9167f1a630576c177c1b831f7" ]; then
+            echo "::error::el nombre CSOT no contiene el binario Tianma"; miss=1
+          fi
+
+          # (d) los nombres de paquete: si aparece alguno viejo (pre-rename) es
+          # que la cache de packages de GHA sirvio un paquete obsoleto.
+          echo "--- paquetes de begonia instalados ---"
+          sudo ls "$MNT/var/lib/pacman/local/" | grep -E 'begonia|mediatek-mt6785' || true
+          if sudo ls "$MNT/var/lib/pacman/local/" | grep -q 'firmware-mediatek-mt6785'; then
+            echo "::error::la imagen trae firmware-mediatek-mt6785 (nombre viejo, pre-rename)"; miss=1
+          fi
+
+          sudo umount "$MNT"
+          sudo losetup -d "$LOOP"
+          exit "$miss"
 
       - name: Verify kernel modules and firmware in the image
         run: |
