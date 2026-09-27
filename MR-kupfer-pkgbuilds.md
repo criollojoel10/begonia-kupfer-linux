@@ -126,7 +126,7 @@ Two things begonia needs that the stock flow does not do on its own:
   to fastboot. `avbtool make_vbmeta_image --flags 2 --padding_size 2048` is all it takes.
 
 Flashing the raw image is also what can kill `fastboot` (`load_sparse_file()` allocates the
-whole image in RAM, 4.7 GB peak on a 6.7 GB image, and `systemd-oomd` kills it even with
+whole image in RAM, 4.7 GB peak on the 6.7 GiB rootfs (7.2 GB), and `systemd-oomd` kills it even with
 swap), so convert with `img2simg` first and flash the `.simg` without `-S`. Kupfer's own
 `--split-size` path does the same thing internally.
 
