@@ -10,9 +10,16 @@
 #   soc1_0_ram_wifi_2a_1_hdr.bin   firmware de la RAM de wifi
 #   soc1_0_ram_bt_2a_1_hdr.bin     firmware de la RAM de BT
 #   WIFI_RAM_CODE_soc1_0_2a_1.bin  firmware principal del WLAN (connac)
-#   wifi.cfg                       parametros de calibracion (opcional: si no
-#                                  esta, el driver prueba rutas de Android y
-#                                  sigue sin error)
+#   wifi.cfg                       parametros del driver, opcional (ver abajo)
+#
+# wifi.cfg y txpowerctrl.cfg son opcionales de verdad, no por un fallback: los
+# dos se cargan DESPUES de haber puesto la tabla de fabrica que ya viene
+# compilada en el driver, y el fichero solo la sobreescribe si viene relleno.
+# wlanGetConfig() (gl_init.c, CFG_SUPPORT_CFG_FILE=1) hace antes
+# wlanCfgInit(prAdapter, NULL, 0, 0), y txPwrCtrlLoadConfig() mete antes la
+# lista con txPwrCtrlGlobalVariableToList(). Si el cfg no esta, el firmware
+# arranca igual y solo se pierde la configuracion de fabrica. Como este paquete
+# instala el directorio entero del repo, van los que haya.
 #
 # El nombre del firmware del WLAN lo construye connacConstructFirmwarePrio() con
 # "%s_%u%s_%u.bin" = <prefijo>_<CFG_WIFI_IP_SET=2><kalGetFwFlavor()><eco>.bin, y

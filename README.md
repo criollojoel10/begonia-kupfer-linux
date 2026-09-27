@@ -478,10 +478,16 @@ El `2a` del nombre no es casualidad: se compone como `<prefijo>_<CFG_WIFI_IP_SET
 y `kalGetFwFlavor()` en `os/linux/plat/mt6785/plat_priv.c` devuelve `'a'`. Si el kernel pidiera otro,
 se prueban en orden `..._2a_1.bin`, `..._2a_1`, `WIFI_RAM_CODE_soc1_0`, `WIFI_RAM_CODE_soc1_0.bin`.
 
-Dos ficheros que **no** hacen falta: `wifi.cfg` y `txpowerctrl.cfg` son opcionales (el driver
-prueba rutas de Android y sigue sin error), y el EEPROM (`EEPROM_MT<chip_id>.bin`) no se
-proporciona a propósito, porque si no lo encuentra cae al **modo eFuse**, que es lo normal en un
-móvil: la calibración está en el eFuse del SoC, no en un fichero.
+Dos ficheros más del repo que **no son obligatorios**: `wifi.cfg` y `txpowerctrl.cfg`. No es que el
+driver los pida y si no los encuentra siga sin error, es que **la tabla de fábrica ya viene
+compilada** en el driver y el fichero solo la sobreescribe: `wlanGetConfig()` (`CFG_SUPPORT_CFG_FILE=1`)
+hace antes `wlanCfgInit(prAdapter, NULL, 0, 0)`, y `txPwrCtrlLoadConfig()`
+(`CFG_SUPPORT_DYNAMIC_PWR_LIMIT=1`) mete antes la lista con `txPwrCtrlGlobalVariableToList()`. Como
+este paquete instala el directorio entero del repo, si el driver los pide, se los encuentra.
+
+El EEPROM (`EEPROM_MT<chip_id>.bin`) tampoco se proporciona, y aquí sí es a propósito: si el driver no
+lo encuentra cae al **modo eFuse**, que es lo normal en un móvil, porque la calibración está en el
+eFuse del SoC y no en un fichero.
 
 Los `.zst` no hay que descomprimirlos: el config base del kernel es el de pmaports y ya trae
 `CONFIG_FW_LOADER_COMPRESS_ZSTD=y`.
