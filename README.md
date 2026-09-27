@@ -493,13 +493,15 @@ fuentes. Lo que sí hay es `/dev/wmtWifi`, un nodo misc que crea `wmt_drv` (dent
 `wmt_wifi_trigger.c`): escribir `'1'` llama a `mtk_wcn_wmt_func_on(WMTDRV_TYPE_WIFI)`, que enciende
 connsys, arma el WFSYS y lanza el probe del gen4m → aparece `wlan0`.
 
-Ojo con un malentendido fácil: ese `RUNTIME-UNPROVEN` que lleva el fichero de arriba **no dice que
-el driver no funcione en el móvil**. Está pegado al write y solo habla del **orden** del `func_on`
-(un `func_on` a pelo, sin el BTIF registrado antes, no arranca), que su autor resolvió en la misma
-sesión en la que después consiguió que funcionara. El MR de su forward-port
-(`mt6785-mainline/linux` !2) dice con todas las letras que **`wlan0` escanea y se asocia en 2.4 y
-5 GHz, con DHCP y ping verificados en hardware**, y el commit `b8c1b8b5` ("Verified on hardware:
-this clears the 'no hif info' gate; STP/BTIF now activates") lo respalda. El resumen está en
+Ojo con un malentendido fácil: ese `RUNTIME-UNPROVEN` **no dice que el driver no funcione en el
+móvil**, y además no está en ningún fichero de este port. Está en el fichero que el fwport añade al
+kernel para el trigger (`drivers/misc/mediatek/connectivity/common/common_main/linux/
+wmt_wifi_trigger.c:16`), y es una nota para quien lo porte: *"compile/link verified only ... the
+end-to-end bring-up has not been exercised on a device"*, que solo duda del **orden** del `func_on`.
+Su commit es del 18/06 a las 02:27; los verificados en hardware, ese mismo día, a las 08:18
+(`b8c1b8b5`) y las 09:25 (`0468921f`). Sencillamente no se actualizó el comentario. El MR de su
+forward-port (`mt6785-mainline/linux` !2) dice con todas las letras que **`wlan0` escanea y se asocia
+en 2.4 y 5 GHz, con DHCP y ping verificados en hardware**. El resumen está en
 [El wifi: verificado por su autor, sin probar por nosotros](#el-wifi-verificado-por-su-autor-sin-probar-por-nosotros).
 
 `device-mt6785-xiaomi-begonia` instala ahora `mediatek-wifi.service` (habilitada por symlink en
