@@ -736,8 +736,11 @@ cp -r overlay/* /ruta/a/pkgbuilds/
 2. `cp -r /ruta/al/port/overlay/* .`
 3. `git checkout -b begonia` y commit con los tres paquetes nuevos y los dos parches.
 4. `kupferbootstrap packages check --ci-mode` (el CI de upstream lo corre también).
-5. Push al fork y MR contra la rama `dev` con **este README como cuerpo**: qué funciona, qué no,
-   y qué no se ha probado (wifi interno `RUNTIME-UNPROVEN`, BT interno inviable).
+5. Push al fork y MR contra la rama `dev`.
+
+El cuerpo del MR está **escrito y listo para pegar** en [`MR-kupfer-pkgbuilds.md`](MR-kupfer-pkgbuilds.md)
+(en inglés, como el resto de la guía de porting). No se pudo abrir el MR desde aquí porque
+este entorno no tiene token de gitlab.com.
 
 El MR son exactamente cinco paquetes: tres nuevos (`linux/mt6785`, `firmware/mt6785-xiaomi-begonia`,
 `device/device-mt6785-xiaomi-begonia`) y dos parches a paquetes que ya existen
