@@ -777,7 +777,26 @@ cp -r overlay/* /ruta/a/pkgbuilds/
 2. `cp -r /ruta/al/port/overlay/* .`
 3. `git checkout -b begonia` y commit con los tres paquetes nuevos y los dos parches.
 4. `kupferbootstrap packages check --ci-mode` (el CI de upstream lo corre también).
-5. Push al fork y MR contra la rama `dev`.
+5. Push al fork y MR contra la rama `dev`, con el título **prefijado con `Draft: `** mientras el
+   wifi interno siga sin probar en hardware: es lo que piden las guías de porting, y lo quitas
+   cuando ya esté probado en el móvil.
+
+Y para probarlo de verdad, el flujo es el de siempre
+([quickstart de kupferbootstrap](https://kupfer.gitlab.io/kupferbootstrap/main/usage/quickstart/)),
+con el perfil en `~/.config/kupfer/kupferbootstrap.toml` (secciones `[profiles.<nombre>]`, clave
+`[profiles] current`):
+
+```
+kupferbootstrap config init
+kupferbootstrap config profile init begonia     # device = "mt6785-xiaomi-begonia", flavour = "plasma-mobile"
+kupferbootstrap packages update
+kupferbootstrap image build
+kupferbootstrap image flash abootimg && kupferbootstrap image flash full userdata
+```
+
+Dos extras que begonia necesita y el flujo de stock no hace: `fastboot erase dtbo` (el bootloader
+quiere el `empty.dtbo` que va dentro de `aboot.img`) y un vbmeta con `--flags 2`. Lo tiene
+resuelto `kupferbootstrap image boot`, que ya borra el dtbo.
 
 El cuerpo del MR está **escrito y listo para pegar** en [`MR-kupfer-pkgbuilds.md`](MR-kupfer-pkgbuilds.md)
 (en inglés, como el resto de la guía de porting). No se pudo abrir el MR desde aquí porque
