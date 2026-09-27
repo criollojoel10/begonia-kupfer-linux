@@ -3,6 +3,9 @@
 Ready to paste. Everything below was written before the first flash, so the "not tested"
 section is honest about what is still unverified on hardware.
 
+PENDIENTE ANTES DE ENVIAR: confirmar el run de CI verde y poner su número en la primera
+balanza de "What works".
+
 ---
 
 ## Title
