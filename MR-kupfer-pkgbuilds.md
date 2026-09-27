@@ -12,6 +12,9 @@ balanza de "What works".
 
 `mt6785: add Xiaomi Redmi Note 8 Pro (begonia) — first MediaTek device`
 
+Open it as `Draft:` while the internal WiFi is still unproven on hardware, per the porting
+guidelines; drop the prefix once it has been tested on the phone.
+
 ## Body
 
 ### Summary
@@ -99,20 +102,33 @@ bumps, so the local build keeps winning over the prebuilts.
 
 ### How to test
 
-Requires an unlocked bootloader. The device and the flavour go in the profile (same as any
-other device, `~/.config/kupfer/<flavour>.toml`), then:
+This is the stock flow, nothing device-specific: fork this repo, then
 
 ```
-kupferbootstrap image build                 # -> mt6785-xiaomi-begonia-plasma-mobile-{full,boot,root}.img
-kupferbootstrap image flash abootimg        # dumps /aboot.img out of the boot partition and flashes it
-kupferbootstrap image flash full userdata   # flashes the image to userdata
+kupferbootstrap config init                                              # ~/.config/kupfer/kupferbootstrap.toml
+kupferbootstrap config profile init begonia                               # [profiles.begonia]
+kupferbootstrap packages update                                           # refresh PKGBUILDs.git + SRCINFO, pulls this MR
+kupferbootstrap image build                                               # -> mt6785-xiaomi-begonia-plasma-mobile-{full,boot,root}.img
+kupferbootstrap image flash abootimg                                      # dumps aboot.img and flashes boot
+kupferbootstrap image flash full userdata                                  # flashes the full image to userdata
 ```
 
-begonia needs two fastboot steps that Kupfer does not do: a vbmeta image flashed with
-`--flags 2` (flags 0 makes LK refuse the boot and drop back to fastboot), and
-`fastboot erase dtbo`. Flashing the raw image as a sparse file is what can kill `fastboot`
-(`load_sparse_file()` allocates the whole image in RAM), so convert with `img2simg` first and
-flash the `.simg` without `-S`.
+with `device = "mt6785-xiaomi-begonia"` and `flavour = "plasma-mobile"` in the profile. Requires
+an unlocked bootloader. `kupferbootstrap image flash` takes `--confirm` if you want it to ask
+first.
+
+Two things begonia needs that the stock flow does not do on its own:
+
+- **`fastboot erase dtbo`.** The bootloader needs the `empty.dtbo` that is inside `aboot.img`;
+  a leftover Android `dtbo` contradicts it and puts the phone in a boot loop.
+  `kupferbootstrap image boot` already does this erase, so the `image boot` path is fine.
+- **A vbmeta image flashed with `--flags 2`.** With flags 0 LK refuses the boot and drops back
+  to fastboot. `avbtool make_vbmeta_image --flags 2 --padding_size 2048` is all it takes.
+
+Flashing the raw image is also what can kill `fastboot` (`load_sparse_file()` allocates the
+whole image in RAM, 4.7 GB peak on a 6.7 GB image, and `systemd-oomd` kills it even with
+swap), so convert with `img2simg` first and flash the `.simg` without `-S`. Kupfer's own
+`--split-size` path does the same thing internally.
 
 ### Maintainer notes
 
@@ -121,7 +137,9 @@ flash the `.simg` without `-S`.
   for this device to keep working.
 - This port is not a fork of anything: the deviceinfo is imported from pmaports at a fixed
   commit (`6c223d3`), the same way `device-sdm845-xiaomi-beryllium` imports its own.
-- `packages check --ci-mode` is clean on all five packages, and CI runs the equivalent.
+- `packages check --ci-mode` is clean on all five packages, and CI runs the equivalent. The
+  layout follows the porting guidelines: `device/`, `linux/`, `firmware/`, and a `.gitignore`
+  next to every `PKGBUILD` that downloads or generates files.
 - One thing a maintainer may want to know because it is device-independent: if `mkinitcpio`
   is ever reinstalled in the same transaction that does not touch `/etc/kupfer/*`, the
   `50-mkinitcpio-overwrite` hook does not re-run and `/etc/mkinitcpio.conf` is left as
