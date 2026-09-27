@@ -102,7 +102,7 @@ absoluto** (0 coincidencias en todo el repo), así que la rama header v2 constru
    `wireless_send_event()`, que solo se compila con `CONFIG_WEXT_CORE`; sin esa opción
    modpost aborta el kernel con `ERROR: modpost: "wireless_send_event" [...] undefined!`.
    El WiFi del hub (`rtl8xxxu`, `mt76`) no depende de ese stack, así que la imagen no debe
-   depender de él. Ver `overlay/linux-mt6785/extra_config` para reactivarlo.
+   depender de él. Ver `overlay/linux/mt6785/extra_config` para reactivarlo.
    Comprobado: con `CONFIG_WEXT_CORE=y` el símbolo resuelve y el kernel compila entero.
 
 ### El overlay del boot updater: dos trampas, y ninguna era visible
@@ -592,14 +592,67 @@ nada.
 Ver `.github/workflows/build.yaml`. Runs bajo demanda (`workflow_dispatch`).
 Los builds pesados van a GHA (evita OOM en la máquina local).
 
+## El overlay es un espejo del árbol de `pkgbuilds`
+
+`overlay/` no es un directorio plano de paquetes: reproduce **exactamente** las rutas
+del repo `gitlab.com/kupfer/packages/pkgbuilds` (rama `dev`):
+
+```
+overlay/linux/mt6785/                    -> linux/mt6785/              (nuevo, kernel)
+overlay/firmware/mediatek-mt6785/        -> firmware/mediatek-mt6785/  (nuevo, blobs)
+overlay/device/mt6785-xiaomi-begonia/     -> device/mt6785-xiaomi-begonia/ (nuevo, device)
+overlay/boot/android-bootimg-updater/    -> boot/android-bootimg-updater/  (modifica upstream)
+overlay/main/mkbootimg-git/              -> main/mkbootimg-git/            (modifica upstream)
+```
+
+Gracias a eso el MR es literalmente:
+
+```sh
+git clone -b dev https://gitlab.com/kupfer/packages/pkgbuilds
+cp -r overlay/* packages/pkgbuilds/
+```
+
+y no puede divergir de lo que se ha construido en el CI. Los dos directorios que
+*modifican* paquetes de upstream llevan solo los ficheros que cambian
+(`PKGBUILD` y `update-bootimg.sh`); el resto lo aporta el checkout porque
+`cp -r` fusiona encima.
+
+Los paquetes que se añaden al repo son `linux-mt6785` (kernel), `firmware-mediatek-mt6785`
+(conectividad + panel) y `device-mt6785-xiaomi-begonia` (deviceinfo, initramfs, autostart
+del stack MTK). Los otros dos son parches a paquetes que ya existen y que **necesitan un
+pkgrel más alto** para que se construyan en vez de cogerse el prebuilt:
+
+| paquete | upstream | aquí | por qué |
+| --- | --- | --- | --- |
+| `boot-android-bootimg-updater` | `0.5-1` | `0.5-2` | su `update-bootimg.sh` no sabe pasar `--recovery_dtbo` |
+| `mkbootimg-git` | `r254.ba2684e-2` | `r254.ba2684e-3` | su `mkbootimg` calcula mal el tamaño en cabecera v2 (división entera) |
+
+`kupferbootstrap packages check --ci-mode` pasa limpio sobre los cinco paquetes en el
+CI (paso homónimo en `.github/workflows/build.yaml`), que es lo que exige la guía de
+porting.
+
+## Abrir el MR
+
+1. `git clone -b dev https://gitlab.com/kupfer/packages/pkgbuilds && cd packages/pkgbuilds`
+2. `cp -r /ruta/al/port/overlay/* .`
+3. `git checkout -b begonia` y commit con los tres paquetes nuevos y los dos parches.
+4. `kupferbootstrap packages check --ci-mode` (el CI de upstream lo corre también).
+5. MR contra la rama `dev` con **este README como cuerpo**: qué funciona, qué no, y qué
+   no se ha probado (wifi interno `RUNTIME-UNPROVEN`, BT interno inviable).
+
+Los dos parches a paquetes compartidos son la parte que un maintainer querrá revisar
+primero: si se prefieren como cambios a `boot-android-bootimg-updater` y `mkbootimg-git`
+en su propio MR, este port se queda solo con los tres paquetes nuevos y las mismas
+`pkgrel` nuevas.
+
 ## Roadmap
 
-- [ ] Port PKGBUILDs y overlay de boot-img (rama `begonia` del fork pkgbuilds)
-- [ ] Build imagen Plasma Mobile en GHA (base `dev`)
-- [ ] Flasheo + verificación (panel Tianma, touch, WiFi/Bluetooth dongles, Plasma)
-- [ ] MR upstream a `kupfer/packages/pkgbuilds` (rama `dev`) — **con informe de qué funciona, qué
-      no, y qué no se probó**, que es lo que pide la contribución
-- [ ] Replicar método táctil tianma (pmOS) documentado
+- [x] Port PKGBUILDs y overlay de boot-img
+- [x] Build de imagen Plasma Mobile en GHA (base `dev`) verde
+- [ ] Flasheo + verificación en el móvil (panel Tianma, touch, WiFi interno MediaTek, dongles, Plasma)
+- [x] Informe de qué funciona / qué no / qué no se probó (este README)
+- [ ] MR upstream a `kupfer/packages/pkgbuilds` (rama `dev`)
+- [x] Replicar método táctil tianma (pmOS) documentado
 
 ## Referencias
 
