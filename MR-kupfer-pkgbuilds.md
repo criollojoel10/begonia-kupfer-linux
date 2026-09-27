@@ -27,7 +27,7 @@ part worth reviewing first.
 |---|---|
 | `linux/mt6785` | `pkgbase=linux-mt6785`, kernel `6.16.4` from the `mt6785-mainline/linux` fork, `Image.gz` + dtbs, `extra_config` on top of pmaports' config |
 | `firmware/mt6785-xiaomi-begonia` | MediaTek connectivity blobs, novatek panel/touch firmware, Realtek dongle firmware |
-| `device/device-mt6785-xiaomi-begonia` | the `deviceinfo` (taken from pmaports at a fixed commit, plus the few attributes Kupfer needs), `/etc/machine-info`, the `mkinitcpio.conf.d` snippet, `empty.dtbo`, and `mediatek-wifi.service` |
+| `device/device-mt6785-xiaomi-begonia` | the `deviceinfo` (taken from pmaports at a fixed commit, plus the few attributes Kupfer needs), `/etc/machine-info`, the `mkinitcpio.conf.d` snippet, `empty.dtbo`, `mediatek-wifi.service`, and one libalpm hook that re-asserts Kupfer's `mkinitcpio.conf` |
 
 ### What works
 
@@ -119,4 +119,11 @@ flash the `.simg` without `-S`.
 - This port is not a fork of anything: the deviceinfo is imported from pmaports at a fixed
   commit (`6c223d3`), the same way `device-sdm845-xiaomi-beryllium` imports its own.
 - `packages check --ci-mode` is clean on all five packages, and CI runs the equivalent.
+- One thing a maintainer may want to know because it is device-independent: if `mkinitcpio`
+  is ever reinstalled in the same transaction that does not touch `/etc/kupfer/*`, the
+  `50-mkinitcpio-overwrite` hook does not re-run and `/etc/mkinitcpio.conf` is left as
+  Arch's stock one, which silently produces an initramfs without `rootfsdetect`,
+  `rootfsresize` or `firmwaresearchpath`. The device package here ships
+  `95-mkinitcpio-begonia.hook` so this device does not depend on that happening to go
+  well. If it is deemed general enough, it belongs in `boot/mkinitcpio-kupfer-hooks`.
 - Ask me anything, Matrix `#kupfer-community`.
