@@ -1,6 +1,6 @@
 #!/bin/sh
-# Reconstruye /etc/mkinitcpio.conf con el conf de Kupfer y regenera el
-# initramfs. Lo invoca 95-mkinitcpio-begonia.hook.
+# Reconstruye /etc/mkinitcpio.conf con el conf de Kupfer, regenera el
+# initramfs y reconstruye aboot.img. Lo invoca 80-mkinitcpio-begonia.hook.
 #
 # Por que hace falta (fallo real del run 36305169422, trabajo previo):
 # el paquete mkinitcpio deja /etc/mkinitcpio.conf con los hooks DE STOCK en su
@@ -13,6 +13,11 @@
 # Se ejecuta en la transaccion en la que entra device-mt6785-xiaomi-begonia, que
 # es posterior a la del kernel porque el paquete depende de linux-mt6785. Asi da
 # igual como pacman agrupe las transacciones.
+#
+# El paso 3 (update-bootimg) es por si el hook 91-android-bootimg-updater.hook no
+# llegara a dispararse en esa transaccion. /boot/aboot.img lleva dentro el
+# initramfs, asi que un initramfs bueno con un aboot.img viejo sigue arrancando
+# mal. Es idempotente: si el 91 se dispara despues, reconstruye lo mismo.
 #
 # Todo se protege: si algo no esta, sale con 0 en vez de abortar la transaccion
 # (un Exec de hook que falla tumba el build entero).
@@ -35,6 +40,13 @@ if [ -f /etc/mkinitcpio.d/linux.preset ]; then
     mkinitcpio -p /etc/mkinitcpio.d/linux.preset || {
         echo "aviso: mkinitcpio fallo, el initramfs puede no ser el de Kupfer" >&2
     }
+fi
+
+# 3) aboot.img lleva por dentro el initramfs que hay ahora mismo en /boot
+if [ -x /usr/bin/update-bootimg ]; then
+    update-bootimg || echo "aviso: update-bootimg fallo" >&2
+else
+    echo "aviso: update-bootimg no esta instalado" >&2
 fi
 
 exit 0

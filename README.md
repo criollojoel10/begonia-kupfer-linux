@@ -611,10 +611,15 @@ Dos trampas que costaron un run cada una y que conviene no volver a pisar:
   donde no se toca `/etc/kupfer/*`, el conf se queda con los hooks de Arch
   (`systemd microcode kms sd-vconsole…`) y el initramfs sale sin `rootfsdetect`/`rootfsresize` (no
   monta la rootfs), sin `firmwaresearchpath` y sin los módulos del panel ni el firmware del táctil de
-  `FILES` ⇒ pantalla en negro. De ahí el hook `95-mkinitcpio-begonia.hook` del paquete device: se
+  `FILES` ⇒ pantalla en negro. De ahí el hook `80-mkinitcpio-begonia.hook` del paquete device: se
   dispara en la transacción en la que entra el paquete, que es posterior al kernel porque es
-  dependencia suya, y como va en `95-` corre después de `90-mkinitcpio.hook` y deja el initramfs
-  final hecho con el conf de Kupfer. El check de CI "Verify the rootfs" lo verifica en la imagen.
+  dependencia suya, y rehace el conf con `mkinitcpio-overwrite` y regenera el initramfs entero. Va
+  en `80-` y no en `95-` a propósito: **`/boot/aboot.img` lleva dentro el initramfs** (lo empaqueta
+  `update-bootimg`, que dispara `91-android-bootimg-updater.hook`), así que un hook que regenerase el
+  initramfs *después* del `91` dejaría `aboot.img` con el initramfs roto de antes y el móvil
+  arrancaría mal aunque `/boot/initramfs-linux.img` esté bien. Los hooks `PostTransaction` se
+  ejecutan en orden alfabético de nombre de fichero, así que `80-` va antes que el `90-` y el `91-`.
+  El check de CI "Verify the rootfs" lo verifica en la imagen.
 - El `hook systemd` de mkinitcpio hace `map add_module 'crypto-lzo' 'crypto-lz4'`, y el config base
   de pmaports trae `CONFIG_CRYPTO_LZO=y` pero `CONFIG_CRYPTO_LZ4` apagado. Con el conf de stock eso
   es un `==> ERROR: module not found: 'crypto_lz4'` cada vez que se construye un initramfs en el

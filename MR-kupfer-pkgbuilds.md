@@ -145,6 +145,10 @@ swap), so convert with `img2simg` first and flash the `.simg` without `-S`. Kupf
   `50-mkinitcpio-overwrite` hook does not re-run and `/etc/mkinitcpio.conf` is left as
   Arch's stock one, which silently produces an initramfs without `rootfsdetect`,
   `rootfsresize` or `firmwaresearchpath`. The device package here ships
-  `95-mkinitcpio-begonia.hook` so this device does not depend on that happening to go
-  well. If it is deemed general enough, it belongs in `boot/mkinitcpio-kupfer-hooks`.
+  `80-mkinitcpio-begonia.hook` so this device does not depend on that happening to go
+  well. It runs *before* `90-linux.hook` and `91-android-bootimg-updater.hook` on
+  purpose: `aboot.img` embeds the initramfs, so regenerating the initramfs after
+  `update-bootimg` has run would leave a good `initramfs-linux.img` inside a stale
+  `aboot.img`, which still boots broken. If it is deemed general enough, it belongs
+  in `boot/mkinitcpio-kupfer-hooks`.
 - Ask me anything, Matrix `#kupfer-community`.

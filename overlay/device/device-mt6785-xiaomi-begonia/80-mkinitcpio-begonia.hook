@@ -1,0 +1,62 @@
+# Hook de libalpm del port a Kupfer para begonia.
+#
+# Que arregla (fallo real del run 36301882701, job 108570910979):
+#
+# El paquete mkinitcpio trae /etc/mkinitcpio.conf de stock. Su post_install lo
+# escribe siempre, y en una construccion de imagen el conf acaba siendo el de
+# Arch (log del run, transaccion de 8 paquetes con mkinitcpio y linux-mt6785):
+#
+#   HOOKS=(base systemd autodetect microcode modconf kms keyboard sd-vconsole
+#          block filesystems fsck)
+#
+# El conf de Kupfer (/etc/kupfer/mkinitcpio.conf) tiene en cambio
+#
+#   HOOKS=(base firmwaresearchpath udev autodetect modconf block rootfsdetect
+#          filesystems keyboard rootfsresize fsck)
+#
+# El hook 50-mkinitcpio-overwrite.hook de mkinitcpio-kupfer-hooks deberia
+# rehacerlo, pero en ese run no llego a correr (0 apariciones de "Overwriting
+# mkinitcpio.conf" en las 32926 lineas del log), asi que no se puede depender de
+# el. Con el conf de stock el initramfs se queda SIN rootfsdetect/rootfsresize
+# (no monta la rootfs), SIN firmwaresearchpath (no encuentra el firmware) y SIN
+# los modulos del panel ni el firmware del tactil declarados en FILES:
+# pantalla en negro. Ademas el hook 'systemd' hace add_module 'crypto-lzo'
+# 'crypto-lz4' y avisa de "module not found: crypto_lz4".
+#
+# Este hook rehace el conf con mkinitcpio-overwrite (que es lo que hace el
+# 50-mkinitcpio-overwrite.hook) y regenera el initramfs entero. Se dispara
+# cuando entra /etc/kupfer/deviceinfo, que instala este mismo paquete, y para
+# entonces el kernel ya esta instalado (es una dependencia), asi que da igual
+# como se agrupen las transacciones de pacman.
+#
+# EL 80- ES LO IMPORTANTE. Los hooks PostTransaction se ejecutan en el orden
+# alfabetico del nombre del fichero (evidencia del run 36301882701):
+#
+#   60-linux.hook            "Updating linux-mt6785 module dependencies"
+#   90-linux.hook            "Updating linux initcpios"   (mkinitcpio -p linux)
+#   91-android-bootimg-updater.hook  "Updating aboot.img"  (update-bootimg)
+#
+# Y da igual que este hook se llame 95: /boot/aboot.img METE DENTRO el
+# initramfs, o sea que update-bootimg empaqueta el initramfs que hay en ese
+# momento. Si el initramfs se regenera DESPUES del 91, aboot.img se queda con
+# el initramfs roto de antes y el movil arranca con el initramfs malo aunque en
+# /boot/initramfs-linux.img y en el paquete este todo bien. Por eso va al
+# principio: asi el 90 (si se dispara) y el 91 workan con el initramfs ya
+# bueno. Este es el unico hook del port cuya posicion en el nombre importa.
+#
+# El Exec es un script propio y no una linea de shell con comillas: libalpm
+# parsea el Exec a mano y partirlo en palabras es fragil. Ademas el script
+# autoprotege cada paso, porque un Exec que sale con error tumba la transaccion
+# entera y con ella el build.
+
+[Trigger]
+Type = File
+Operation = Install
+Operation = Upgrade
+Target = etc/kupfer/deviceinfo
+Target = etc/kupfer/mkinitcpio.conf.d/xiaomi-begonia.conf
+
+[Action]
+Description = Rebuilding the initramfs with Kupfer's mkinitcpio.conf
+When = PostTransaction
+Exec = /usr/libexec/regen-initramfs-begonia

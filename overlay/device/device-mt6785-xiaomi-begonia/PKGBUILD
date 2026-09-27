@@ -25,7 +25,12 @@ pkgver=0.1
 # /usr/lib/device-mt6785-xiaomi-begonia/mediatek-wifi.sh y el script se
 # instala en /usr/libexec/. El servicio no podia arrancar jamas (203/EXEC) y el
 # wifi interno no se encendia nunca. Nada de esto hacia fallar el build.
-pkgrel=5
+#
+# 6: el hook de libalpm que regenera el initramfs pasa de 95- a 80-. /boot/aboot.img
+# mete DENTRO el initramfs (lo empaqueta update-bootimg), asi que un hook que
+# regenerase el initramfs despues del 91-android-bootimg-updater.hook dejaria
+# aboot.img con el initramfs viejo, que es justo el roto. Ver el propio hook.
+pkgrel=6
 _arches=specific
 arch=(aarch64)
 license=(MIT)
@@ -43,7 +48,7 @@ source=(
     empty.dtbo
     mediatek-wifi.sh
     mediatek-wifi.service
-    95-mkinitcpio-begonia.hook
+    80-mkinitcpio-begonia.hook
     regen-initramfs.sh
 )
 # Ojo: los hash de abajo son de los ficheros de source=(). Al tocar uno de
@@ -118,11 +123,13 @@ EOF
     ln -s /usr/lib/systemd/system/mediatek-wifi.service \
         "$pkgdir"/etc/systemd/system/multi-user.target.wants/mediatek-wifi.service
 
-    # Hook que arregla /etc/mkinitcpio.conf y regenera el initramfs al final de
-    # la transaccion en la que entra este paquete. Ver el propio hook para el
-    # por que (fallo del run 36301882701).
-    install -Dm644 "$srcdir"/95-mkinitcpio-begonia.hook \
-        "$pkgdir"/usr/share/libalpm/hooks/95-mkinitcpio-begonia.hook
+    # Hook que arregla /etc/mkinitcpio.conf y regenera el initramfs en la
+    # transaccion en la que entra este paquete. Ver el propio hook para el por
+    # que (fallo del run 36301882701) y para por que el 80- importa: aboot.img
+    # lleva dentro el initramfs, y este hook tiene que correr antes del
+    # 91-android-bootimg-updater.hook que lo empaqueta.
+    install -Dm644 "$srcdir"/80-mkinitcpio-begonia.hook \
+        "$pkgdir"/usr/share/libalpm/hooks/80-mkinitcpio-begonia.hook
     install -Dm755 "$srcdir"/regen-initramfs.sh \
         "$pkgdir"/usr/libexec/regen-initramfs-begonia
 }

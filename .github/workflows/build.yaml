@@ -819,9 +819,11 @@ jobs:
           #  1644 header_size | 1648 dtb_size | 1652 dtb_addr
           set -euo pipefail
           ABOOT="${{ steps.paths.outputs.images_dir }}/aboot.img"
+          IRAM="${{ steps.paths.outputs.images_dir }}/initramfs-linux.img"
           test -s "$ABOOT" || { echo "::error::no hay aboot.img que verificar"; exit 1; }
-          python3 - "$ABOOT" <<'PY'
-          import struct, sys
+          test -s "$IRAM" || { echo "::error::no hay initramfs-linux.img que verificar"; exit 1; }
+          python3 - "$ABOOT" "$IRAM" <<'PY'
+          import struct, sys, hashlib
 
           d = open(sys.argv[1], "rb").read(1700)
           u32 = lambda o: struct.unpack_from("<I", d, o)[0]
@@ -882,6 +884,41 @@ jobs:
                 % (u32(8), u32(16), u32(1648), dtbo))
           print("  cmdline: %s" % cmd)
           print("  earlymodules: %s" % ",".join(mods))
+
+          # Lo que de verdad decide si el movil arranca: aboot.img lleva el
+          # initramfs DENTRO (--ramdisk de mkbootimg), no al lado. Si el
+          # initramfs se regenera despues de que update-bootimg construyera
+          # aboot.img, /boot/initramfs-linux.img queda bien y aboot.img lleva
+          # dentro el viejo, que es el que arranca. El build puede salir verde
+          # igual. Layout (orden de escritura de mkbootimg, cada bloque alineado
+          # a page): cabecera | kernel | ramdisk | recovery_dtbo | dtb.
+          # Comprobado sobre el aboot.img del run 36277664585: a
+          # page + align(kernel_size) empieza el cpio "070701" del initramfs y
+          # justo despues del ramdisk esta el magic d7b7ab1e del recovery dtbo.
+          full = open(sys.argv[1], "rb").read()
+          align = lambda n, p: (n + p - 1) // p * p
+          off_r = page + align(u32(8), page)
+          ramdisk = full[off_r:off_r + u32(16)]
+          if len(ramdisk) != u32(16):
+              bad.append("el ramdisk se sale del fichero (off %d, %d bytes)"
+                         % (off_r, u32(16)))
+          elif not ramdisk.startswith(b"070701"):
+              # 070701 = cpio newc. El initramfs de mkinitcpio empieza siempre
+              # por un cpio SIN comprimir delante del cuerpo gzip, y ese primer
+              # segmento es donde van los modulos y los FILES.
+              bad.append("el ramdisk de aboot.img no empieza por un cpio 070701: %r"
+                         % ramdisk[:8])
+          ref = open(sys.argv[2], "rb").read()
+          a = hashlib.md5(ramdisk).hexdigest()
+          b = hashlib.md5(ref).hexdigest()
+          print("  ramdisk md5: aboot.img=%s initramfs-linux.img=%s (%d bytes)"
+                % (a, b, len(ref)))
+          if a != b:
+              bad.append("aboot.img lleva dentro un initramfs distinto del de "
+                         "/boot/initramfs-linux.img: el movil arranca con el "
+                         "initramfs viejo aunque el otro sea el bueno "
+                         "(update-bootimg se ejecuto antes de regenerarlo)")
+
           if bad:
               for b in bad:
                   print("::error::aboot.img: %s" % b)
