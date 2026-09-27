@@ -908,17 +908,31 @@ jobs:
 
           missing=0
 
-          # 1) modules.builtin: los cuatro modulos de la pila.
+          # 1) modules.builtin: los cinco modulos de la pila.
           BI=$(grep -E 'usr/lib/modules/[^/]+/modules\.builtin$' /tmp/bat-kernel-files.txt | head -1)
           if [ -z "$BI" ]; then
             echo "::error::el paquete del kernel no trae modules.builtin"; exit 1
           fi
           echo "--- $BI ---"
           bsdtar -xOf "$KPKG" "$BI" > /tmp/bat-modules.builtin
-          # gauge + manager + auxadc (canales IIO) + rtc (nvmem) + el core MFD
-          # que declara los 12 IRQ del gauge.
-          for m in mt6359-gauge.ko mt6359_battery.ko mtk-battery-manager.ko \
-                   mt6359-auxadc.ko rtc-mt6397.ko mt6397-core.ko; do
+          # OJO: estos son nombres de MODULO, no de fichero fuente, y no coinciden.
+          # En power/supply el Makefile hace
+          #   mt6359_battery-objs := mt6359-gauge.o mtk_battery.o ...
+          #   obj-$(CONFIG_BATTERY_MT6359) += mtk-battery-manager.o mt6359_battery.o
+          # asi que NO existe mt6359-gauge.ko: el gauge va DENTRO de mt6359_battery.ko,
+          # que es el que aparece en modules.builtin. Comprobar "mt6359-gauge.ko"
+          # aqui dio un falso negativo en el run 36356080657 y tiro 50 minutos de
+          # build por nada.
+          # En mfd pasa igual:
+          #   mt6397-objs := mt6397-core.o mt6397-irq.o mt6358-irq.o
+          #   obj-$(CONFIG_MFD_MT6397) += mt6397.o
+          # o sea mt6397-core.ko tampoco existe; el modulo compuesto es mt6397.ko,
+          # y es el que trae el core MFD que declara los 12 IRQ del gauge.
+          # Los 4 modulos: el gauge+battery (mt6359_battery), el manager, el
+          # proveedor de los canales IIO (mt6359-auxadc), el del nvmem (rtc-mt6397),
+          # y el core MFD que les da los IRQ (mt6397).
+          for m in mt6359_battery.ko mtk-battery-manager.ko \
+                   mt6359-auxadc.ko rtc-mt6397.ko mt6397.ko; do
             if grep -q "/${m}\$" /tmp/bat-modules.builtin; then
               echo "OK builtin ${m}"
             else
@@ -1139,6 +1153,15 @@ jobs:
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
+        # always() a proposito. Sin esto el upload usa success() por defecto, asi
+        # que cualquier fallo de un verify posterior se lleva por delante las
+        # imagenes: el runner las borra y se pierden ~50 minutos de build. En el
+        # run 36356080657 un unico nombre de modulo mal escrito en el verify de
+        # la bateria tiro el artefacto entero. Subir las imagenes aunque un verify
+        # haya fallado no es peligroso por si mismo (if-no-files-found: warn, y si
+        # el build fallo antes de generarlas no hay nada que subir); quien
+        # decide si las flashea es el usuario, leyendo el run.
+        if: always()
         with:
           name: kupfer-begonia-${{ inputs.flavour }}
           path: |
