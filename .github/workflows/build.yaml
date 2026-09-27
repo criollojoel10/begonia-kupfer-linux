@@ -589,6 +589,28 @@ jobs:
             echo "::error::la imagen trae firmware-mediatek-mt6785 (nombre viejo, pre-rename)"; miss=1
           fi
 
+          # (e) los blobs del stack MediaTek DENTRO de la imagen, no solo dentro
+          # del paquete. El paso anterior comprueba el .pkg.tar.xz; esto comprueba
+          # que ese paquete llego de verdad al rootfs. Son dos cosas distintas: un
+          # paquete bien construido que no se instala deja la imagen verde y sin
+          # un solo blob en /usr/lib/firmware/mediatek/, y entonces wlan_gen4m no
+          # puede pedir firmware y wlan0 no aparece nunca. Es el mismo fallo que
+          # se comio la imagen de pmOS del run 36304158010.
+          echo "--- /usr/lib/firmware/mediatek (en la imagen, no en el paquete) ---"
+          sudo ls -l "$MNT/usr/lib/firmware/mediatek/" || {
+            echo "::error::no hay /usr/lib/firmware/mediatek en la imagen"; miss=1; }
+          for f in WIFI_RAM_CODE_soc1_0_2a_1.bin.zst WMT_SOC.cfg.zst \
+                   soc1_0_patch_mcu_2a_1_hdr.bin.zst soc1_0_ram_bt_2a_1_hdr.bin.zst \
+                   soc1_0_ram_mcu_2a_1_hdr.bin.zst soc1_0_ram_wifi_2a_1_hdr.bin.zst \
+                   wifi.cfg.zst; do
+            [ -s "$MNT/usr/lib/firmware/mediatek/$f" ] || {
+              echo "::error::falta o vacio /usr/lib/firmware/mediatek/$f en la imagen (el wifi interno no cargara firmware)"; miss=1; }
+          done
+          # Y que la version instalada del paquete de firmware sea la del
+          # pkgrel actual, no una anterior que se hubiera quedado en la cache.
+          sudo ls "$MNT/var/lib/pacman/local/" | grep -E '^firmware-mt6785-xiaomi-begonia-' \
+            || { echo "::error::firmware-mt6785-xiaomi-begonia no esta instalado"; miss=1; }
+
           sudo umount "$MNT"
           sudo losetup -d "$LOOP"
           exit "$miss"
@@ -677,7 +699,8 @@ jobs:
           # que trae el config (viene de pmaports).
           for f in WMT_SOC.cfg.zst soc1_0_patch_mcu_2a_1_hdr.bin.zst \
                    soc1_0_ram_mcu_2a_1_hdr.bin.zst soc1_0_ram_wifi_2a_1_hdr.bin.zst \
-                   soc1_0_ram_bt_2a_1_hdr.bin.zst WIFI_RAM_CODE_soc1_0_2a_1.bin.zst; do
+                   soc1_0_ram_bt_2a_1_hdr.bin.zst WIFI_RAM_CODE_soc1_0_2a_1.bin.zst \
+                   wifi.cfg.zst; do
             if grep -q "/${f}\$" /tmp/kupfer-fw-files.txt; then
               echo "OK fw ${f}"
             else
