@@ -465,6 +465,13 @@ jobs:
 
           MODS = ["novatek-nvt-ts-spi", "ti-lmu", "lm363x-regulator",
                   "panel-novatek-nt36672a", "lm36274_bl"]
+          # Y el firmware del tactil. El driver pide "novatek/nt36672a_begonia_csot.bin"
+          # tal cual (firmware-name del DTB) y lo carga desde el initramfs: si el
+          # binario no esta dentro, el panel se enciende pero el touch no existe.
+          # En una unidad Tianma el nombre CSOT debe contener el binario Tianma
+          # (lo hace el paquete de firmware, _panel=tianma).
+          FW = ["nt36672a_begonia_csot.bin.zst",
+                "nt36672a_begonia_tianma.bin.zst"]
 
           data = open(sys.argv[1], "rb").read()
           # el CPIO temprano, si lo hay, termina con su entrada TRAILER!!!
@@ -491,6 +498,16 @@ jobs:
               print("::error::faltan modulos en el initramfs: %s" % " ".join(missing))
               sys.exit(1)
           print("initramfs ok: los %d modulos de panel/tactil estan dentro" % len(MODS))
+          # El cpio de mkinitcpio guarda los nombres tal cual (no con sufijo de
+          # compresion), asi que el .zst tiene que aparecer en la lista.
+          miss_fw = [f for f in FW if f.encode() not in head + body]
+          if miss_fw:
+              print("::error::falta el firmware del panel en el initramfs: %s"
+                    % " ".join(miss_fw))
+              sys.exit(1)
+          # Y que el nombre CSOT sea realmente el Tianma: si el cp metió el
+          # CSOT, el touch sale con los ejes cruzados sin decir nada en el log.
+          print("firmware del panel en el initramfs: %d ficheros" % len(FW))
           PY
 
       - name: Verify kernel modules and firmware in the image
@@ -575,6 +592,21 @@ jobs:
               missing=1
             fi
           done
+          # Y lo que de verdad importa: el DTB de 6.16 pide el nombre CSOT, asi
+          # que ese fichero TIENE que ser el binario Tianma (md5 7d67c2e9...) o
+          # el touch sale con los ejes invertidos. Un simple grep de nombres no
+          # lo pilla: los dos ficheros existen siempre.
+          csot_md5=$(bsdtar -xOf "$FPKG" "usr/lib/firmware/novatek/nt36672a_begonia_csot.bin.zst" | md5sum | cut -d' ' -f1)
+          tianma_md5=$(bsdtar -xOf "$FPKG" "usr/lib/firmware/novatek/nt36672a_begonia_tianma.bin.zst" | md5sum | cut -d' ' -f1)
+          echo "csot=$csot_md5 tianma=$tianma_md5"
+          if [ "$csot_md5" != "7d67c2e9167f1a630576c177c1b831f7" ]; then
+            echo "::error::el nombre CSOT no contiene el binario Tianma (touch invertido)"
+            missing=1
+          fi
+          if [ "$tianma_md5" != "7d67c2e9167f1a630576c177c1b831f7" ]; then
+            echo "::error::el binario Tianma no es el esperado"
+            missing=1
+          fi
           # Los modulos del panel tienen que estar en el paquete del kernel:
           # se cargan desde el initramfs, no desde la rootfs.
           for m in panel-novatek-nt36672a novatek-nvt-ts-spi ti-lmu \

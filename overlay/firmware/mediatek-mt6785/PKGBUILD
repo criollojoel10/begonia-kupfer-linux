@@ -28,10 +28,30 @@
 # cargador de firmware del kernel solo busca en /usr/lib/firmware (y sus
 # subdirectorios), asi que antes de este cambio el firmware estaba en
 # /usr/mediatek/ y era invisible para el driver.
+#
+# --- variante de panel ---
+#
+# _panel dice que panel lleva ESTA unidad, y no es un detalle. El DTB de la
+# rama 6.16 (la unica que hay para begonia) solo conoce la variante CSOT:
+#
+#   panel@...:     compatible = "xiaomi,begonia-csot-nt36672a", "novatek,nt36672a"
+#   touchscreen@0: firmware-name = "novatek/nt36672a_begonia_csot.bin"
+#
+# El driver del tactil (novatek-nvt-ts-spi) hace request_firmware() con ese
+# nombre EXACTO, asi que en una unidad Tianma hay que servir el binario Tianma
+# bajo el nombre CSOT o el touch sale con los ejes invertidos. Confirmado en
+# hardware sobre este mismo movil con pmOS.
+#
+#   md5sum nt36672a_begonia_tianma.bin.zst = 7d67c2e9167f1a630576c177c1b831f7 (53321 B)
+#   md5sum nt36672a_begonia_csot.bin.zst  = 52f5e96f84fbdd6cbed2e98790a202df (53731 B)
+#
+# Asi el touch va bien sin tocar el movil. Para una unidad CSOT: _panel=csot.
+_panel=tianma
 _mode=cross
 pkgname=firmware-mediatek-mt6785
 pkgver=0.1
-pkgrel=2
+# 3: el nombre CSOT pasa a contener el binario Tianma (touch de esta unidad).
+pkgrel=3
 _arches=specific
 arch=(aarch64)
 license=(custom:Proprietary)
@@ -56,5 +76,15 @@ package() {
     if [ -f "$srcdir"/firmware/LICENSE ]; then
         install -Dm644 "$srcdir"/firmware/LICENSE \
             "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    fi
+
+    # El tactil de una unidad Tianma se queda sin blob si esto no esta: el DTB
+    # pide el nombre CSOT y ese nombre tiene que contener el binario Tianma
+    # (ver la nota de _panel arriba). Se hace aqui, y no en el paquete del
+    # device, para que haya un unico escritor de ese path.
+    if [ "$_panel" = tianma ]; then
+        cp -f "$pkgdir"/usr/lib/firmware/novatek/nt36672a_begonia_tianma.bin.zst \
+              "$pkgdir"/usr/lib/firmware/novatek/nt36672a_begonia_csot.bin.zst
+        echo "panel Tianma: el nombre CSOT apunta al binario Tianma"
     fi
 }
