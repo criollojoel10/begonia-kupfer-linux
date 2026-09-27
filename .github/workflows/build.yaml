@@ -542,7 +542,10 @@ jobs:
           sudo mkdir -p "$MNT"
           ROOTP=""
           for p in "${LOOP}"p*; do
-            sudo mount -o ro "$p" "$MNT" 2>/dev/null || continue
+            # ro a secas falla si ext4 se desmonto sin limpiar el journal
+            # (la imagen se acaba de ensamblar); noload lo salta.
+            sudo mount -o ro "$p" "$MNT" 2>/dev/null \
+              || sudo mount -o ro,noload "$p" "$MNT" 2>/dev/null || continue
             if [ -f "$MNT/etc/kupfer/deviceinfo" ]; then ROOTP="$p"; break; fi
             sudo umount "$MNT"
           done
