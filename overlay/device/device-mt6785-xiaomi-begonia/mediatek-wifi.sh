@@ -13,7 +13,7 @@
 #   2. wmt_drv          -> crea /dev/wmtWifi y el core WMT
 #   3. wlan_gen4m       -> registra el probe del WLAN
 #   4. write '1'        -> wmt_dev_set_hif_btif() + func_on(WIFI)
-# El 1 tiene que ir antes del 4 porque el propio write llama a
+# El btif tiene que ir cargado antes del 4 porque el propio write llama a
 # wmt_dev_set_hif_btif() para registrar el BTIF como transporte STP; si el
 # modulo no esta cargado, stp_init se queda sin hif info.
 #
