@@ -27,7 +27,7 @@ arch=(aarch64)
 license=(MIT)
 depends=(
     boot-android-common
-    firmware-mediatek-mt6785
+    firmware-mt6785-xiaomi-begonia
     linux-mt6785
 )
 _commit=6c223d3
@@ -57,7 +57,7 @@ package() {
     cp "$srcdir"/deviceinfo "$srcdir"/deviceinfo_
     cat >>"$srcdir"/deviceinfo_ <<EOF
 
-# --- anadido por el port a Kupfer (overlay/device-mt6785-xiaomi-begonia) ---
+# --- anadido por el port a Kupfer (overlay/device/device-mt6785-xiaomi-begonia) ---
 # header_version 2 hace que update-bootimg.sh use la ruta --kernel/--dtb/--dtb_offset
 # en vez de concatenar Image.gz y el dtb.
 deviceinfo_header_version="2"
@@ -101,7 +101,7 @@ EOF
     # post_install, porque en una construccion de imagen no corre systemctl y
     # hay que dejar la unidad habilitada de antemano.
     install -Dm755 "$srcdir"/mediatek-wifi.sh \
-        "$pkgdir"/usr/lib/device-mt6785-xiaomi-begonia/mediatek-wifi.sh
+        "$pkgdir"/usr/libexec/mediatek-wifi.sh
     install -Dm644 "$srcdir"/mediatek-wifi.service \
         "$pkgdir"/usr/lib/systemd/system/mediatek-wifi.service
     ln -s /usr/lib/systemd/system/mediatek-wifi.service \

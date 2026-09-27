@@ -48,7 +48,7 @@
 # Asi el touch va bien sin tocar el movil. Para una unidad CSOT: _panel=csot.
 _panel=tianma
 _mode=cross
-pkgname=firmware-mediatek-mt6785
+pkgname=firmware-mt6785-xiaomi-begonia
 pkgver=0.1
 # 3: el nombre CSOT pasa a contener el binario Tianma (touch de esta unidad).
 pkgrel=3
