@@ -27,9 +27,13 @@ fi
 
 # 2) initramfs del kernel con ese conf
 if [ -f /etc/mkinitcpio.d/linux.preset ]; then
+    # Ojo: esto sale con 0 aunque mkinitcpio falle a proposito. Un Exec de hook
+    # que devuelve error puede tumbar la transaccion entera, y aqui no se trata
+    # de tapar un initramfs roto: hay un check de CI que lo verifica y su error
+    # dice mucho mas que "hook failed". Si el conf ya era el de Kupfer y otro
+    # hook ya habia generado bien el initramfs, este fallo no es grave.
     mkinitcpio -p /etc/mkinitcpio.d/linux.preset || {
-        echo "aviso: mkinitcpio fallo" >&2
-        exit 1
+        echo "aviso: mkinitcpio fallo, el initramfs puede no ser el de Kupfer" >&2
     }
 fi
 
