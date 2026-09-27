@@ -117,3 +117,22 @@ CONFIG_USB_CONFIGFS_MASS_STORAGE=y
 # CONFIG_MODULE_COMPRESS_ALL is not set
 CONFIG_BLK_DEV_DM_BUILTIN=y
 CONFIG_BLK_DEV_DM=y
+# ---------------------------------------------------------------------------
+# Fuel gauge GM30 de la bateria (PMIC MT6359), importado del kernel downstream
+# ---------------------------------------------------------------------------
+# Sin esto el movil no expone NINGUN power_supply de tipo Battery: solo el
+# cargador mt6360-chg.1.auto y el tcpm-source-psy. Mainline no trae ningun
+# fuel gauge de Mediatek; este es el contador coulomb propietario, con su
+# daemon de usuario y 15 tablas de perfil (3 baterias x 5 temperaturas).
+#
+# El simbolo es uno solo: obj-$(CONFIG_BATTERY_MT6359) += mtk-battery-manager.o
+# mt6359_battery.o en drivers/power/supply/Makefile. Depende de MFD_MT6397, que
+# el config de pmaports ya trae a =y.
+#
+# Este fichero solo declara simbolos que el config de pmaports NO tiene (por eso
+# todos los de arriba son nuevos: wifi, USB, BT). Los otros dos que hacen falta
+# para la pila de bateria, CONFIG_RTC_DRV_MT6397 y
+# CONFIG_MEDIATEK_MT6359_AUXADC, ya existen ahi en =m y se suben a =y con
+# scripts/config en el prepare() del PKGBUILD, no aqui: concatenarlos crearia
+# lineas duplicadas, y este fichero no se usa para redefinir nada.
+CONFIG_BATTERY_MT6359=y

@@ -847,6 +847,120 @@ jobs:
           fi
           exit "$missing"
 
+      - name: Verify battery stack (gauge MT6359 + battery manager in the DTB)
+        run: |
+          # El begonia no tiene fuel gauge en mainline: el chip real es el GM30
+          # propietario de MTK, dentro del PMIC MT6359, y no existe upstream.
+          # La rama battery-downstream de mt6785-mainline/linux lo reintroduce
+          # importando el codigo del kernel de Android (mt6359-gauge +
+          # mtk_battery*), y esta overlaid encima del pin del wifi mediante 10
+          # parches. Si esa serie no llega al kernel, el build sale verde y el
+          # movil arranca igual pero sin power_supply de tipo Battery: no hay
+          # porcentaje, ni voltaje, ni el apagado por bateria baja. Este paso
+          # comprueba lo unico comprobable sin arrancar el movil: que los cuatro
+          # modulos estan EN EL NUCLEO y que el DTB lleva los dos nodos.
+          #
+          # Los cuatro van con =y a proposito, no =m. Los referencia el DT, y el
+          # orden de probe entre modulos no esta garantizado: el primer
+          # devm_iio_channel_get() de mt6359-gauge es un punto DURO de probe
+          # (dev_err + return -EPROBE_DEFER), y el nvmem que lee el RTC es de
+          # donde salen sus dos nvmem-cells (inicializacion y state-of-charge).
+          # Como modulos, un probe en diferido no siempre se reintenta. Como
+          # built-in no hay carrera. Por eso se comprueba modules.builtin y NO
+          # la presencia de .ko: un .ko aqui seria seial de que olddefconfig los
+          # dejo en =m.
+          set -euo pipefail
+          PKGDIR="${{ steps.paths.outputs.cache_dir }}/packages"
+          KPKG=$(find "$PKGDIR" -maxdepth 3 -type f -name 'linux-mt6785-*.pkg.tar.*' 2>/dev/null \
+                   | grep -E '/linux-mt6785-[0-9]' | sort | tail -1)
+          if [ -z "$KPKG" ]; then
+            echo "::error::no se encuentra linux-mt6785-*.pkg.tar.* en $PKGDIR"; exit 1
+          fi
+          echo "paquete del kernel: $KPKG"
+          bsdtar -tf "$KPKG" > /tmp/bat-kernel-files.txt
+
+          missing=0
+
+          # 1) modules.builtin: los cuatro modulos de la pila.
+          BI=$(grep -E 'usr/lib/modules/[^/]+/modules\.builtin$' /tmp/bat-kernel-files.txt | head -1)
+          if [ -z "$BI" ]; then
+            echo "::error::el paquete del kernel no trae modules.builtin"; exit 1
+          fi
+          echo "--- $BI ---"
+          bsdtar -xOf "$KPKG" "$BI" > /tmp/bat-modules.builtin
+          # gauge + manager + auxadc (canales IIO) + rtc (nvmem) + el core MFD
+          # que declara los 12 IRQ del gauge.
+          for m in mt6359-gauge.ko mt6359_battery.ko mtk-battery-manager.ko \
+                   mt6359-auxadc.ko rtc-mt6397.ko mt6397-core.ko; do
+            if grep -q "/${m}\$" /tmp/bat-modules.builtin; then
+              echo "OK builtin ${m}"
+            else
+              echo "::error::${m} NO esta en modules.builtin (se quedo en =m o no se compilo)"
+              missing=1
+            fi
+          done
+
+          # 2) el .config que se shipped: la unica opcion que enciende todo.
+          # OJO: el .config NO esta en el paquete del kernel. _package() borra
+          # el symlink usr/lib/modules/<ver>/build (por eso no esta ahi el
+          # .config); el que se instala es linux-mt6785-headers, via
+          # `install -Dt "${_builddir}" -m644 Makefile .config Module.symvers`.
+          # Asi que hay que mirar el subpackage de cabeceras, no el del kernel.
+          HPKG=$(find "$PKGDIR" -maxdepth 3 -type f -name 'linux-mt6785-headers-*.pkg.tar.*' 2>/dev/null \
+                   | grep -E '/linux-mt6785-headers-[0-9]' | sort | tail -1)
+          if [ -z "$HPKG" ]; then
+            echo "::error::no se encuentra linux-mt6785-headers-*.pkg.tar.* en $PKGDIR"; exit 1
+          fi
+          echo "paquete de cabeceras: $HPKG"
+          bsdtar -tf "$HPKG" > /tmp/bat-headers-files.txt
+          CFG=$(grep -E '/build/\.config$' /tmp/bat-headers-files.txt | head -1)
+          if [ -z "$CFG" ]; then
+            echo "::error::el paquete de cabeceras no trae build/.config"
+            head -20 /tmp/bat-headers-files.txt
+            missing=1
+          else
+            echo "--- $CFG (de $(basename "$HPKG")) ---"
+            bsdtar -xOf "$HPKG" "$CFG" > /tmp/bat.config
+            grep -E '^CONFIG_(BATTERY_MT6359|CHARGER_MT6360|MFD_MT6397|RTC_DRV_MT6397|MEDIATEK_MT6359_AUXADC)=' \
+              /tmp/bat.config | sed 's/^/    /'
+            if grep -q '^CONFIG_BATTERY_MT6359=y' /tmp/bat.config; then
+              echo "OK CONFIG_BATTERY_MT6359=y"
+            else
+              echo "::error::CONFIG_BATTERY_MT6359 no esta en =y (esta en =m o =n: no habra BAT0)"
+              missing=1
+            fi
+          fi
+
+          # 3) el DTB: tiene que llevar los dos nodos. En un DTB las cadenas
+          # van en claro, no hace falta descompilarlo con dtc.
+          DTB=$(grep -E '/mt6785-xiaomi-begonia\.dtb$' /tmp/bat-kernel-files.txt | head -1)
+          if [ -z "$DTB" ]; then
+            echo "::error::el paquete del kernel no trae mt6785-xiaomi-begonia.dtb"; exit 1
+          fi
+          echo "--- $DTB ---"
+          bsdtar -xOf "$KPKG" "$DTB" > /tmp/begonia.dtb
+          ls -l /tmp/begonia.dtb
+          for s in mediatek,battery-manager mediatek,mt6359-gauge; do
+            if grep -qa "$s" /tmp/begonia.dtb; then
+              echo "OK dtb contiene ${s}"
+            else
+              echo "::error::el DTB no contiene ${s} (falta el parche 0109 o el 0110)"
+              missing=1
+            fi
+          done
+          # Las 15 tablas de perfil de bateria del fabricante. Si el DTB fuera
+          # diminuto, el gauge arrancaria pero daria porcentajes sin sentido.
+          # Un DTB de begonia con el nodo manager pesa ~23 KB; este es solo
+          # un suelo muy holgado para no ser fragil entre variantes.
+          SZ=$(stat -c %s /tmp/begonia.dtb)
+          if [ "$SZ" -lt 8192 ]; then
+            echo "::error::el DTB pesa ${SZ} B: demasiado pequeno para llevar las tablas de perfil"
+            missing=1
+          else
+            echo "OK dtb de ${SZ} B"
+          fi
+          exit "$missing"
+
       - name: Verify aboot.img header (v2 + recovery dtbo + cmdline)
         run: |
           # Esto es lo que decide si el movil arranca: el aboot de begonia

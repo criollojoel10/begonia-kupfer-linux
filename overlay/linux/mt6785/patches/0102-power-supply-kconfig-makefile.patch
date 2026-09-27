@@ -1,0 +1,25 @@
+--- a/drivers/power/supply/Kconfig	2026-09-27 16:55:42.311642662 -0500
++++ b/drivers/power/supply/Kconfig	2026-09-27 16:55:21.519463112 -0500
+@@ -1074,4 +1074,13 @@
+ 	  the state of charge, temperature, cycle count, actual and design
+ 	  capacity, etc.
+ 
++config BATTERY_MT6359
++	tristate "MT6359 fuel gauge support"
++	depends on MFD_MT6397
++	help
++	  Say Y to enable support for MT6359 battery driver.
++	  it measure battery current and temperature to provide
++	  battery information. It issues interrupt when trigger
++	  threshold is met.
++
+ endif # POWER_SUPPLY
++++ b/drivers/power/supply/Makefile	2026-09-27 16:55:20.408396166 -0500
+@@ -122,3 +122,7 @@
+ obj-$(CONFIG_BATTERY_UG3105)	+= ug3105_battery.o
+ obj-$(CONFIG_CHARGER_QCOM_SMB2)	+= qcom_pmi8998_charger.o
+ obj-$(CONFIG_FUEL_GAUGE_MM8013)	+= mm8013.o
++
++mtk-battery-manager-objs := mtk_battery_manager.o mtk_battery_interface.o
++mt6359_battery-objs := mt6359-gauge.o mtk_battery.o mtk_battery_algo.o mtk_battery_coulomb_service.o mtk_battery_daemon.o mtk_battery_interface.o
++obj-$(CONFIG_BATTERY_MT6359) += mtk-battery-manager.o mt6359_battery.o

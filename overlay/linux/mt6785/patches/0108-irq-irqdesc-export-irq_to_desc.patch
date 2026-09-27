@@ -1,0 +1,12 @@
+--- a/kernel/irq/irqdesc.c	2026-09-27 16:55:54.318263148 -0500
++++ b/kernel/irq/irqdesc.c	2026-09-27 16:55:34.059190885 -0500
+@@ -415,9 +415,7 @@
+ {
+ 	return mtree_load(&sparse_irqs, irq);
+ }
+-#ifdef CONFIG_KVM_BOOK3S_64_HV_MODULE
+ EXPORT_SYMBOL_GPL(irq_to_desc);
+-#endif
+ 
+ void irq_lock_sparse(void)
+ {

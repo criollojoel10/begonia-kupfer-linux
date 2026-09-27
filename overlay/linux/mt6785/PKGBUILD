@@ -3,7 +3,7 @@ _kernelname=mt6785
 pkgbase="linux-$_kernelname"
 _desc="MediaTek MT6785 (begonia) kernel"
 pkgver=6.16.4
-pkgrel=1
+pkgrel=2
 _arches=specific
 arch=(aarch64)
 license=(GPL2)
@@ -40,6 +40,21 @@ source=(
     linux.preset
     60-linux.hook
     90-linux.hook
+    # Fuel gauge GM30 del PMIC MT6359, importado del kernel downstream por
+    # Dinolek en la rama suelta "battery-downstream" de mt6785-mainline/linux
+    # (commit fad73078, sin MR). Se aplica como parches sobre nuestro pin
+    # para no perder el forward-port de wifi/Tianma (MR !2, begonia-conn-wifi).
+    # Detalle de cada parche en patches/README.md.
+    patches/0101-power-supply-mtk-battery-import.patch
+    patches/0102-power-supply-kconfig-makefile.patch
+    patches/0103-mfd-mt6397-core-gauge-irqs.patch
+    patches/0104-mfd-mt6359-registers.patch
+    patches/0105-rtc-mt6397-nvmem.patch
+    patches/0106-iio-adc-mt6359-auxadc-processed.patch
+    patches/0107-psupply-mt6360-charger-supplied-to.patch
+    patches/0108-irq-irqdesc-export-irq_to_desc.patch
+    patches/0109-dts-mt6359-fuel-gauge-node.patch
+    patches/0110-dts-begonia-battery-manager.patch
 )
 sha256sums=(
     d1aa741cea0cc1d7728bf4b6c8f2a2a3ffd0ce3c5fd4993516d596779186b2b8
@@ -48,6 +63,16 @@ sha256sums=(
     SKIP
     SKIP
     SKIP
+    f2e8cb6e450947b751d6f1aa3d4fbad622294ac50e7ec795536876943dbfe141
+    8b0a8615dc4549f5f6004c37b787cab73db3701cbb30f0cf317e46b9ef85f307
+    ce396d12f80a03c2d3a83f55b3a7d331187e1ffcef9b7ba6692e9e159eb8043c
+    8a9fdaad10406d2d4670e548b85667c81d3d3e464ef77b7d1cd944f788a0ab76
+    45aedd15c72fa585ec369f6bdaade1d79bd36046fc08d76b06b514c8cb9d99f7
+    14c1977f6c06a34573dc9ec459916c474e938c790ab421a35d1366f9b6f5f2db
+    30d8fcad7c37a3753746ef7e05b512c97e44a25f76881dba43ad6771eb281233
+    315b104a75addc3c5b766c3b35e2e8342ebb50611e14f12c0be43b106ea94c19
+    7980e779736a756b05474f08138c9bc2c5b9645e6bb972d115c40de1eaac7332
+    6d497d97ac34e6b71bb5cd48aa07b3fd547fe4f671b815bf3813fbee159cb3fc
 )
 
 pkgver() {
@@ -58,8 +83,47 @@ pkgver() {
 prepare() {
     cd "$srcdir/${_srcname}"
 
+    # Fuel gauge GM30 (PMIC MT6359), importado del kernel downstream de Xiaomi.
+    # El orden importa: 0102 añade `config BATTERY_MT6359` al Kconfig de
+    # power/supply, y olddefconfig (abajo) tiene que ver ese símbolo para que
+    # CONFIG_BATTERY_MT6359=y de extra_config sobreviva. Por eso los parches
+    # van ANTES de generar el .config.
+    local p
+    for p in "$srcdir"/patches/*.patch; do
+        echo "==> $(basename "$p")"
+        patch -Np1 --no-backup-if-mismatch -i "$p"
+    done
+
     cp "$srcdir/config-postmarketos-mediatek-mt6785.aarch64" .config
     cat "$srcdir/extra_config" >>.config
+
+    # Los otros dos modulos de la pila de bateria se suben aqui de =m a =y, y
+    # no en extra_config, porque extra_config se CONCATENA al .config y esos dos
+    # simbolos ya existen en el config de pmaports (=m): concatenarlos dejaria
+    # lineas duplicadas. Este fichero solo declara simbolos nuevos.
+    #
+    # De =m a =y a proposito. Los tres modulos de la pila se referencian por DT
+    # y su orden de probe no esta garantizado entre modulos:
+    #   rtc-mt6397     -> registra el nvmem "mtk_rtc_nvmem"; de ahi salen los dos
+    #                     nvmem-cells del gauge (fg_init = inicializacion del
+    #                     contador coulomb, fg_soc = state-of-charge). Sin el,
+    #                     el gauge se queda esperando.
+    #   mt6359-auxadc  -> es el proveedor IIO de los 4 canales que pide el gauge
+    #                     (BAT_TEMP, BATADC, VBIF, VBAT). Su primer
+    #                     devm_iio_channel_get() es el unico punto DURO del
+    #                     driver: si falla, -EPROBE_DEFER para siempre.
+    # Con los tres built-in el orden lo fija el DT, no el sincronismo de modprobe.
+    # Efecto secundario buscado: esos .ko desaparecen del paquete.
+    #
+    # scripts/config es la herramienta que trae el kernel para esto. Si alguno de
+    # los tres hubiera desaparecido del Kconfig (por ejemplo, si el parche 0102
+    # no llegara a aplicarse) este comando falla y el build para aqui, en vez de
+    # compilar en silencio un kernel sin fuel gauge.
+    sh scripts/config --file .config \
+        -e BATTERY_MT6359 \
+        -e RTC_DRV_MT6397 \
+        -e MEDIATEK_MT6359_AUXADC
+
     make olddefconfig
 
     # don't run depmod on "make install". We'll do this ourselves in packaging
