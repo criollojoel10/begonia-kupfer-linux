@@ -525,7 +525,7 @@ está compilado.
 
 ## Notas de CI
 
-El build no se limita a "salir verde": hay tres pasos que comprueban cosas que solo se ven con el
+El build no se limita a "salir verde": hay cuatro pasos que comprueban cosas que solo se ven con el
 móvil en la mano, porque si no el error aparece en el mejor caso a los diez minutos de encender la
 pantalla.
 
@@ -543,7 +543,12 @@ pantalla.
    móvil arranca: el aboot de begonia rechaza un boot v0/v1 con DTB, y sin recovery dtbo no
    encuentra el override del panel. `unpack_bootimg` no viene en los runners, así que se parsea
    el layout AOSP a mano.
-3. **`List images`** — el boot fs tiene que caber en la partición `boot` de 64 MiB y traer dentro
+3. **`Verify the rootfs`** — monta la partición de la imagen final y mira, por separado, (a) el
+   `FILES` que dejó el `mkinitcpio-overwrite` en `/etc/mkinitcpio.conf`, (b) los `.zst` de novatek
+   en `/usr/lib/firmware/novatek/`, (c) el **md5** del que está bajo el nombre `csot` y (d) los
+   nombres de paquete instalados. Sin (d) el paso (b) no distingue "el paquete de firmware no
+   lleva los blobs" de "los blobs no llegaron al initramfs", y son fallos muy distintos.
+4. **`List images`** — el boot fs tiene que caber en la partición `boot` de 64 MiB y traer dentro
    un `aboot.img` no vacío.
 
 Dos trampas que costaron un run cada una y que conviene no volver a pisar:
@@ -556,6 +561,23 @@ Dos trampas que costaron un run cada una y que conviene no volver a pisar:
 - El nombre de un `.ko` no tiene por qué coincidir con el símbolo de kconfig: `rtl8150.ko` (no
   `r8150.ko`), `mt76-usb.ko` (con guion). Y el grep tiene que anclar (`/\.ko$`) para que un
   módulo compilado dentro del kernel no cuente como presente, porque no se puede `modprobe`.
+- **La cache de `packages` de Actions no puede tener `restore-keys` por prefijo.** kupferbootstrap
+  no reinstala desde cero: busca cada paquete en su repo local y, si el checksum encaja, lo da por
+  bueno. Con `restore-keys` por prefijo, el run se colgaba los paquetes del último run verde
+  aunque los PKGBUILD del overlay hubieran cambiado (nuestro `pkgver`/`pkgrel` no cambia en cada
+  commit), y la imagen se construía con un paquete viejo. Pasó con el rename
+  `firmware-mediatek-mt6785` → `firmware-mt6785-xiaomi-begonia`: el build creó el 0.1-3 nuevo y
+  instaló el 0.1-2 viejo, sin los blobs de novatek, y el initramfs salió sin el firmware del
+  táctil. La clave es ahora `hashFiles('overlay/**')` y sin `restore-keys`; `ccache` los conserva
+  porque ahí sí interesa, y perder la cache de paquetes solo obliga a recompilar el kernel propio.
+- **`FILES` de mkinitcpio va con `/lib/firmware`, no con `/usr/lib/firmware`.** mkinitcpio guarda
+  cada elemento de `FILES` en el cpio **con la ruta que se le da**, y el cargador de firmware busca
+  `/lib/firmware/updates*` y luego `/lib/firmware` (`fw_path()` en
+  `drivers/base/firmware_loader/main.c`). Con `/usr/lib/firmware/...` el `.zst` acaba en
+  `usr/lib/firmware/...` dentro del initramfs, donde nadie lo mira. Upstream usa
+  `/lib/firmware/qcom/...` en sus device confs por el mismo motivo. Y con rutas explícitas en vez
+  de un glob, porque `mkinitcpio-overwrite` sourcea los `.conf` en un orden en el que el paquete de
+  firmware puede todavía no estar instalado y el glob se quedaría literal.
 
 El resto de notas de CI:
 
