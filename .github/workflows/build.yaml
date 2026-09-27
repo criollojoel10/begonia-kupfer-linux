@@ -636,9 +636,27 @@ jobs:
               echo "::error::$EX no es ejecutable en la imagen"; miss=1
             fi
             # Y que la unidad este habilitada de verdad, no solo instalada.
-            if [ ! -e "$MNT/etc/systemd/system/multi-user.target.wants/mediatek-wifi.service" ]; then
+            # OJO: -e NO sirve aqui. El symlink apunta a una ruta ABSOLUTA
+            # (/usr/lib/systemd/system/...), y un symlink absoluto se resuelve
+            # contra la raiz de verdad, no contra $MNT: -e se pregunta al runner
+            # si existe /usr/lib/systemd/system/mediatek-wifi.service en su
+            # propio filesystem, que no existe, y da falso negativo aunque el
+            # link este perfecto en la imagen. Hay que usar -L y comparar el
+            # readlink con el destino que esperamos.
+            WANTS="$MNT/etc/systemd/system/multi-user.target.wants/mediatek-wifi.service"
+            if [ ! -L "$WANTS" ]; then
               echo "::error::mediatek-wifi.service no esta habilitada en multi-user.target.wants"
+              sudo ls -l "$MNT/etc/systemd/system/multi-user.target.wants/" 2>&1 | head -5 || true
               miss=1
+            else
+              tgt=$(sudo readlink "$WANTS")
+              echo "wants -> $tgt"
+              # El destino se comprueba dentro de la imagen, que es lo que
+              # systemd resolvera de verdad.
+              if [ ! -f "$MNT$tgt" ]; then
+                echo "::error::el symlink apunta a $tgt y eso no esta en la imagen"
+                miss=1
+              fi
             fi
           fi
 
