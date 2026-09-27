@@ -26,9 +26,20 @@
 # Este hook no depende de que se haya modificado nada: se dispara en la
 # transaccion en la que este paquete entra, y para entonces el kernel ya esta
 # instalado (es una dependencia), asi que da igual como se agrupen las
-# transacciones de pacman. Va en 95- a proposito, para ejecutarse el ultimo
-# despues de "90-mkinitcpio.hook" y dejar el initramfs final hecho con el
-# conf de Kupfer.
+# transacciones de pacman.
+#
+# El 95- es a proposito. En la transaccion del run 36301882701 los hooks
+# PostTransaction se ejecutaron en este orden, que es el alfabetico del nombre
+# del fichero:
+#
+#   60-linux.hook          "Updating linux-mt6785 module dependencies"
+#   90-linux.hook          "Updating linux initcpios"
+#   91-android-bootimg...  "Updating aboot.img"
+#
+# Asi el 95 va despues del 90 y el initramfs que se queda es el del conf de
+# Kupfer. Y aunque el orden no fuera ese, da igual: el script regenera el
+# initramfs entero con el conf correcto en cuanto se ejecuta, sin mirar lo que
+# hubiera hecho el 90.
 #
 # El Exec es un script propio y no una linea de shell con comillas: libalpm
 # parsea el Exec a mano y partirlo en palabras es frágil. Ademas el script
