@@ -1,8 +1,9 @@
 # Kupfer Linux for Xiaomi Redmi Note 8 Pro (begonia)
 
 Port: **pmOS (Alpine) → Kupfer Linux (Arch)** para Xiaomi Redmi Note 8 Pro (`xiaomi-begonia`,
-SoC MediaTek **MT6785**). **Primer dispositivo MediaTek soportado por Kupfer** (hasta ahora los 24
-dispositivos son Qualcomm: msm8916/8953/sdm670/sdm845).
+SoC MediaTek **MT6785**). **Primer dispositivo MediaTek soportado por Kupfer** (a 2026-09-13 la
+página oficial lista 10 dispositivos en `dev` y 5 en `main`, **todos Qualcomm**:
+msm8916/8953/sdm670/sdm845).
 
 Kupfer: *"to Arch what postmarketOS is to Alpine"* — derivada de Arch Linux ARM, infraestructura
 heredada de pmOS (`deviceinfo`, `kupferbootstrap`), boot vía Android boot.img (`aboot`).
@@ -38,7 +39,9 @@ comunidad.mergea primero.
 
 Se revisó el estado real del proyecto antes de escribir nada, para saber si existía una guía:
 
-- **24 dispositivos** en `dev`, **todos Qualcomm** (msm8916, msm8953, sdm670, sdm845).
+- **10 dispositivos** en `dev` y **5** en `main` (página oficial, generada 2026-09-13), **todos
+  Qualcomm**: msm8916, msm8953, sdm670, sdm845. En el árbol de `pkgbuilds` son 9 paquetes
+  `device-*` más 3 `-common` de apoyo.
 - De ~100 merge requests, **cero de MediaTek**.
 - De ~61 branches del repo de pkgbuilds, **ninguna de MediaTek**.
 - Lo único no-Qualcomm son 2 drafts de **Exynos** (MR 159 / 162, Nexus 10), **cerrados sin
@@ -521,6 +524,40 @@ por dongle: los drivers de USB están en el `extra_config` y el soporte de BT (`
 está compilado.
 
 ## Notas de CI
+
+El build no se limita a "salir verde": hay tres pasos que comprueban cosas que solo se ven con el
+móvil en la mano, porque si no el error aparece en el mejor caso a los diez minutos de encender la
+pantalla.
+
+1. **`Verify kernel modules and firmware in the image`** — lista el paquete del kernel ya
+   construido (`bsdtar -tf`, sin arrancar nada) y exige los 3 `.ko` del stack MediaTek, los 21
+   `.ko` de los dongles USB (ethernet, wifi, BT y serie) y los 5 del panel/táctil; y lista el
+   paquete de firmware exigiendo los 8 blobs, incluido el **md5 del binario que hay bajo el nombre
+   `csot`**: en una unidad Tianma tiene que ser el Tianma, y un simple `ls` no lo distingue
+   porque los dos ficheros existen siempre.
+2. **`Verify aboot.img header`** — lee la cabecera del `aboot.img` que sale del build y exige
+   `header_version=2`, `recovery_dtbo_size=136` (el `empty.dtbo`), `page_size`, `header_size`, los
+   tres payloads no vacíos, las direcciones de carga de pmaports (base `0x40078000` + offsets) y
+   los cinco módulos de panel/táctil dentro de `earlymodules=` (que es una lista separada por
+   comas, así que buscar `earlymodules=<mod>` no vale). Es el check que de verdad decide si el
+   móvil arranca: el aboot de begonia rechaza un boot v0/v1 con DTB, y sin recovery dtbo no
+   encuentra el override del panel. `unpack_bootimg` no viene en los runners, así que se parsea
+   el layout AOSP a mano.
+3. **`List images`** — el boot fs tiene que caber en la partición `boot` de 64 MiB y traer dentro
+   un `aboot.img` no vacío.
+
+Dos trampas que costaron un run cada una y que conviene no volver a pisar:
+
+- `find "$PKGDIR" -name "$1-*.pkg.tar.*"` para localizar el paquete del kernel se queda con
+  `linux-mt6785-headers-*`, porque el kernel genera las dos cosas y `"headers"` ordena antes que
+  el número de versión. El paquete de cabeceras no tiene ningún `.ko` y el verify falla
+  quejándose de 29 módulos que sí están. El nombre tiene que seguir a un **dígito** (`pkgver`
+  siempre empieza por uno; un subpackage no).
+- El nombre de un `.ko` no tiene por qué coincidir con el símbolo de kconfig: `rtl8150.ko` (no
+  `r8150.ko`), `mt76-usb.ko` (con guion). Y el grep tiene que anclar (`/\.ko$`) para que un
+  módulo compilado dentro del kernel no cuente como presente, porque no se puede `modprobe`.
+
+El resto de notas de CI:
 
 - El build usa el wrapper **Docker** de kupferbootstrap (`type = "docker"`): construye
   Arch packages con `makepkg`, que no existe en el runner Ubuntu (`type = "none"` →
