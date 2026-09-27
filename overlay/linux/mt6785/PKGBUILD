@@ -44,17 +44,25 @@ source=(
     # Dinolek en la rama suelta "battery-downstream" de mt6785-mainline/linux
     # (commit fad73078, sin MR). Se aplica como parches sobre nuestro pin
     # para no perder el forward-port de wifi/Tianma (MR !2, begonia-conn-wifi).
-    # Detalle de cada parche en patches/README.md.
-    patches/0101-power-supply-mtk-battery-import.patch
-    patches/0102-power-supply-kconfig-makefile.patch
-    patches/0103-mfd-mt6397-core-gauge-irqs.patch
-    patches/0104-mfd-mt6359-registers.patch
-    patches/0105-rtc-mt6397-nvmem.patch
-    patches/0106-iio-adc-mt6359-auxadc-processed.patch
-    patches/0107-psupply-mt6360-charger-supplied-to.patch
-    patches/0108-irq-irqdesc-export-irq_to_desc.patch
-    patches/0109-dts-mt6359-fuel-gauge-node.patch
-    patches/0110-dts-begonia-battery-manager.patch
+    # Detalle de cada parche en README.md.
+    #
+    # VAN PLANOS, sin subdirectorio, a proposito: makepkg no los encuentra si
+    # la entrada de source= lleva prefijo de directorio. En el run 36355197902
+    # el primer build fallo con "0101-...patch was not found in the build
+    # directory and is not a URL" -- el mensaje sale sin el prefijo "patches/",
+    # o sea que makepkg lo resolvia a basename y lo buscaba en la raiz del
+    # directorio de build. En el mismo paquete, extra_config / linux.preset y
+    # los hooks, que son planos, si se encontraron.
+    0101-power-supply-mtk-battery-import.patch
+    0102-power-supply-kconfig-makefile.patch
+    0103-mfd-mt6397-core-gauge-irqs.patch
+    0104-mfd-mt6359-registers.patch
+    0105-rtc-mt6397-nvmem.patch
+    0106-iio-adc-mt6359-auxadc-processed.patch
+    0107-psupply-mt6360-charger-supplied-to.patch
+    0108-irq-irqdesc-export-irq_to_desc.patch
+    0109-dts-mt6359-fuel-gauge-node.patch
+    0110-dts-begonia-battery-manager.patch
 )
 sha256sums=(
     d1aa741cea0cc1d7728bf4b6c8f2a2a3ffd0ce3c5fd4993516d596779186b2b8
@@ -88,11 +96,24 @@ prepare() {
     # power/supply, y olddefconfig (abajo) tiene que ver ese símbolo para que
     # CONFIG_BATTERY_MT6359=y de extra_config sobreviva. Por eso los parches
     # van ANTES de generar el .config.
-    local p
-    for p in "$srcdir"/patches/*.patch; do
+    #
+    # El glob es 01[0-9][0-9]-*.patch a proposito: son exactamente los 10, en
+    # orden lexico (0101..0110), que es el orden en que hay que aplicarlos. Si
+    # faltara alguno, el glob se quedaria literal y patch fallaria en vez de
+    # saltarselo. Y se cuentan, para que un parche que aplicara a medias no
+    # pase por bueno: patch -Np1 devuelve !=0 ante un hunk fallido y makepkg
+    # para igual, pero el recuento deja el numero en el log.
+    local p n=0
+    for p in "$srcdir"/01[0-9][0-9]-*.patch; do
         echo "==> $(basename "$p")"
         patch -Np1 --no-backup-if-mismatch -i "$p"
+        n=$((n + 1))
     done
+    [ "$n" -eq 10 ] || {
+        echo "==> ERROR: se esperaban 10 parches de bateria y se aplicaron $n" >&2
+        return 1
+    }
+    echo "==> $n parches de bateria aplicados"
 
     cp "$srcdir/config-postmarketos-mediatek-mt6785.aarch64" .config
     cat "$srcdir/extra_config" >>.config

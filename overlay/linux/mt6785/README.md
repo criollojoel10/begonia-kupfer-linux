@@ -34,6 +34,21 @@ en las dos versiones y se generaron los diff con `diff -u`. Comprobado: los 12
 aplican con **cero offset y cero fuzz**, o sea que nuestro pin es byte-idéntico
 a la base de `battery-downstream` en esas rutas.
 
+## Los 10 parches van PLANOS en este directorio, no en un subdirectorio
+
+Restricción real de Kupfer, aprendida a base de un build fallido (run `36355197902`):
+al resolver `source=`, makepkg **reduce cada entrada a su basename y la busca en la
+raíz del directorio de build**. Un `patches/0101-...patch` no se encuentra, y el
+error lo dice sin el prefijo, lo que despista:
+
+```
+==> ERROR: 0101-power-supply-mtk-battery-import.patch was not found in the build directory and is not a URL.
+```
+
+Los ficheros planos del paquete (`extra_config`, `linux.preset`, los dos hooks) sí
+se encontraban, en las cuatro líneas anteriores del mismo log. Así que **no los
+muevas a `patches/`** sin comprobar antes que Kupfer lo soporta.
+
 ## Contenido de cada parche
 
 | # | parche | qué hace |

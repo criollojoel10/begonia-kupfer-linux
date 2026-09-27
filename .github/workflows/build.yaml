@@ -304,6 +304,33 @@ jobs:
             test -f "$PDIR/$f" || { echo "::error::overlay ausente: $f"; exit 1; }
             echo "overlay ok: $f"
           done
+          # Los 10 parches de bateria tienen que estar PLANOS junto al PKGBUILD.
+          # makepkg reduce cada entrada de source= a su basename y la busca en la
+          # raiz del directorio de build, asi que un subdirectorio hace que el
+          # build reviente 20 minutos despues, en el primer paquete, con
+          # "was not found in the build directory and is not a URL" (run
+          # 36355197902). Esta guarda lo detecta en el segundo 17, y de paso
+          # comprueba que el numero coincide con lo que espera prepare().
+          n=0
+          for p in "$PDIR/linux/mt6785"/01[0-9][0-9]-*.patch; do
+            [ -f "$p" ] || continue
+            n=$((n + 1))
+          done
+          if [ "$n" -ne 10 ]; then
+            echo "::error::se esperaban 10 parches planos en linux/mt6785/, hay $n"
+            ls -1 "$PDIR/linux/mt6785" || true
+            exit 1
+          fi
+          echo "patches de bateria planos: $n"
+          # El propio source= no debe llevar prefijo de directorio, que es lo
+          # que rompio el build anterior.
+          if grep -qE '^\s+(patches/)' "$PDIR/linux/mt6785/PKGBUILD"; then
+            echo "::error::source= con prefijo de subdirectorio: makepkg lo resolvia a basename y fallaba"
+            exit 1
+          fi
+          grep -q '^CONFIG_BATTERY_MT6359=y$' "$PDIR/linux/mt6785/extra_config" \
+            || { echo "::error::extra_config no declara CONFIG_BATTERY_MT6359=y"; exit 1; }
+          echo "extra_config enciende el gauge: $(grep -c '^CONFIG_BATTERY_MT6359=y$' "$PDIR/linux/mt6785/extra_config")"
           # El parche de --recovery_dtbo y el binario empty.dtbo son los dos
           # motivos por los que existe este port; si uno se pierde, begonia no
           # arranca. Se comprueba aqui y no confiar en el diff.
