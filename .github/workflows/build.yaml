@@ -522,8 +522,15 @@ jobs:
           # busca en modo `find` y con comodin en la extension. Con un glob
           # `packages/*.pkg.tar.zst` este paso se murio en el run 36280135443
           # aunque los tres paquetes estuvieran construidos.
+          # OJO el digito REQUIRED: el paquete del kernel genera
+          # ademas linux-mt6785-headers-*, y con "$1-*" el find se queda con
+          # ese en cuanto existe ("headers" ordena antes que el numero de
+          # version). Al listar el headers no aparece ningun .ko y el verify
+          # falla quejandose de modulos que si estan. pkgver siempre empieza
+          # por un digito; un subpackage no.
           find_pkg() {
             find "$PKGDIR" -maxdepth 3 -type f -name "$1-*.pkg.tar.*" 2>/dev/null \
+              | grep -E "/$1-[0-9]" \
               | sort | tail -1
           }
           KPKG=$(find_pkg linux-mt6785)
@@ -533,6 +540,19 @@ jobs:
           echo "paquete del kernel: $KPKG"
           bsdtar -tf "$KPKG" > /tmp/kupfer-kernel-files.txt
           wc -l < /tmp/kupfer-kernel-files.txt
+          # Un paquete de kernel sin ningun .ko es el paquete equivocado
+          # (o el subpackage headers). Fallar aqui, con el nombre a la vista,
+          # en vez de 24 errores de modulos mas abajo.
+          if ! grep -q '\.ko' /tmp/kupfer-kernel-files.txt; then
+            echo "::error::$KPKG no contiene ningun .ko: es el paquete equivocado"
+            head -5 /tmp/kupfer-kernel-files.txt
+            exit 1
+          fi
+          # Y que de verdad sea el paquete del kernel, no el de las cabeceras.
+          if [[ "$(basename "$KPKG")" == *-headers-* ]]; then
+            echo "::error::find_pkg devolvio el paquete de cabeceras: $KPKG"
+            exit 1
+          fi
           FPKG=$(find_pkg firmware-mt6785-xiaomi-begonia)
           if [ -z "$FPKG" ]; then
             echo "::error::no se encuentra firmware-mt6785-xiaomi-begonia-*.pkg.tar.* en $PKGDIR"; exit 1
@@ -646,6 +666,91 @@ jobs:
             echo "::error::no se encuentra el paquete device-mt6785-xiaomi-begonia"; missing=1
           fi
           exit "$missing"
+
+      - name: Verify aboot.img header (v2 + recovery dtbo + cmdline)
+        run: |
+          # Esto es lo que decide si el movil arranca: el aboot de begonia
+          # rechaza un boot.img v0/v1 cuando lleva DTB y recovery dtbo, y el
+          # build puede salir verde sin que nadie mire la cabecera. Un
+          # unpack_bootimg no viene en los runners, asi que se lee la
+          # cabecera directamente (layout AOSP, estable desde 2011):
+          #   0 magic[8] | 8 kernel_size | 12 kernel_addr | 16 ramdisk_size |
+          #  20 ramdisk_addr | 24 second_size | 28 second_addr | 32 tags_addr |
+          #  36 page_size | 40 header_version | 44 os_version | 48 name[16] |
+          #  64 cmdline[512] | 576 id[32] | 608 extra_cmdline[1024] |
+          #  1632 recovery_dtbo_size | 1636 recovery_dtbo_offset |
+          #  1644 header_size | 1648 dtb_size | 1652 dtb_addr
+          set -euo pipefail
+          ABOOT="${{ steps.paths.outputs.images_dir }}/aboot.img"
+          test -s "$ABOOT" || { echo "::error::no hay aboot.img que verificar"; exit 1; }
+          python3 - "$ABOOT" <<'PY'
+          import struct, sys
+
+          d = open(sys.argv[1], "rb").read(1700)
+          u32 = lambda o: struct.unpack_from("<I", d, o)[0]
+          u64 = lambda o: struct.unpack_from("<Q", d, o)[0]
+          bad = []
+
+          if d[0:8] != b"ANDROID!":
+              bad.append("magic = %r, no es ANDROID!" % d[0:8])
+          hv = u32(40)
+          if hv != 2:
+              bad.append("header_version = %d, begonia con dtb exige 2" % hv)
+          page = u32(36)
+          if page not in (2048, 4096):
+              bad.append("page_size = %d" % page)
+          hsize = u32(1644)
+          if hsize < 1644:
+              bad.append("header_size = %d, no cabe la cabecera v2" % hsize)
+          dtbo = u32(1632)
+          if dtbo != 136:
+              # 136 bytes es el empty.dtbo de pmaports. Sin el, el aboot de
+              # begonia no encuentra el recovery dtbo y no arranca.
+              bad.append("recovery_dtbo_size = %d, se esperaba 136 (empty.dtbo)" % dtbo)
+          for f, o in (("kernel_size", 8), ("ramdisk_size", 16), ("dtb_size", 1648)):
+              if u32(o) == 0:
+                  bad.append("%s = 0" % f)
+          # Las direcciones de carga tienen que ser las de pmapORTS: base
+          # 0x40078000 + offsets. Si el base se pierde, el kernel no arranca.
+          for f, o, want in (("kernel_addr", 12, 0x40080000),
+                             ("ramdisk_addr", 20, 0x47C80000),
+                             ("tags_addr", 32, 0x4BC80000),
+                             ("dtb_addr", 1652, 0x4BC80000)):
+              got = u32(o) if f != "dtb_addr" else u64(o)
+              if got != want:
+                  bad.append("%s = %#x, se esperaba %#x" % (f, got, want))
+          cmd = d[64:576].rstrip(b"\0").decode("utf-8", "replace")
+          for want in ("kupfer", "console=", "bootopt=64S3,32N2,64N2"):
+              if want not in cmd:
+                  bad.append("el cmdline no lleva %r" % want)
+          # earlymodules= es UNA lista separada por comas, asi que buscar
+          # "earlymodules=<mod>" no funciona: hay que partir el valor.
+          mods = []
+          for part in cmd.split():
+              if part.startswith("earlymodules="):
+                  mods = [m for m in part.split("=", 1)[1].split(",") if m]
+          # Sin estos tres el panel no enciende en el primer arranque: se
+          # cargan desde el initramfs antes de que haya rootfs.
+          for want in ("novatek-nvt-ts-spi", "panel-novatek-nt36672a",
+                       "ti-lmu", "lm363x-regulator", "lm36274_bl"):
+              if want not in mods:
+                  bad.append("earlymodules no lleva %r (lleva %s)"
+                             % (want, ",".join(mods) or "nada"))
+          if not mods:
+              bad.append("el cmdline no tiene earlymodules=")
+
+          print("aboot.img: %d bytes" % len(open(sys.argv[1], "rb").read()))
+          print("  header_version=%d page_size=%d header_size=%d" % (hv, page, hsize))
+          print("  kernel=%d ramdisk=%d dtb=%d recovery_dtbo=%d"
+                % (u32(8), u32(16), u32(1648), dtbo))
+          print("  cmdline: %s" % cmd)
+          print("  earlymodules: %s" % ",".join(mods))
+          if bad:
+              for b in bad:
+                  print("::error::aboot.img: %s" % b)
+              sys.exit(1)
+          print("aboot.img: cabecera v2 con recovery dtbo y cmdline correctos")
+          PY
 
       - name: List images
         run: |
