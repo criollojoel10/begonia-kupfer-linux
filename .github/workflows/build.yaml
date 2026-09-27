@@ -557,6 +557,56 @@ jobs:
       # la causa de verdad. En el run 36288864029 la causa fue (b): la cache de
       # paquetes de GHA instalo un firmware-mediatek-mt6785 viejo (anterior al
       # rename) que no lleva los blobs de novatek.
+      - name: Verify ccache actually filled
+        run: |
+          # El ccache no habia funcionado NUNCA y el build salia verde igual. Las
+          # entradas ccache-* del repo pesaban 273 B, que es un marcador de
+          # directorio vacio, y no habia ningun paso que lo notara. Tres bugs, los
+          # tres fuera de este repositorio:
+          #   1) kupferbootstrap escribe el makepkg.conf con
+          #      BUILDENV=(!distcc color !ccache !check !sign) (generator.py:94),
+          #      asi que makepkg no envuelve CC/CXX con ccache.
+          #   2) El compilador real es de CROSS, $CROSS_COMPILE-gcc, y lo unico que
+          #      kupferbootstrap engancha al PATH es /usr/lib/ccache
+          #      (packages/build.py:722), donde solo hay shims de gcc/g++/cc/c++/
+          #      cpp/ld/gcov a secas. En el log no aparece ni una vez "ccache
+          #      aarch64-linux-gnu-gcc": los ~30k objetos del target nunca
+          #      entraron en la cache.
+          #   3) ccache 4.x escribe en $HOME/.cache/ccache (src/ccache/config.cpp
+          #      default_cache_dir()), no en ~/.ccache, que es donde
+          #      chroot/build.py:183 hace el bind. Sin CCACHE_DIR la cache se
+          #      queda en un directorio efimero que muere con el chroot.
+          # El PKGBUILD arregla (2) y (3). Este paso es la red de seguridad, y
+          # comprueba lo unico comprobable sin arrancar el movil: que la cache ha
+          # relleno de verdad.
+          set -euo pipefail
+          # chroot/build.py:183 mount_ccache() hace bind de /ccache/<arch> sobre
+          # $HOME/.ccache del chroot, y /ccache es este directorio del host. El
+          # chroot que compila es el x86_64, aunque el target sea aarch64.
+          CCDIR="${{ steps.paths.outputs.cache_dir }}/ccache/x86_64"
+          # pipefail + set -e hace que un find sobre un directorio inexistente
+          # aborte el paso en silencio, sin mensaje, que es el peor sitio para
+          # enterarse de que el bind no se hizo. Por eso se comprueba antes y se
+          # cuenta con los errores tolerados.
+          if [ ! -d "$CCDIR" ]; then
+            echo "::error::no existe $CCDIR: kupferbootstrap no llego a montar la cache (chroot/build.py:183 mount_ccache)"
+            exit 1
+          fi
+          n=$( { find "$CCDIR" -type f 2>/dev/null || true; } | wc -l)
+          sz=$( { du -sh "$CCDIR" 2>/dev/null || true; } | cut -f1)
+          echo "ccache: $n ficheros, ${sz:-0} en $CCDIR"
+          # 100 ficheros es un liston bajisimo a proposito: un build de verdad
+          # deja decenas de miles. Lo unico que tiene que atrapar es "la cache
+          # esta vacia", que es como han ido todos los builds hasta ahora.
+          # Ojo: el PRIMER build con el arreglo no tiene por que ser rapido. La
+          # cache empieza vacia de verdad y ese run es el que la llena; el
+          # siguiente es el que nota la diferencia.
+          if [ "$n" -lt 100 ]; then
+            echo "::error::la cache de ccache sigue vacia ($n ficheros): el ccache no ha cacheado nada. Ver los 3 bugs en el comentario de este paso y el bloque de build() en overlay/linux/mt6785/PKGBUILD"
+            exit 1
+          fi
+          echo "ccache ha relleno: esta cache es la que guardara Post Cache ccache"
+
       - name: Verify the rootfs (mkinitcpio.conf + panel firmware + package names)
         run: |
           set -o pipefail

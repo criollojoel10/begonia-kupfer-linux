@@ -3,7 +3,7 @@ _kernelname=mt6785
 pkgbase="linux-$_kernelname"
 _desc="MediaTek MT6785 (begonia) kernel"
 pkgver=6.16.4
-pkgrel=2
+pkgrel=3
 _arches=specific
 arch=(aarch64)
 license=(GPL2)
@@ -154,10 +154,68 @@ prepare() {
 build() {
     cd ${_srcname}
     unset LDFLAGS
+
+    # --- ccache ---------------------------------------------------------------
+    # Esto no es una optimizacion: el ccache no ha funcionado NUNCA y por eso
+    # `make Image.gz modules` se come 22m49s en cada build. Hay tres bugs
+    # apilados, los tres fuera de este repositorio:
+    #
+    # 1) kupferbootstrap escribe el makepkg.conf con
+    #       BUILDENV=(!distcc color !ccache !check !sign)
+    #    (generator.py:94), asi que makepkg no envuelve CC/CXX con ccache. Se
+    #    escribe en chroot/abstract.py:397 y el kernel se compila con
+    #    --config /etc/makepkg_cross_aarch64.conf, que es ese fichero.
+    #
+    # 2) El compilador real es de CROSS: generator.py:194 exporta
+    #       CROSS_COMPILE="{hostspec}-"  /  CC="{hostspec}-gcc ..."
+    #    y el Makefile del kernel usa CC = $(CROSS_COMPILE)gcc. El unico enganche
+    #    que deja kupferbootstrap es prependar /usr/lib/ccache al PATH
+    #    (packages/build.py:722), y ahi solo hay shims de gcc/g++/cc/c++/cpp/ld/
+    #    gcov a secas, ninguno de cross. En el log del build no aparece ni una
+    #    vez "ccache aarch64-linux-gnu-gcc": los ~30k objetos del target nunca
+    #    entraron en la cache. Solo pasaban por ella los HOSTCC de a secas.
+    #
+    # 3) ccache 4.x escribe donde nadie monta. chroot/build.py:183 hace bind de
+    #    /ccache/<arch> sobre $HOME/.ccache, pero src/ccache/config.cpp
+    #    default_cache_dir() devuelve en Linux  $HOME/.cache/ccache  (no
+    #    ~/.ccache). Sin CCACHE_DIR ni XDG_CACHE_HOME, ccache escribia en
+    #    /home/kupfer/.cache/ccache, que no esta bind-montado y muere con el
+    #    chroot. El log lo delata: el mount -o bind se hace bien y aun asi la
+    #    cache sale vacia.
+    #
+    # Sintoma medido: todas las entradas ccache-* del repo pesan 273 B, que es
+    # un marcador de directorio vacio.
+    #
+    # El arreglo de (1) no es posible desde aqui (habria que parchear
+    # kupferbootstrap). El de (2) y el de (3) caben aqui:
+    #
+    # Para (2) se invoca ccache en su forma NORMAL, con argv[0] == ccache y el
+    # compilador de cross como argumento, y se sobreescribe CC en la linea de
+    # comandos, que pisa el CC = $(CROSS_COMPILE)gcc del Makefile. Se ha
+    # descartado a proposito la otra via, un shim aarch64-linux-gnu-gcc ->
+    # /usr/bin/ccache en un directorio prependido al PATH: funciona, pero obliga
+    # a confiar en que ccache no se encuentra a si mismo al resolver el
+    # compilador real, y eso no se ha podido verificar. Con esta forma no hay
+    # ninguna auto-referencia posible, y no hay que tocar el PATH ni crear
+    # shims. ${CROSS_COMPILE%-} quita la raya final; el hostspec NO se escribe a
+    # mano porque el log no lo imprime.
+    # HOSTCC idem, para los binarios de host (fixdep, conf, sortextable). Se
+    # deja LD/AR/NM/OBJCOPY/STRIP como estan: ccache no puede envolverlos.
+    export CCACHE_DIR="${CCACHE_DIR:-$HOME/.ccache}"
+    mkdir -p "$CCACHE_DIR"
+    command -v ccache >/dev/null || {
+        echo "==> ERROR: ccache no esta instalado en el chroot" >&2
+        return 1
+    }
+    local _cc="ccache ${CROSS_COMPILE%-}gcc"
+    echo "==> CCACHE_DIR=$CCACHE_DIR  CC=$_cc  HOSTCC=ccache gcc"
     # shellcheck disable=SC2086
-    make ${MAKEFLAGS} Image.gz modules
+    make ${MAKEFLAGS} CC="$_cc" HOSTCC="ccache gcc" Image.gz modules
+    # Para que el log diga cuantos hits hubo de verdad, y no haya que deducirlo
+    # del tamano de la cache.
+    ccache -s || true
     # shellcheck disable=SC2086
-    make ${MAKEFLAGS} DTC_FLAGS="-@" dtbs
+    make ${MAKEFLAGS} CC="$_cc" HOSTCC="ccache gcc" DTC_FLAGS="-@" dtbs
 }
 
 _package() {
