@@ -28,23 +28,29 @@ set -e
 
 log() { echo "mediatek-wifi: $*"; }
 
-# El nodo aparece al cargar wmt_drv, pero el modulo puede tardar si el
-# dispositivo UFS no ha woken todavia.
+# wmt_drv primero, sin esperar: el nodo /dev/wmtWifi lo crea ese modulo, asi
+# que esperarlo sin cargarlo es esperar 30 s a algo que no va a pasar. Se
+# cargan en el orden del stack (btif -> wmt_drv -> wlan_gen4m), no en el que
+# toca el nodo: ver la nota de arriba.
+if ! modprobe wmt_drv; then
+	log "ERROR: no se pudo cargar wmt_drv (sin el no hay /dev/wmtWifi)"
+	exit 1
+fi
+if ! modprobe mtk-vendor-btif 2>/dev/null; then
+	log "AVISO: no se pudo cargar mtk-vendor-btif; el WMT se queda sin HIF btif"
+fi
+
+# El nodo aparece al cargar wmt_drv, pero puede tardar si el dispositivo UFS no
+# ha woken todavia.
 i=0
 while [ ! -e /dev/wmtWifi ]; do
 	i=$((i + 1))
 	if [ "$i" -gt 30 ]; then
-		log "ERROR: /dev/wmtWifi no aparece (wmt_drv no cargo?)"
-		modprobe wmt_drv 2>&1 | sed 's/^/  /' || true
+		log "ERROR: /dev/wmtWifi no aparece"
 		exit 1
 	fi
 	sleep 1
 done
-
-# mtk-vendor-btif: sin el no hay transporte STP para el WMT.
-if ! modprobe mtk-vendor-btif 2>/dev/null; then
-	log "AVISO: no se pudo cargar mtk-vendor-btif; el WMT se queda sin HIF btif"
-fi
 
 if ! modprobe wlan_gen4m; then
 	log "ERROR: no se pudo cargar wlan_gen4m"

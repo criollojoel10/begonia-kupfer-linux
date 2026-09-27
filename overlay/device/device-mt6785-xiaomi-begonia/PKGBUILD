@@ -21,7 +21,11 @@
 _mode=cross
 pkgname=device-mt6785-xiaomi-begonia
 pkgver=0.1
-pkgrel=4
+# 5: ExecStart de mediatek-wifi.service apuntaba a
+# /usr/lib/device-mt6785-xiaomi-begonia/mediatek-wifi.sh y el script se
+# instala en /usr/libexec/. El servicio no podia arrancar jamas (203/EXEC) y el
+# wifi interno no se encendia nunca. Nada de esto hacia fallar el build.
+pkgrel=5
 _arches=specific
 arch=(aarch64)
 license=(MIT)

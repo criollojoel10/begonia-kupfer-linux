@@ -611,6 +611,37 @@ jobs:
           sudo ls "$MNT/var/lib/pacman/local/" | grep -E '^firmware-mt6785-xiaomi-begonia-' \
             || { echo "::error::firmware-mt6785-xiaomi-begonia no esta instalado"; miss=1; }
 
+          # (f) el ExecStart de la unidad del wifi interno tiene que existir DENTRO
+          # de la imagen. Hace falta porque un ExecStart mal escrito no rompe nada
+          # en el build: el paquete se construye bien y el wifi simplemente no se
+          # enciende en el movil, con un 203/EXEC en el journal que nadie mira. Ya
+          # paso con /usr/lib/device-mt6785-xiaomi-begonia/, con el script instalado
+          # en /usr/libexec/.
+          echo "--- mediatek-wifi.service ---"
+          UNIT="$MNT/usr/lib/systemd/system/mediatek-wifi.service"
+          if [ ! -f "$UNIT" ]; then
+            echo "::error::no hay mediatek-wifi.service en la imagen"; miss=1
+          else
+            sudo grep -E '^(Description|After|ExecStart)=' "$UNIT" || true
+            # ExecStart puede llevar un prefijo con -; aqui no lo lleva, pero se
+            # tolera por si algum dia hace falta.
+            EX=$(sudo sed -n 's/^ExecStart=//p' "$UNIT" | head -1 | sed 's/^-//')
+            echo "ExecStart: ${EX:-<vacio>}"
+            if [ -z "$EX" ]; then
+              echo "::error::la unidad no tiene ExecStart"; miss=1
+            elif [ ! -e "$MNT$EX" ]; then
+              echo "::error::ExecStart apunta a $EX y ese fichero no esta en la imagen (el servicio no arrancara: 203/EXEC)"
+              miss=1
+            elif [ ! -x "$MNT$EX" ]; then
+              echo "::error::$EX no es ejecutable en la imagen"; miss=1
+            fi
+            # Y que la unidad este habilitada de verdad, no solo instalada.
+            if [ ! -e "$MNT/etc/systemd/system/multi-user.target.wants/mediatek-wifi.service" ]; then
+              echo "::error::mediatek-wifi.service no esta habilitada en multi-user.target.wants"
+              miss=1
+            fi
+          fi
+
           sudo umount "$MNT"
           sudo losetup -d "$LOOP"
           exit "$miss"

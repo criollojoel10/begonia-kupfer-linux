@@ -9,7 +9,12 @@ StartLimitIntervalSec=0
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/lib/device-mt6785-xiaomi-begonia/mediatek-wifi.sh
+# La ruta tiene que ser EXACTAMENTE la que instala el PKGBUILD
+# (/usr/libexec/mediatek-wifi.sh). Con /usr/lib/device-mt6785-xiaomi-begonia/
+# el servicio arrancaba con status=203/EXEC "No such file or directory": el
+# fichero nunca estuvo ahi, el wifi interno no se encendia nunca, y nada de
+# esto lo delata en el build (el paquete se construye bien de todos modos).
+ExecStart=/usr/libexec/mediatek-wifi.sh
 TimeoutStartSec=120
 # Si falla, reintenta: al arrancar el nodo puede no existir todavia porque el
 # UFS acaba de despertar y el firmware se pide del disco.
