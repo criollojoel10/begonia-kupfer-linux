@@ -1,0 +1,25 @@
+[connection]
+id=Redmi Note 12 Pro 5G w0
+uuid=86c3f78e-3434-49d2-b79e-0a3824397f62
+type=wifi
+autoconnect=false
+interface-name=wlan0
+
+[wifi]
+mode=infrastructure
+ssid=Redmi Note 12 Pro 5G
+
+[wifi-security]
+auth-alg=open
+key-mgmt=wpa-psk
+pmf=1
+psk=AQUI_VA_TU_CLAVE
+
+[ipv4]
+method=auto
+
+[ipv6]
+addr-gen-mode=default
+method=auto
+
+[proxy]

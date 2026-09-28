@@ -972,14 +972,49 @@ Los cuatro perfiles del device quedan con `key-mgmt=wpa-psk`, `pmf=1` y `psk` en
 
 La imagen solo trae `org.kde.secretservicecompat.service` → `Exec=/usr/bin/ksecretd` y
 `org.kde.kwalletd6.service`. **No hay ningún `org.freedesktop.secrets.service`**, ni en
-`/usr/lib/systemd/user/` ni en `/usr/share/dbus-1/services/`.
+`/usr/lib/systemd/user/` ni en `/usr/share/dbus-1/services/`, que es donde lo busca D-Bus.
 
 No es un problema heredado: la imagen **tampoco trae `gnome-keyring`**, que era lo que secuestraba
-`org.freedesktop.secrets` con un llavero vacío. El begonia que corre ahora sí tiene el override,
-porque se creó a mano; flasheando solo `boot` sobrevive, pero si algún día se flashea `userdata`
-hay que rehacerlo. El fichero que hace falta es simplemente un `Exec=/usr/bin/ksecretd` con el
-nombre `org.freedesktop.secrets.service`, en `/usr/lib/systemd/user/`, para que D-Bus enrute ahí las
-peticiones de secretos de NetworkManager.
+`org.freedesktop.secrets` con un llavero vacío. El begonia que corre ahora sí lo tiene resuelto, pero
+**a mano**: flasheando solo `boot` sobrevive; si algún día se flashea `userdata` hay que rehacerlo.
+
+Son tres ficheros, en tres sitios distintos, y el segundo no es donde parece:
+
+```sh
+# 1. El override de D-Bus. Va en /usr/share/dbus-1/services/, que es un fichero de
+#    activación D-Bus, NO una unidad de systemd: systemctl --user cat no lo encuentra.
+#    Este es el que enruta org.freedesktop.secrets a ksecretd.
+#    Contenido: [D-BUS Service] / Name=org.freedesktop.secrets / Exec=/usr/bin/ksecretd
+sudo tee /usr/share/dbus-1/services/org.freedesktop.secrets.service >/dev/null <<'EOF'
+[D-BUS Service]
+Name=org.freedesktop.secrets
+Exec=/usr/bin/ksecretd
+EOF
+
+# 2. Los masks de gnome-keyring, en ~/.config/systemd/user/ (no en /etc).
+#    Son symlinks a /dev/null. Sin esto, el socket vuelve a arrancar el daemon.
+mkdir -p ~/.config/systemd/user
+ln -sf /dev/null ~/.config/systemd/user/gnome-keyring-daemon.service
+ln -sf /dev/null ~/.config/systemd/user/gnome-keyring-daemon.socket
+systemctl --user disable --now gnome-keyring-secrets.service
+
+# 3. El PATH de opencode, que en este móvil no viene de serie.
+echo 'export PATH="$HOME/.opencode/bin:$PATH"' >> ~/.bashrc
+```
+
+Sobre el `PATH`: `~/.bashrc:6` corta la ejecución en shells no interactivas, así que la línea tiene
+que estar **también** en `~/.bash_profile`, y **antes** del `source ~/.bashrc` que tiene ahí. Si
+solo se añade a `.bashrc`, `opencode` sigue sin existir cuando te conectas por SSH.
+
+El fichero original de gnome-keyring se guardó en
+`/root/org.freedesktop.secrets.service.gnomekeyring.bak` por si hay que deshacer. Con los tres
+pasos aplicados, `pgrep gnome-keyring` no devuelve nada, `systemctl --user is-enabled
+gnome-keyring-daemon.service` dice `masked`, y `ksecretd` queda vivo (pid 1043 el 28-09-2026).
+
+Los ficheros que hacen falta, con el sitio exacto donde van, están en
+[`device-state/`](device-state/README.md). Ahí está también lo que **no** se puede recuperar
+desde el repo: las contraseñas de las redes, que están censuradas porque este repo es público, y
+las claves SSH.
 
 ## Build en GitHub Actions
 
