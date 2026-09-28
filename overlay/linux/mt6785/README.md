@@ -143,7 +143,7 @@ evitarlo.
 
 ## Qué está verificado y qué no
 
-**Verificado:**
+**Verificado en el build:**
 - Los 10 parches aplican limpios (22 ficheros, sin offset ni fuzz) sobre una
   copia de las 12 rutas tal cual están en `3a1ea769`.
 - `mt6785.dtsi` queda byte-idéntico al pin: el WiFi (`wifi@1800000`,
@@ -155,16 +155,51 @@ evitarlo.
   array `mt6359_auxadc_channels[]`, y la IIO core empareja por
   `io-channel-names` del consumidor + índice, no por `chan->name`. Por eso
   funciona aunque el driver no rellene `.name`.
+- El kernel entero compila. GHA run `36359217206` (sha `11637f4`), 25 pasos
+  verdes en 55 min 32 s, incluido el paso `Verify battery stack`.
+
+**Verificado en el begonia real** (run `36359217206` flasheado solo en `boot`,
+28-09-2026):
+
+- El kernel que corre es el construido en GHA, no el anterior:
+  `Linux version 6.16.4 (kupfer@runnervmtr4k5) ... #1 SMP PREEMPT Mon Sep 28
+  00:12:27 UTC 2026`, con `CONFIG_BATTERY_MT6359=y`, `CONFIG_MFD_MT6397=y`,
+  `CONFIG_RTC_DRV_MT6397=y` y `CONFIG_MEDIATEK_MT6359_AUXADC=y` en
+  `/proc/config.gz`.
+- Los 8 dispositivos del PMIC se registran en `sysfs`: `battery-manager`,
+  `mt6359-gauge`, `mt6359-auxadc`, `mt6359-rtc`, `mt6359-accdet`,
+  `mt6359-keys`, `mt6359-regulator`, `mt6359-sound`.
+- **El gauge lee corriente de verdad**, no devuelve ceros ni valores fijos:
+  `fgauge:[get_ptim_current]ptim current:10821` repetido cada 10 s, y el daemon
+  escribe `fgauge:[fgauge] car[-15,218,-218,437,-219] tmp:27 soc:4 vbat:3837
+  ibat:2764 baton:777 algo:1 ...` — `algo:1` es conteo de culombios.
+- **No hay ni un `probe deferral` ni un `probe fail`** en todo el `dmesg`. Era el
+  riesgo real de la serie: `mt6359-gauge.c` devuelve `-EPROBE_DEFER` en el primer
+  `devm_iio_channel_get()`, y como los cuatro drivers van `=y` no hay carrera de
+  orden de probe. Se confirma en hardware.
+- `/dev/rtc0` existe y la fecha del sistema es correcta.
+- Hay un `power_supply` de tipo `Battery` con `capacity`, `voltage_now`,
+  `current_now`, `temp`, `charge_full` y `cycle_count`.
+
+**Lo que se midió de la lectura del 4%**, porque es donde las tablas sin
+calibrar podían fallar y no fallaron: `capacity=4` con `voltage_now=3840000` µV
+(3,84 V), `temp=270` (27 °C), `charge_full = charge_full_design = 2946000` µAh,
+`cycle_count=1`. El SOC que calcula el gauge por conteo de culombios y su propio
+voltaje dicen los dos 4%, así que la tabla no está inventándose nada: 3,84 V en
+una celda Li-ion es de verdad el final. `capacity_level=Low` es correcto ahí.
 
 **No verificado:**
-- Que el kernel compile entero. Nadie ha construido esta serie.
-- Que el gauge dé porcentajes correctos. Las tablas son las del fabricante, pero
-  están sin calibrar contra esta unidad.
-- Que el gauge sobreviva a un ciclo completo de carga/descarga. La lógica de
-  "shutdown por batería baja" (`pmic-min-vol = 33500`,
-  `shutdown-gauge0-voltage = 34000`) decide cuándo apagar el móvil: mal
-  calibrado, puede apagarse antes de tiempo. **Merece atención las primeras
-  cargas.**
+- Un ciclo completo de carga/descarga. La lógica de "shutdown por batería baja"
+  (`pmic-min-vol = 33500`, `shutdown-gauge0-voltage = 34000`) decide cuándo
+  apagar el móvil: mal calibrada, puede apagarse antes de tiempo. No se ha
+  probado a llegar al umbral, y es lo primero que hay que mirar.
+- La precisión del porcentaje a medio ciclo. `cycle_count=1` significa que el
+  gauge todavía no ha aprendido una capacidad de carga completa distinta de la
+  de diseño.
+- La carga rápida. Se mide `mt6360-chg.2.auto` con `online=1` pero
+  `usb_type=Unknown [SDP] DCP CDP`, y el TCPC con `current_max=0`: **el USB-PD
+  no negocia contrato**, así que entra a ~150-200 mA sobre 2946 mAh. Con un
+  cargador de pared que negocie PD sube, pero eso no se ha probado.
 
 ## Procedencia
 

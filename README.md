@@ -17,9 +17,11 @@ comunidad.mergea primero.
 
 ## Estado
 
-**Build verde.** Run `36310845797` (commit `0497987`, 27-09-2026 09:54→10:34 UTC), flavour
-`plasma-mobile`, runner limpio sin cache: construye la imagen y pasa los 6 checks de
-verificación. Artifact `kupfer-begonia-plasma-mobile` (id `10929910559`).
+**Build verde y verificado en el begonia real.** Último run `36361060222` (commit
+`0f5ce7b`, 28-09-2026 00:08→00:59 UTC), flavour `plasma-mobile`: 25 pasos, todos
+verdes. El run anterior `36359217206` (commit `11637f4`, 23:35→00:31 UTC) es el
+primer build con la pila de batería y también salió verde entero. Artifacts
+`kupfer-begonia-plasma-mobile`, 4562 MB y 4559 MB, ambos expiran el 2026-10-05.
 
 | Etapa | Estado |
 |---|---|
@@ -29,7 +31,7 @@ verificación. Artifact `kupfer-begonia-plasma-mobile` (id `10929910559`).
 | Parche `update-bootimg.sh` (header v2 + recovery_dtbo) | ✅ |
 | Toolchain de cruce en el build (lo que faltaba) | ✅ |
 | `mkbootimg` con la división entera arreglada (sin esto no sale `aboot.img`) | ✅ |
-| Build de la imagen en GHA (base `dev`, 19 steps, ~50 min) | ✅ run `36310845797` verde, ver [Notas de CI](#notas-de-ci) |
+| Build de la imagen en GHA (base `dev`, 25 steps, ~55 min) | ✅ runs `36359217206` y `36361060222` verdes, ver [Notas de CI](#notas-de-ci) |
 | `aboot.img` generado con el initramfs completo | ✅ |
 | Los 5 módulos de panel/táctil dentro del initramfs | ✅ comprobado en CI |
 | Firmware de novatek dentro del initramfs (faltaba) | ✅ |
@@ -37,8 +39,10 @@ verificación. Artifact `kupfer-begonia-plasma-mobile` (id `10929910559`).
 | Firmware MediaTek en `/usr/lib/firmware` (estaba en `/usr/mediatek/`) | ✅ |
 | Los 7 blobs MediaTek **dentro de la imagen**, no solo en el paquete | ✅ comprobado en CI |
 | Encendido automático del wifi interno (`mediatek-wifi.service`) | ✅ `ExecStart` y symlink comprobados en CI |
+| **Fuel gauge GM30 del PMIC MT6359** (`battery`) | ✅ 10 parches, run `36359217206` verde, [medido en el device](overlay/linux/mt6785/README.md#qué-está-verificado-y-qué-no) |
+| **ccache** (nunca había cacheado nada) | ✅ 3 bugs arreglados, `Verify ccache actually filled` en verde |
 | Bluetooth interno | ❌ falta el driver HCI: el BTIF sí está y es el mismo bus que el wifi ([detalle](#el-bluetooth-interno-falta-el-driver-hci)) |
-| Flasheo y verificación en device | ⏳ pendiente |
+| Flasheo y verificación en device | ✅ flasheado solo en `boot`, [verificado](#flasheo-solo-en-boot-sin-tocar-userdata) |
 
 ## Investigación: no hay ningún port MediaTek que nos preceda
 
@@ -693,6 +697,31 @@ Dos trampas que costaron un run cada una y que conviene no volver a pisar:
   de pmaports trae `CONFIG_CRYPTO_LZO=y` pero `CONFIG_CRYPTO_LZ4` apagado. Con el conf de stock eso
   es un `==> ERROR: module not found: 'crypto_lz4'` cada vez que se construye un initramfs en el
   chroot de build (no es fatal, pero grita). Por eso `CONFIG_CRYPTO_LZ4=m` en `extra_config`.
+- **ccache no había cacheado nunca nada, por tres bugs independientes.** Los tres tenían que
+  arreglarse a la vez; con uno solo arreglado sigue sin cachear.
+  1. `generator.py:94` escribe `BUILDENV=(!distcc color !ccache !check !sign)`, así que el
+     entorno de build descarta ccache aunque esté instalado en el chroot.
+  2. El compilador es de cross y `/usr/lib/ccache` solo trae los shims de **host**. Aun así no se
+     usan shims: un shim de ccache en el `PATH` se autoconfigura de forma no verificable, así que
+     el override va en la línea de comandos de `make` (`CC="ccache ${CROSS_COMPILE}gcc"`,
+     `HOSTCC="ccache gcc"`), sin envolver `LD`/`AR`/`NM`/`OBJCOPY`/`STRIP`.
+  3. ccache 4.x escribe en `$HOME/.cache/ccache`, pero kupferbootstrap monta `$HOME/.ccache`
+     (`chroot/build.py:183`). Con el directorio equivocado la caché se llena en un sitio que se
+     descarta al acabar el run.
+
+  El síntoma era delator: las entradas `ccache-*` del repo pesaban **273 B**, que es lo que pesa un
+  marcador de directorio vacío. La premisa de que los runs antiguos eran rápidos por la caché era
+  falsa: el mejor run medido (`36310845797`) tardó 39 min 13 s, con `Build image` en 28 min 52 s.
+
+  El `PKGBUILD` hace `export CCACHE_DIR="${CCACHE_DIR:-$HOME/.ccache}"`, guarda con `command -v`
+  tanto `ccache` como `${CROSS_COMPILE}gcc` para no fallar en silencio, y acaba con `ccache -s`. El
+  paso `Verify ccache actually filled` falla si el run deja menos de 100 ficheros, para que esto no
+  vuelva a pasar inadvertido.
+- **`${CROSS_COMPILE}` ya lleva la raya final.** Es `aarch64-unknown-linux-gnu-`, así que el
+  compilador es `${CROSS_COMPILE}gcc`, **con** guion. `${CROSS_COMPILE%-}gcc` fue el bug del run
+  `36360020474`.
+- El paso `Upload artifacts` lleva `if: always()`. Sin eso, un `verify` mal escrito destruye los
+  50 min de build sin dejar nada que debuggear.
 
 El resto de notas de CI:
 
@@ -792,6 +821,165 @@ systemd-run --user --unit=kupfer-flash --collect \
 `flash-final.sh` valida tamaños y hashes, comprueba `LABEL=kupfer_root` (con `blkid`, que no
 entiende sparse, sobre la imagen cruda) y, sin `--yes`, solo imprime el plan y sale con 0 sin tocar
 nada.
+
+## Flasheo solo en `boot`, sin tocar `userdata`
+
+Es la vía para **actualizar el kernel conservando todo lo demás del móvil**: los perfiles de
+NetworkManager, la clave SSH, el `$HOME`, el monedero. Es la que se usó para llevar la pila de
+batería al begonia real, y se verificó entera antes de escribir una sola partición.
+
+### Por qué no hace falta tocar `userdata`
+
+Toda la pila de batería —los drivers compilados en el kernel y el DTB con
+`mt6359_gauge`/`battery_manager`— va **dentro del `aboot.img`**, o sea dentro de la partición
+`boot`. `userdata` no aporta nada a la batería.
+
+Comprobado en el device antes de flashear:
+
+| Comprobación | Resultado |
+|---|---|
+| Distribución real del almacenamiento | `/dev/sdc` = UFS interna (SKhynix) con GPT de 59,6 GB. **`sdc46` = 52,3 GiB, ext4, `LABEL=kupfer_root`, montada en `/`** ⇒ esa es `userdata`. `mmcblk0` = 29 GB vfat = microSD. |
+| Partición `boot` | **`sdc34`, 64 MiB, `PARTLABEL=boot`**. El `aboot.img` ocupa 27.924.480 B, cabe de sobra. |
+| ¿El rootfs actual aguanta un kernel nuevo? | Sí. El kernel que corría y el nuevo son ambos **6.16.4**, y **`CONFIG_MODVERSIONS` está apagado** (0 módulos con sección `__versions`): no se validan CRCs de símbolos, así que los `.ko` del rootfs siguen siendo válidos. |
+| ¿El initramfs nuevo es una regresión? | No. El viejo y el nuevo son estructuralmente idénticos (2 zstd, 2 gzip, 14 cpio) y **ninguno lleva los `.ko` del panel**. En el viejo sus 2 apariciones de la cadena `.ko` son bytes sueltos dentro de datos comprimidos, no nombres de fichero. El `earlymodules=` del cmdline no depende del initramfs. |
+| `vbmeta` actual | `Algorithm: NONE`, **`Flags: 2`** (verificación desactivada), **`Descriptors: (none)`**. Al no tener descriptores no verifica nada ⇒ **no hace falta reflashearlo** aunque cambie el kernel. |
+| Rollback | `fastboot fetch` existe en platform-tools 33 ⇒ se puede guardar el `boot` actual exacto antes de escribir. |
+
+### Los comandos
+
+Deja el móvil **enchufado al cargador**: es la primera vez que arranca el gauge nuevo y lo que más
+se vigila es la lógica de batería baja.
+
+```sh
+cd /home/joel/work-begonia/kupfer-img
+
+FB=/home/joel/work-begonia/tools/pt33/platform-tools/fastboot
+```
+
+`$FB` es un alias solo para abreviar. Si tu shell es `fish`, escribe `$FB` como
+`set FB /home/joel/work-begonia/tools/pt33/platform-tools/fastboot`; si no, sustituye cada
+`$FB` por la ruta entera.
+
+```sh
+# 1. En fastboot: reserva el boot actual. OBLIGATORIA, el rollback depende de esto.
+$FB devices
+$FB fetch boot boot-actual.img
+sha256sum boot-actual.img
+
+# 2. Un solo comando de escritura. Sin --wipe, sin userdata, sin recovery, sin dtbo.
+sha256sum -c <<< "397051a671ec2e08c282a9a528ea05c48decf05c68f3981df3e7bb5b18337490  aboot-bateria.img"
+$FB flash boot aboot-bateria.img
+$FB reboot
+```
+
+`fetch` está en platform-tools 33 y también en el 37 del sistema (`/usr/bin/fastboot`), así que
+da igual cuál de los dos uses. Si `fetch` no devolviera nada, para ahí: sin esa reserva no se
+sigue.
+
+### Rollback
+
+```sh
+$FB flash boot boot-actual.img
+$FB reboot
+```
+
+### Verificación tras arrancar
+
+```sh
+ssh joel@100.112.2.11 '
+dmesg | grep -iE "mt6359-gauge|mtk_battery|battery-manager|mt6397|fgauge|bm_update_status"
+ls /sys/class/power_supply/
+for f in capacity voltage_now current_now temp status; do
+  printf "%-12s %s\n" "$f" "$(cat /sys/class/power_supply/battery/$f)"
+done'
+```
+
+Lo que salió en el begonia real el 28-09-2026, con el run `36359217206`:
+
+- 8 dispositivos del PMIC en sysfs, gauge leyendo corriente real
+  (`fgauge:[get_ptim_current]ptim current:10821`) y `bm_update_status` cada 10 s con
+  `soc:4 vbat:3843`.
+- **Cero `probe deferral` y cero `probe fail`** en todo el `dmesg`.
+- `capacity=4` con `voltage_now=3840000` µV, `temp=270`, `charge_full=2946000`,
+  `cycle_count=1`. El SOC por culombios y el voltaje coinciden, así que la tabla sin calibrar no
+  está fallando. Detalle y lo que sigue sin medirse, en
+  [el README del overlay](overlay/linux/mt6785/README.md#qué-está-verificado-y-qué-no).
+
+### Descargar el artefacto: `gh api` no sirve, `aria2c` sí, con un rodeo
+
+La descarga son 4,5 GB. `gh api` va a una sola conexión: 2,18 GB en 5 minutos. Con `aria2c`
+`-x16` baja 4,46 GB en 25-30 s, **pero no se le puede pasar `--header "Authorization: Bearer ..."`**:
+la API responde 302 hacia `productionresultssa9.blob.core.windows.net`, `aria2c` reenvía el header
+al host destino y Azure lo rechaza con `errorCode=24 -> Authorization failed`.
+
+El rodeo es resolver la redirección primero y darle a `aria2c` la URL ya firmada, que no necesita
+header:
+
+```sh
+URL=$(curl -s -o /dev/null -D - -H "Authorization: Bearer $TOKEN" \
+      "https://api.github.com/repos/OWNER/REPO/actions/runs/RUN/artifacts/ID/zip" \
+      | awk 'tolower($1)=="location:"{print $2}' | tr -d '\r')
+aria2c -x16 -s16 -k1M --file-allocation=none --auto-file-renaming=false -o artifact.zip "$URL"
+```
+
+Esa URL lleva su SAS con caducidad (`se=`), así que hay que **re-resolverla en cada reintento**; no
+vale guardarla.
+
+Del artifact solo se usan dos ficheros, y uno no:
+
+```
+aboot.img                                          27.924.480   -> sí, va a boot
+mt6785-xiaomi-begonia-plasma-mobile-root.img    7.180.648.448   -> no, solo si flasheas userdata
+mt6785-xiaomi-begonia-plasma-mobile-boot.img        62.914.560   -> no, el boot va dentro de aboot.img
+mt6785-xiaomi-begonia-plasma-mobile-full.img     7.390.363.648   -> no, es el rootfs con el GPT delante
+initramfs-linux.img                                 17.150.743   -> no, ya va embebido en aboot.img
+```
+
+Si aun así hay que flashear `userdata`, el roundtrip sparse se verificó byte a byte:
+`img2simg` da 6,69 GiB → 5,74 GB con magic `3aff26ed`, y `simg2img` recupera el sha256
+`197d98518c3ace9e8647dbdf26428f41a7018687fc41d5402483a2fba92bfb83` idéntico al original. Ojo:
+`simg2img` contra `/tmp` falla con ENOSPC, hay que hacerlo contra disco real.
+
+## Agregar una red wifi: el `pmf` importa
+
+Un AP mixto WPA2/WPA3 rechaza la asociación de un cliente que no soporte MFP (802.11w), y el
+código de estado 802.11 que devuelve es el **16**. En `wpa_supplicant` sale así:
+
+```
+Trying to associate with SSID 'Redmi Note 12 Pro 5G'
+CTRL-EVENT-ASSOC-REJECT  bssid=00:00:00:00:00:00 status_code=16
+```
+
+Lo que confunde es que la asociación **falla antes** de necesitar la clave, y NM pide el secreto
+después para reintentar; como no hay agente disponible, el síntoma que se ve es `no secrets` y
+parece un problema de llavero. **No lo es: la `psk` nunca llega a usarse.** El arreglo es
+`wifi-sec.pmf=1` (MFP capaz, no obligatorio), que funciona tanto con APs WPA2 puras como con las
+mixtas. Probado en el device: `pmf=1` conecta, `pmf=3` da `association took too long`, y `sae` no
+aporta nada aquí.
+
+Dos trampas de NetworkManager que costaron tiempo:
+
+- Dos perfiles de conexión con el **mismo `id`** (aunque los ficheros y los UUID sean distintos) no
+  se distinguen: `nmcli con up "Redmi Note 12 Pro 5G w0"` responde `unknown connection`. Hay que
+  tirar de `nmcli con up uuid <uuid>`.
+- `nmcli con mod ... wifi-sec.pmf 1` **no persiste** el cambio, porque NM no escribe la clave si
+  cree que es el valor por defecto. Hay que editar el keyfile directamente y recargar con
+  `nmcli con reload`.
+
+Los cuatro perfiles del device quedan con `key-mgmt=wpa-psk`, `pmf=1` y `psk` en el fichero.
+
+## La imagen no trae `org.freedesktop.secrets.service`
+
+La imagen solo trae `org.kde.secretservicecompat.service` → `Exec=/usr/bin/ksecretd` y
+`org.kde.kwalletd6.service`. **No hay ningún `org.freedesktop.secrets.service`**, ni en
+`/usr/lib/systemd/user/` ni en `/usr/share/dbus-1/services/`.
+
+No es un problema heredado: la imagen **tampoco trae `gnome-keyring`**, que era lo que secuestraba
+`org.freedesktop.secrets` con un llavero vacío. El begonia que corre ahora sí tiene el override,
+porque se creó a mano; flasheando solo `boot` sobrevive, pero si algún día se flashea `userdata`
+hay que rehacerlo. El fichero que hace falta es simplemente un `Exec=/usr/bin/ksecretd` con el
+nombre `org.freedesktop.secrets.service`, en `/usr/lib/systemd/user/`, para que D-Bus enrute ahí las
+peticiones de secretos de NetworkManager.
 
 ## Build en GitHub Actions
 
