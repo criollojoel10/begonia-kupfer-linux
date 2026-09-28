@@ -3,7 +3,7 @@ _kernelname=mt6785
 pkgbase="linux-$_kernelname"
 _desc="MediaTek MT6785 (begonia) kernel"
 pkgver=6.16.4
-pkgrel=3
+pkgrel=4
 _arches=specific
 arch=(aarch64)
 license=(GPL2)
@@ -172,7 +172,8 @@ build() {
     #    que deja kupferbootstrap es prependar /usr/lib/ccache al PATH
     #    (packages/build.py:722), y ahi solo hay shims de gcc/g++/cc/c++/cpp/ld/
     #    gcov a secas, ninguno de cross. En el log del build no aparece ni una
-    #    vez "ccache aarch64-linux-gnu-gcc": los ~30k objetos del target nunca
+    #    vez "ccache aarch64-unknown-linux-gnu-gcc" (el hostspec real lo delata
+    # el propio log): los ~30k objetos del target nunca
     #    entraron en la cache. Solo pasaban por ella los HOSTCC de a secas.
     #
     # 3) ccache 4.x escribe donde nadie monta. chroot/build.py:183 hace bind de
@@ -192,13 +193,20 @@ build() {
     # Para (2) se invoca ccache en su forma NORMAL, con argv[0] == ccache y el
     # compilador de cross como argumento, y se sobreescribe CC en la linea de
     # comandos, que pisa el CC = $(CROSS_COMPILE)gcc del Makefile. Se ha
-    # descartado a proposito la otra via, un shim aarch64-linux-gnu-gcc ->
+    # descartado a proposito la otra via, un shim aarch64-unknown-linux-gnu-gcc ->
     # /usr/bin/ccache en un directorio prependido al PATH: funciona, pero obliga
     # a confiar en que ccache no se encuentra a si mismo al resolver el
     # compilador real, y eso no se ha podido verificar. Con esta forma no hay
     # ninguna auto-referencia posible, y no hay que tocar el PATH ni crear
-    # shims. ${CROSS_COMPILE%-} quita la raya final; el hostspec NO se escribe a
-    # mano porque el log no lo imprime.
+    # shims. ${CROSS_COMPILE} YA LLEVA la raya final, asi que se concatena
+    # directo: kupferbootstrap lo exporta como "aarch64-unknown-linux-gnu-" y el
+    # compilador es "${CROSS_COMPILE}gcc", CON guion. Quitar la raya con
+    # ${CROSS_COMPILE%-} y pegarle "gcc" sin volver a ponerla daba
+    # "aarch64-unknown-linux-gnugcc", que no existe: revento el run 36360020474 a
+    # los 11m26s con "ccache: error: Could not find compiler ... in PATH" y
+    # "scripts/Kconfig.include:45: Sorry, this C compiler is not supported". Ese
+    # era el unico fallo, y lo produjo un string mal escrito aqui.
+    # El hostspec NO se escribe a mano porque el log no lo imprime.
     # HOSTCC idem, para los binarios de host (fixdep, conf, sortextable). Se
     # deja LD/AR/NM/OBJCOPY/STRIP como estan: ccache no puede envolverlos.
     export CCACHE_DIR="${CCACHE_DIR:-$HOME/.ccache}"
@@ -207,7 +215,15 @@ build() {
         echo "==> ERROR: ccache no esta instalado en el chroot" >&2
         return 1
     }
-    local _cc="ccache ${CROSS_COMPILE%-}gcc"
+    # El compilador de cross se comprueba ANTES de arrancar el make. Sin esto un
+    # nombre mal escrito se descubre 11 minutos despues, en syncconfig, con el
+    # motivo enterrado en el log; con esto falla al instante y legible.
+    command -v "${CROSS_COMPILE}gcc" >/dev/null || {
+        echo "==> ERROR: no existe el compilador de cross ${CROSS_COMPILE}gcc" >&2
+        echo "==> CROSS_COMPILE vale '$CROSS_COMPILE'" >&2
+        return 1
+    }
+    local _cc="ccache ${CROSS_COMPILE}gcc"
     echo "==> CCACHE_DIR=$CCACHE_DIR  CC=$_cc  HOSTCC=ccache gcc"
     # shellcheck disable=SC2086
     make ${MAKEFLAGS} CC="$_cc" HOSTCC="ccache gcc" Image.gz modules
