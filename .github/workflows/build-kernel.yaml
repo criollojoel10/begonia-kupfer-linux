@@ -1,0 +1,185 @@
+name: Build kernel only (begonia, MT6785)
+
+# Ruta rapida para iterar el kernel sin pagar el build de imagen completa
+# (~300 min). Compila SOLO linux-mt6785 (PKGBUILD del overlay), verifica los
+# simbolos de netfilter que Tailscale necesita y publica el paquete + Image.gz
+# + DTB como artifacts (y en un Release si se lanza con tag).
+#
+# No sustituye build.yaml: ese sigue siendo el que produce la imagen flasheable.
+
+on:
+  workflow_dispatch:
+    inputs:
+      verify_connmark:
+        description: 'Falla si xt_connmark/mark no estan en el config resultante'
+        type: boolean
+        required: false
+        default: true
+
+jobs:
+  kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    env:
+      DOCKER_BUILDKIT: "1"
+
+    steps:
+      - name: Checkout port repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Free up disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3 python3-venv python3-pip git rsync parted libarchive-tools
+
+      - name: Checkout kupferbootstrap
+        run: |
+          git clone --depth 1 --branch dev \
+            https://gitlab.com/kupfer/kupferbootstrap.git kupferbootstrap
+
+      # --- misma preparacion de toolchain que build.yaml, pero solo kernel ---
+      - name: Setup Python venv for kupferbootstrap
+        working-directory: kupferbootstrap
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check -q -e .
+
+      - name: Prepare cache dirs
+        run: |
+          mkdir -p "$HOME/.cache/kupferbootstrap/pkgbuilds" \
+                   "$HOME/.cache/kupferbootstrap/packages"
+
+      # Mismas rutas reales que usa build.yaml (kupferbootstrap escribe en
+      # $HOME/.cache/kupferbootstrap), no dentro del checkout del repo.
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/kupferbootstrap/ccache
+          key: ccache-kernel-${{ github.sha }}
+          restore-keys: ccache-kernel-
+
+      - name: Cache packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/kupferbootstrap/packages
+          key: pkgs-kernel-${{ github.sha }}
+          restore-keys: pkgs-kernel-
+
+      - name: Generate kupferbootstrap config
+        run: |
+          mkdir -p $HOME/.config/kupfer
+          cat > $HOME/.config/kupfer/kupferbootstrap.toml <<'TOML'
+          [build]
+          clean_mode = false
+          crosscompile = true
+          crossdirect = true
+          ccache = true
+          threads = 0
+
+          [pacman]
+          parallel_downloads = 10
+
+          [profiles.default]
+          device = "mt6785-xiaomi-begonia"
+          flavour = "plasma-mobile"
+          TOML
+
+      - name: Build kupferbootstrap image
+        working-directory: kupferbootstrap
+        run: |
+          docker build --pull --network host \
+            -t registry.gitlab.com/kupfer/kupferbootstrap:BUILD .
+          docker run --rm registry.gitlab.com/kupfer/kupferbootstrap:BUILD \
+            kupferbootstrap --help >/dev/null
+
+      - name: Initialize pkgbuilds (dev)
+        working-directory: kupferbootstrap
+        run: |
+          script -qec ".venv/bin/kupferbootstrap packages init --non-interactive" /dev/null
+
+      - name: Apply kernel overlay
+        run: |
+          set -euo pipefail
+          PDIR="$HOME/.cache/kupferbootstrap/pkgbuilds"
+          test -d "$PDIR/.git" || { echo "::error::pkgbuilds no clonado"; exit 1; }
+          # Solo el overlay del kernel (los demas no hacen falta aqui).
+          cp -r "$GITHUB_WORKSPACE/overlay/linux" "$PDIR/"
+          test -f "$PDIR/linux/mt6785/PKGBUILD" \
+            || { echo "::error::falta linux/mt6785/PKGBUILD"; exit 1; }
+          # Comprobacion temprana: el fix tiene que estar en el extra_config.
+          grep -q '^CONFIG_NETFILTER_XT_CONNMARK=m' \
+            "$PDIR/linux/mt6785/extra_config" \
+            || { echo "::error::extra_config sin CONFIG_NETFILTER_XT_CONNMARK"; exit 1; }
+          echo "overlay kernel ok"
+
+      - name: Build cross toolchain (x86_64)
+        working-directory: kupferbootstrap
+        run: |
+          script -qec ".venv/bin/kupferbootstrap -v packages build --arch x86_64 cross/aarch64-unknown-linux-gnu-bin" /dev/null
+          ls -l "$HOME/.cache/kupferbootstrap/packages/x86_64/cross/" \
+            | grep -q 'aarch64-unknown-linux-gnu-bin-.*\.pkg\.tar' \
+            || { echo "::error::toolchain aarch64 ausente"; exit 1; }
+
+      - name: Build kernel package
+        working-directory: kupferbootstrap
+        run: |
+          script -qec ".venv/bin/kupferbootstrap -v packages build --arch aarch64 linux/mt6785" /dev/null \
+            2>&1 | tee kernel-build.log
+          echo "--- log tail ---"; tail -20 kernel-build.log
+
+      - name: Locate artifacts
+        id: art
+        run: |
+          set -euo pipefail
+          PD="$HOME/.cache/kupferbootstrap/packages/aarch64"
+          PKG=$(ls -1 "$PD"/linux-mt6785-*.pkg.tar.* 2>/dev/null | grep -v headers | head -1)
+          HDR=$(ls -1 "$PD"/linux-mt6785-headers-*.pkg.tar.* 2>/dev/null | head -1)
+          [ -n "$PKG" ] || { echo "::error::no se genero linux-mt6785"; exit 1; }
+          echo "pkg=$PKG" >> "$GITHUB_OUTPUT"
+          echo "hdr=$HDR" >> "$GITHUB_OUTPUT"
+          # Extraer Image.gz y el DTB para inspeccion/uso rapido.
+          mkdir -p out
+          tar -xf "$PKG" -C out boot/Image.gz usr/lib/modules 2>/dev/null || true
+          find out -name 'Image.gz' -o -name 'mt6785-xiaomi-begonia*.dtb' \
+            -o -name 'xt_connmark.ko*' | head -20
+          ls -l "$PKG" "$HDR" 2>/dev/null
+
+      - name: Verify netfilter symbols in the built module set
+        if: ${{ inputs.verify_connmark }}
+        run: |
+          set -euo pipefail
+          echo "=== modulos xt en el paquete ==="
+          find out -name 'xt_connmark.ko*' -o -name 'xt_mark.ko*' | sort
+          ls out/usr/lib/modules/*/kernel/net/netfilter/ 2>/dev/null | grep -iE 'connmark|mark' || true
+          # Fallo duro si xt_connmark.ko no esta: es TODO el objetivo del fix.
+          if ! find out -name 'xt_connmark.ko*' | grep -q .; then
+            echo "::error::xt_connmark.ko no esta en el paquete"
+            exit 1
+          fi
+          echo "OK: xt_connmark.ko presente"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-mt6785-${{ github.run_number }}
+          path: |
+            ${{ steps.art.outputs.pkg }}
+            ${{ steps.art.outputs.hdr }}
+            out/boot/Image.gz
+          if-no-files-found: error
+          retention-days: 30
