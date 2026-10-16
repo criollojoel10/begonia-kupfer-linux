@@ -84,6 +84,12 @@ jobs:
         run: |
           mkdir -p $HOME/.config/kupfer
           cat > $HOME/.config/kupfer/kupferbootstrap.toml <<'TOML'
+          [wrapper]
+          # makepkg no existe en el runner Ubuntu: hace falta el wrapper docker
+          # (imagen oficial archlinux:base-devel + toolchain). Sin esto falla
+          # con "makepkg: command not found".
+          type = "docker"
+
           [build]
           clean_mode = false
           crosscompile = true
@@ -91,8 +97,27 @@ jobs:
           ccache = true
           threads = 0
 
+          [pkgbuilds]
+          git_repo = "https://gitlab.com/kupfer/packages/pkgbuilds.git"
+          git_branch = "dev"
+
           [pacman]
-          parallel_downloads = 10
+          # int, no bool: el esquema lo declara int y pacman.conf rechaza un
+          # booleano con "invalid value for 'ParallelDownloads' : 'True'".
+          parallel_downloads = 5
+          check_space = false
+
+          [paths]
+          # Sin esta seccion kupferbootstrap usa su default ~/.cache/kupfer/,
+          # no ~/.cache/kupferbootstrap/ (esto hizo fallar el run 38953169813:
+          # "pkgbuilds no clonado"). Debe coincidir con los paths del cache.
+          cache_dir = "$HOME/.cache/kupferbootstrap"
+          pkgbuilds = "$HOME/.cache/kupferbootstrap/pkgbuilds"
+          packages = "$HOME/.cache/kupferbootstrap/packages"
+          ccache = "$HOME/.cache/kupferbootstrap/ccache"
+
+          [profiles]
+          current = "default"
 
           [profiles.default]
           device = "mt6785-xiaomi-begonia"
