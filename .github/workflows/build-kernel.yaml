@@ -60,7 +60,13 @@ jobs:
           .venv/bin/pip install --disable-pip-version-check -q -e .
 
       - name: Prepare cache dirs
+        id: paths
         run: |
+          # Igual que build.yaml: las rutas del cache se resuelven en bash
+          # ($HOME si expande aqui) y se pasan al TOML via GITHUB_OUTPUT. Meter
+          # "$HOME" crudo en el heredoc entrecomillado del TOML NO expande y
+          # rompe la extraccion de srcinfos.tar.gz (run 38955375535).
+          echo "cache_dir=$HOME/.cache/kupferbootstrap" >> $GITHUB_OUTPUT
           mkdir -p "$HOME/.cache/kupferbootstrap/pkgbuilds" \
                    "$HOME/.cache/kupferbootstrap/packages"
 
@@ -110,11 +116,11 @@ jobs:
           [paths]
           # Sin esta seccion kupferbootstrap usa su default ~/.cache/kupfer/,
           # no ~/.cache/kupferbootstrap/ (esto hizo fallar el run 38953169813:
-          # "pkgbuilds no clonado"). Debe coincidir con los paths del cache.
-          cache_dir = "$HOME/.cache/kupferbootstrap"
-          pkgbuilds = "$HOME/.cache/kupferbootstrap/pkgbuilds"
-          packages = "$HOME/.cache/kupferbootstrap/packages"
-          ccache = "$HOME/.cache/kupferbootstrap/ccache"
+          # "pkgbuilds no clonado"). Rutas resueltas por GHA, no por bash.
+          cache_dir = "${{ steps.paths.outputs.cache_dir }}"
+          pkgbuilds = "${{ steps.paths.outputs.cache_dir }}/pkgbuilds"
+          packages = "${{ steps.paths.outputs.cache_dir }}/packages"
+          ccache = "${{ steps.paths.outputs.cache_dir }}/ccache"
 
           [profiles]
           current = "default"
