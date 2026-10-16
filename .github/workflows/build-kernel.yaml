@@ -177,10 +177,12 @@ jobs:
         id: art
         run: |
           set -euo pipefail
+          # OJO: kupferbootstrap deja el paquete en packages/aarch64/linux/, no
+          # plano en packages/aarch64/ (run 38956232156 fallo aqui). find recursivo.
           PD="$HOME/.cache/kupferbootstrap/packages/aarch64"
-          PKG=$(ls -1 "$PD"/linux-mt6785-*.pkg.tar.* 2>/dev/null | grep -v headers | head -1)
-          HDR=$(ls -1 "$PD"/linux-mt6785-headers-*.pkg.tar.* 2>/dev/null | head -1)
-          [ -n "$PKG" ] || { echo "::error::no se genero linux-mt6785"; exit 1; }
+          PKG=$(find "$PD" -name 'linux-mt6785-[0-9]*.pkg.tar.*' ! -name '*headers*' 2>/dev/null | sort | head -1)
+          HDR=$(find "$PD" -name 'linux-mt6785-headers-*.pkg.tar.*' 2>/dev/null | sort | head -1)
+          [ -n "$PKG" ] || { echo "::error::no se genero linux-mt6785"; find "$PD" -type f | head -20; exit 1; }
           echo "pkg=$PKG" >> "$GITHUB_OUTPUT"
           echo "hdr=$HDR" >> "$GITHUB_OUTPUT"
           # Extraer Image.gz y el DTB para inspeccion/uso rapido.
