@@ -117,3 +117,30 @@ CONFIG_USB_CONFIGFS_MASS_STORAGE=y
 # CONFIG_MODULE_COMPRESS_ALL is not set
 CONFIG_BLK_DEV_DM_BUILTIN=y
 CONFIG_BLK_DEV_DM=y
+
+# ---------------------------------------------------------------------------
+# Tailscale: netfilter connmark/mark (workaround rp_filter en mangle).
+#
+# Sintoma sin esto: `tailscaled` health check falla con
+#   enabling connmark rules: ... Warning: Extension connmark revision 0 not
+#   supported, missing kernel module? / iptables: unknown option "--nfmask"
+# y el tunel WireGuard queda fragil (handshake que no completa, peer "online"
+# sin datos). Tailscale inserta en mangle/PREROUTING:
+#   -m conntrack --ctstate ESTABLISHED,RELATED -m connmark ! --mark 0x0/0xff0000
+#   -j CONNMARK --restore-mark --nfmask 0xff0000 --ctmask 0xff0000
+# y en mangle/OUTPUT:
+#   -m conntrack --ctstate NEW -m mark ! --mark 0x0/0xff0000
+#   -j CONNMARK --save-mark --nfmask 0xff0000 --ctmask 0xff0000
+#
+# El simbolo que CONSTRUYE xt_connmark.ko es CONFIG_NETFILTER_XT_CONNMARK
+# (net/netfilter/Makefile: obj-$(CONFIG_NETFILTER_XT_CONNMARK) += xt_connmark.o).
+# TARGET/MATCH_CONNMARK solo lo seleccionan (compat); se ponen igual para que el
+# config sea explicito.
+#
+# Fijado a =m (no =y): con NF_CONNTRACK=m el capping tristate degrada =y a =m
+# en silencio (mismo fallo que ya sufrieron CFG80211_WEXT y RTW88 aqui). =m basta:
+# x_tables hace request_module("xt_connmark") y lo autocarga.
+CONFIG_NETFILTER_XT_CONNMARK=m
+CONFIG_NETFILTER_XT_TARGET_CONNMARK=m
+CONFIG_NETFILTER_XT_MATCH_CONNMARK=m
+CONFIG_NETFILTER_XT_TARGET_MARK=m
