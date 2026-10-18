@@ -165,6 +165,20 @@ _package() {
         error "no se genero ningun DTB de begonia (se esperaba -csot y/o -tianma)"
         return 1
     fi
+
+    # Alias retrocompatible para poder actualizar desde el propio equipo (sin PC):
+    # device-mt6785-xiaomi-begonia deja en /etc/kupfer/deviceinfo
+    #   deviceinfo_dtb="mediatek/mt6785-xiaomi-begonia"
+    # y el actualizador de arranque (hook 91-android-bootimg-updater ->
+    # update-bootimg) construye la imagen con
+    #   --dtb "/boot/dtbs/$deviceinfo_dtb.dtb"
+    # En 7.1 ese DTB monolítico ya no existe porque el DTS se partió por panel,
+    # así que sin este alias el hook fallaría al actualizar el kernel. El panel de
+    # begonia es CSOT, así que el alias apunta a esa variante.
+    if [ -e "${pkgdir}/boot/dtbs/mediatek/mt6785-xiaomi-begonia-csot.dtb" ]; then
+        cp -f "${pkgdir}/boot/dtbs/mediatek/mt6785-xiaomi-begonia-csot.dtb" \
+              "${pkgdir}/boot/dtbs/mediatek/mt6785-xiaomi-begonia.dtb"
+    fi
     cp arch/$KARCH/boot/Image.gz "${pkgdir}/boot"
 
     local _extramodules="extramodules-${_basekernel}${_kernelname}"
