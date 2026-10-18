@@ -128,7 +128,7 @@ jobs:
   build:
     name: Compilar linux-mt6785 ${{ inputs.base_tag }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 300
     needs: prepare
     env:
       DOCKER_BUILDKIT: "1"
@@ -214,8 +214,9 @@ jobs:
           mkdir -p "$HOME/.cache/kupferbootstrap/pkgbuilds" \
                    "$HOME/.cache/kupferbootstrap/packages"
 
-      - name: Cache ccache
-        uses: actions/cache@v4
+      - name: Restore ccache
+        id: ccache
+        uses: actions/cache/restore@v4
         with:
           path: ~/.cache/kupferbootstrap/ccache
           key: ccache-kernel71-${{ github.sha }}
@@ -358,3 +359,10 @@ jobs:
           path: kupferbootstrap/kernel-build.log
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Save ccache (siempre, aunque falle)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/kupferbootstrap/ccache
+          key: ccache-kernel71-${{ github.sha }}
