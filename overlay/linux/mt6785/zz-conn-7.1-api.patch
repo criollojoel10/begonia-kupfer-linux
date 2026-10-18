@@ -49,6 +49,15 @@
  };
  
  /* GPIO part */
+@@ -789,7 +806,7 @@
+ 	return chipid;
+ }
+ 
+-struct pinctrl *mtk_wcn_consys_get_pinctrl()
++struct pinctrl *mtk_wcn_consys_get_pinctrl(void)
+ {
+ 	return consys_pinctrl;
+ }
 @@ -955,7 +972,7 @@
  			retry++;
  			WMT_PLAT_PR_INFO("g_probe_called = 0, retry = %d\n", retry);
@@ -98,6 +107,39 @@
 +int __attribute__((weak)) mtk_wcn_wmt_wifi_init(void)
  {
  	WMT_DETECT_PR_DBG("no impl. mtk_wcn_wmt_wifi_init\n");
+ 	return 0;
+--- a/drivers/misc/mediatek/connectivity/common/common_detect/drv_init/bluetooth_drv_init.c
++++ b/drivers/misc/mediatek/connectivity/common/common_detect/drv_init/bluetooth_drv_init.c
+@@ -21,7 +21,7 @@
+ #include "bluetooth_drv_init.h"
+ 
+ #ifdef CONFIG_MTK_COMBO_BT
+-int __attribute__((weak)) mtk_wcn_stpbt_drv_init()
++int __attribute__((weak)) mtk_wcn_stpbt_drv_init(void)
+ {
+ 	WMT_DETECT_PR_DBG("Not implement mtk_wcn_stpbt_drv_init\n");
+ 	return 0;
+--- a/drivers/misc/mediatek/connectivity/common/common_detect/drv_init/fm_drv_init.c
++++ b/drivers/misc/mediatek/connectivity/common/common_detect/drv_init/fm_drv_init.c
+@@ -21,7 +21,7 @@
+ #include "fm_drv_init.h"
+ 
+ #ifdef CONFIG_MTK_FMRADIO
+-int __attribute__((weak)) mtk_wcn_fm_init()
++int __attribute__((weak)) mtk_wcn_fm_init(void)
+ {
+ 	WMT_DETECT_PR_DBG("no impl. mtk_wcn_fm_init\n");
+ 	return 0;
+--- a/drivers/misc/mediatek/connectivity/common/common_detect/drv_init/gps_drv_init.c
++++ b/drivers/misc/mediatek/connectivity/common/common_detect/drv_init/gps_drv_init.c
+@@ -21,7 +21,7 @@
+ #include "gps_drv_init.h"
+ 
+ #ifdef CONFIG_MTK_COMBO_GPS
+-int __attribute__((weak)) mtk_wcn_stpgps_drv_init()
++int __attribute__((weak)) mtk_wcn_stpgps_drv_init(void)
+ {
+ 	WMT_DETECT_PR_DBG("no impl. mtk_wcn_stpgps_drv_init\n");
  	return 0;
 --- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_cfg80211.c
 +++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_cfg80211.c
