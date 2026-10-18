@@ -152,8 +152,19 @@ _package() {
     mkdir -p "${pkgdir}"/{boot,usr/lib/modules}
     make INSTALL_MOD_PATH="${pkgdir}/usr" modules_install
     mkdir -p "${pkgdir}/boot/dtbs/mediatek"
-    cp arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dtb \
-        "${pkgdir}/boot/dtbs/mediatek"
+    # 7.1 partio el DTS de begonia por panel: ya no existe el monolito
+    # mt6785-xiaomi-begonia.dtb, sino mt6785-xiaomi-begonia-{csot,tianma}.dtb.
+    # Se instalan todos los de begonia y se falla si no hay ninguno, para que el
+    # empaquetado no pueda pasar en falso (run 39131222270 murio aqui).
+    local _dtb _dtb_n=0
+    for _dtb in arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia*.dtb; do
+        [ -e "$_dtb" ] || continue
+        cp "$_dtb" "${pkgdir}/boot/dtbs/mediatek/" && _dtb_n=$((_dtb_n + 1))
+    done
+    if [ "$_dtb_n" -eq 0 ]; then
+        error "no se genero ningun DTB de begonia (se esperaba -csot y/o -tianma)"
+        return 1
+    fi
     cp arch/$KARCH/boot/Image.gz "${pkgdir}/boot"
 
     local _extramodules="extramodules-${_basekernel}${_kernelname}"
