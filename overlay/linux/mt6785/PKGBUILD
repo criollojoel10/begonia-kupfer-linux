@@ -87,9 +87,38 @@ prepare() {
     done
 
     # 2) Config: la de pmaports (7.1) + nuestros overrides en extra_config.
+    #
+    # OJO: esta pasada de Kconfig TIENE que usar el MISMO entorno que build()
+    # (LLVM=1). Hay simbolos arm64 cuya visibilidad depende del compilador,
+    # por ejemplo COMPAT_VDSO:
+    #     depends on (CC_IS_CLANG && LD_IS_LLD) || "$(CROSS_COMPILE_COMPAT)" != ""
+    # Al cambiar de gcc a clang/lld pasan de invisibles a visibles. En el run
+    # 39086842278 prepare() evaluo el config SIN LLVM=1 (y Kconfig borro
+    # CONFIG_COMPAT_VDSO y CONFIG_THUMB2_COMPAT_VDSO del .config); despues el
+    # syncconfig implicito de build(), ya con LLVM=1, los vio otra vez como
+    # simbolos nuevos: imprimio "* Restart config... *" y se puso a PREGUNTAR.
+    # Como el job corre bajo un PTY (script -qec) cuyo stdin nunca da EOF, conf
+    # se quedo bloqueado leyendo y el job murio por timeout sin compilar nada.
+    # Reproducido en local; con el entorno alineado la segunda pasada es
+    # silenciosa (0 "Restart config").
+    #
+    # El </dev/null es un cinturon extra: si algun dia Kconfig decide preguntar,
+    # toma los valores por defecto en vez de colgarse hasta el timeout.
     cp "$srcdir/config-postmarketos-mediatek-mt6785.aarch64" .config
     cat "$srcdir/extra_config" >>.config
-    make olddefconfig
+    make LLVM=1 olddefconfig </dev/null
+
+    # 3) Dejamos el arbol sincronizado (auto.conf + headers generados) y a la
+    #    vez comprobamos que Kconfig CONVERGE: si vuelve a pedir respuestas es
+    #    que el config no es coherente con este entorno, y preferimos fallar en
+    #    un minuto que quedarnos horas colgados.
+    _syncout=$(make LLVM=1 syncconfig </dev/null 2>&1)
+    if printf '%s' "$_syncout" | grep -q "Restart config"; then
+        printf '%s\n' "$_syncout" | tail -20
+        echo "ERROR: Kconfig no converge con LLVM=1 (config incoherente con el entorno de build)" >&2
+        exit 1
+    fi
+    [ -f include/config/auto.conf ] || { echo "ERROR: falta include/config/auto.conf tras syncconfig" >&2; exit 1; }
 
     # don't run depmod on "make install". We'll do this ourselves in packaging
     sed -i "2iexit 0" scripts/depmod.sh
@@ -99,8 +128,8 @@ build() {
     cd ${_srcname}
     unset LDFLAGS
     # LLVM=1 como en el APKBUILD de pmaports para 7.1.
-    make ${MAKEFLAGS} LLVM=1 Image.gz modules
-    make ${MAKEFLAGS} LLVM=1 DTC_FLAGS="-@" dtbs
+    make ${MAKEFLAGS} LLVM=1 Image.gz modules </dev/null
+    make ${MAKEFLAGS} LLVM=1 DTC_FLAGS="-@" dtbs </dev/null
 }
 
 _package() {
