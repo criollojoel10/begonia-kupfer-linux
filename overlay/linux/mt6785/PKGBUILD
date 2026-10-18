@@ -2,12 +2,15 @@ _mode=cross
 _kernelname=mt6785
 pkgbase="linux-$_kernelname"
 _desc="MediaTek MT6785 (begonia) kernel"
-pkgver=6.16.4
+pkgver=7.1
 pkgrel=1
 _arches=specific
 arch=(aarch64)
 license=(GPL2)
-url=https://gitlab.postmarketos.org/minorum/linux
+url=https://gitlab.postmarketos.org/mt6785-mainline/linux
+# Toolchain LLVM como en el MR !8852 de pmaports (Draft de Dinolek): el kernel
+# 7.1 de mt6785 se construye con clang/lld y el config de pmaports activa
+# CONFIG_DEBUG_INFO_BTF=y, que necesita pahole (con el fix 000-meow-btf.patch).
 makedepends=(
     xmlto
     docbook-xsl
@@ -17,37 +20,47 @@ makedepends=(
     dtc
     cpio
     python
-    # objtool lo necesita para CONFIG_UNWINDER_ORC (=y en defconfig de arm64):
-    # tools/objtool compila <gelf.h> y enlaza -lelf, y base-devel no trae elfutils.
-    # El APKBUILD de pmaports equivalente lleva elfutils-dev por el mismo motivo.
+    clang
+    lld
+    llvm
+    pahole
+    python3
     libelf
     perl
-    # El config de pmaports deja CONFIG_MODULE_SIG=y con
-    # MODULE_SIG_KEY="certs/signing_key.pem", asi que el kernel genera una clave
-    # RSA al vuelo y firma cada modulo con scripts/sign-file. Sin openssl el
-    # build muere en certs/ con "openssl: command not found". No viene en
-    # base-devel ni en el Dockerfile de kupferbootstrap, hay que declararlo.
     openssl
 )
 options=(!strip)
-_commit=3a1ea7694219eb2fd513f0e630f2a882eab5c86f
-_pmos_commit=019b4284b1834caf0b0d9ac44ae8cbe9e31d23b1
-_srcname="linux-${_commit}"
+
+# Tag del tronco (Dinolek). El port conn/WiFi NO está aquí: llega como serie de
+# parches ya rebasada sobre este tag (ver _conn_* más abajo).
+_tag="7.1-r0"
+_srcname="linux-$_tag"
+
+# Commit de pmaports con el config de 7.1: es el head del MR !8852
+# (Dinolek/pmaports, rama begonia). Si el MR avanza, actualizar este sha.
+_pmos_sha=ae9d32b76335a995f5187be50d8cfffa30e555cb
+
 source=(
-    "$_srcname.tar.gz::$url/-/archive/$_commit/$_srcname.tar.gz"
-    "https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/${_pmos_commit}/device/testing/linux-postmarketos-mediatek-mt6785/config-postmarketos-mediatek-mt6785.aarch64"
+    "$_srcname.tar.gz::$url/-/archive/$_tag/$_srcname.tar.gz"
+    "config-postmarketos-mediatek-mt6785.aarch64::https://gitlab.postmarketos.org/Dinolek/pmaports/-/raw/$_pmos_sha/device/testing/linux-postmarketos-mediatek-mt6785/config-postmarketos-mediatek-mt6785.aarch64"
     extra_config
     linux.preset
     60-linux.hook
     90-linux.hook
+    000-meow-btf.patch
+    #PATCHES#
 )
+# Los dos primeros son remotos: su sha se imprime en el log del workflow
+# (ruta 7.1-r0 y commit de pmaports quedan fijados, así que son reproducibles).
 sha256sums=(
-    d1aa741cea0cc1d7728bf4b6c8f2a2a3ffd0ce3c5fd4993516d596779186b2b8
-    98b3274eda22859550148c8df8e5e9806032335675ca21a2b60e8b9a73d2c7cb
     SKIP
     SKIP
     SKIP
     SKIP
+    SKIP
+    SKIP
+    SKIP
+    #SUMS#
 )
 
 pkgver() {
@@ -58,6 +71,16 @@ pkgver() {
 prepare() {
     cd "$srcdir/${_srcname}"
 
+    # 1) Serie conn/WiFi (rebasada sobre el tag base) + fix de BTF.
+    #    Orden alfabético: 000-meow-btf.patch va primero, luego conn-NNNN-*.
+    local _p
+    for _p in "$srcdir"/*.patch; do
+        [ -e "$_p" ] || continue
+        msg2 "aplicando $(basename "$_p")"
+        patch -p1 -N --no-backup-if-mismatch <"$_p"
+    done
+
+    # 2) Config: la de pmaports (7.1) + nuestros overrides en extra_config.
     cp "$srcdir/config-postmarketos-mediatek-mt6785.aarch64" .config
     cat "$srcdir/extra_config" >>.config
     make olddefconfig
@@ -69,10 +92,9 @@ prepare() {
 build() {
     cd ${_srcname}
     unset LDFLAGS
-    # shellcheck disable=SC2086
-    make ${MAKEFLAGS} Image.gz modules
-    # shellcheck disable=SC2086
-    make ${MAKEFLAGS} DTC_FLAGS="-@" dtbs
+    # LLVM=1 como en el APKBUILD de pmaports para 7.1.
+    make ${MAKEFLAGS} LLVM=1 Image.gz modules
+    make ${MAKEFLAGS} LLVM=1 DTC_FLAGS="-@" dtbs
 }
 
 _package() {
@@ -86,7 +108,6 @@ _package() {
 
     KARCH=arm64
 
-    # get kernel version
     _kernver="$(make kernelrelease)"
     _basekernel=${_kernver%%-*}
     _basekernel=${_basekernel%.*}
@@ -98,33 +119,26 @@ _package() {
         "${pkgdir}/boot/dtbs/mediatek"
     cp arch/$KARCH/boot/Image.gz "${pkgdir}/boot"
 
-    # make room for external modules
     local _extramodules="extramodules-${_basekernel}${_kernelname}"
     ln -s "../${_extramodules}" "${pkgdir}/usr/lib/modules/${_kernver}/extramodules"
 
-    # add real version for building modules and running depmod from hook
     echo "${_kernver}" |
         install -Dm644 /dev/stdin "${pkgdir}/usr/lib/modules/${_extramodules}/version"
 
-    # remove build and source links
     [ -e "${pkgdir}/usr/lib/modules/${_kernver}/source" ] && rm "${pkgdir}/usr/lib/modules/${_kernver}/source"
     [ -e "${pkgdir}/usr/lib/modules/${_kernver}/build" ] && rm "${pkgdir}/usr/lib/modules/${_kernver}/build"
 
-    # now we call depmod...
     depmod -b "${pkgdir}/usr" -F System.map "${_kernver}"
 
-    # sed expression for following substitutions
     local _subst="
     s|%PKGBASE%|${pkgbase}|g
     s|%KERNVER%|${_kernver}|g
     s|%EXTRAMODULES%|${_extramodules}|g
   "
 
-    # install mkinitcpio preset file
     sed "${_subst}" ../linux.preset |
         install -Dm644 /dev/stdin "${pkgdir}/etc/mkinitcpio.d/linux.preset"
 
-    # install pacman hooks
     sed "${_subst}" ../60-linux.hook |
         install -Dm644 /dev/stdin "${pkgdir}/usr/share/libalpm/hooks/60-${pkgbase}.hook"
     sed "${_subst}" ../90-linux.hook |
@@ -153,23 +167,18 @@ _package-headers() {
     mkdir -p "${_builddir}/arch/arm"
     cp -t "${_builddir}/arch/arm" -a arch/arm/include
 
-    # copy in Kconfig files
     find . -name Kconfig\* -exec install -Dm644 {} "${_builddir}/{}" \;
 
-    # remove unneeded architectures
     local _arch
     for _arch in "${_builddir}"/arch/*/; do
         [[ ${_arch} == */${KARCH}/ || ${_arch} == */arm/ ]] && continue
         rm -r "${_arch}"
     done
 
-    # remove files already in linux-docs package
     rm -r "${_builddir}/Documentation"
 
-    # remove now broken symlinks
     find -L "${_builddir}" -type l -printf "Removing %P\n" -delete
 
-    # Fix permissions
     chmod -R u=rwX,go=rX "${_builddir}"
 }
 
