@@ -38,6 +38,10 @@ jobs:
       - name: Rebase y export de la serie de parches
         run: |
           set -euo pipefail
+          # El rebase reescribe commits: sin identidad, `git rebase --continue`
+          # muere con "empty ident name" en el runner (run 39084555322).
+          git config --global user.name "begonia-kupfer-ci"
+          git config --global user.email "ci@users.noreply.github.com"
           git clone --filter=blob:none --no-checkout --quiet \
             https://gitlab.postmarketos.org/mt6785-mainline/linux.git k
           cd k
@@ -58,9 +62,13 @@ jobs:
           # 7.1 (--ours en un rebase es el nuevo base) y se anade lo del port.
           i=0
           while [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; do
-            i=$((i + 1)); [ "$i" -le 60 ] || { echo "::error::demasiadas iteraciones de rebase"; exit 1; }
+            i=$((i + 1)); [ "$i" -le 12 ] || { echo "::error::demasiadas iteraciones de rebase"; exit 1; }
             conflicts=$(git diff --name-only --diff-filter=U || true)
-            if [ -z "$conflicts" ]; then GIT_EDITOR=true git rebase --continue || true; continue; fi
+            if [ -z "$conflicts" ]; then
+              GIT_EDITOR=true git rebase --continue || {
+                echo "::error::git rebase --continue fallo sin conflictos pendientes"; exit 1; }
+              continue
+            fi
             echo "--- conflicto(s): $conflicts ---"
             for f in $conflicts; do
               case "$f" in
