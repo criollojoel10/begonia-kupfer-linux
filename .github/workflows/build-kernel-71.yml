@@ -80,6 +80,22 @@ jobs:
                   git checkout --ours -- "$f"
                   grep -q 'mediatek/' "$f" || printf 'obj-$(CONFIG_MTK_WMT_FWPORT)\t+= mediatek/\n' >>"$f"
                   ;;
+                *mt6785-xiaomi-begonia*)
+                  # El DT del port se re-aplica aparte, con
+                  # overlay/linux/mt6785/010-dts-conn-7.1.patch, sobre el layout
+                  # PARTIDO de 7.1 (-common + -csot + -tianma). En el rebase nos
+                  # quedamos con la version de 7.1 para no arrastrar el fichero
+                  # monolitico de 6.16. Son 3 bloques aditivos (2 includes, el
+                  # nodo connectivity_combo y &{/reserved-memory}), extraidos del
+                  # diff 6.16.4-r0..begonia-conn-wifi.
+                  echo "nota: descarto el cambio de DT del port en $f (lo aplica el PKGBUILD)"
+                  if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+                    git checkout --ours -- "$f" && git add "$f"
+                  else
+                    git rm -f --ignore-unmatch "$f" >/dev/null 2>&1 || true
+                    git add -A -- "$f" || true
+                  fi
+                  ;;
                 *)
                   echo "::error::conflicto no previsto en $f"
                   git diff --diff-filter=U | head -40

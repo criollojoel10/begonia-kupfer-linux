@@ -48,11 +48,13 @@ source=(
     60-linux.hook
     90-linux.hook
     000-meow-btf.patch
+    010-dts-conn-7.1.patch
     #PATCHES#
 )
 # Los dos primeros son remotos: su sha se imprime en el log del workflow
 # (ruta 7.1-r0 y commit de pmaports quedan fijados, así que son reproducibles).
 sha256sums=(
+    SKIP
     SKIP
     SKIP
     SKIP
@@ -71,8 +73,12 @@ pkgver() {
 prepare() {
     cd "$srcdir/${_srcname}"
 
-    # 1) Serie conn/WiFi (rebasada sobre el tag base) + fix de BTF.
-    #    Orden alfabético: 000-meow-btf.patch va primero, luego conn-NNNN-*.
+    # 1) Parches, en orden alfabético:
+    #    000-meow-btf.patch      fix de BTF del MR !8852 (para pahole)
+    #    010-dts-conn-7.1.patch  el DT del port adaptado al layout partido de 7.1
+    #                            (el rebase lo descarta a propósito)
+    #    conn-NNNN-*.patch       serie conn/WiFi rebasada que genera el CI
+    # Los dos primeros viven en este repo; la serie conn-* llega como artifact.
     local _p
     for _p in "$srcdir"/*.patch; do
         [ -e "$_p" ] || continue

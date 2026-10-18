@@ -1,0 +1,66 @@
+diff -Nur a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+--- a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi	2026-10-17 20:31:24.338971546 -0500
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi	2026-10-17 20:31:24.341991390 -0500
+@@ -5,6 +5,8 @@
+ 
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/input/input.h>
++#include <dt-bindings/interrupt-controller/arm-gic.h>
++#include <dt-bindings/interrupt-controller/irq.h>
+ #include <dt-bindings/leds/common.h>
+ #include <dt-bindings/regulator/mediatek,mt6360-regulator.h>
+ #include <dt-bindings/usb/pd.h>
+@@ -43,6 +45,23 @@
+ 		compatible = "mediatek,scp";
+ 	};
+ 
++	/*
++	 * Vendor WMT connectivity-combo node. begonia's conn is SoC-integrated;
++	 * stock has no combo node and reaches the conn MCU via consys@18002000.
++	 * No driver platform-binds this compatible - it is only read by
++	 * of_find_compatible_node() fallbacks for the BGF EINT (idx 1 = BGF_EINT,
++	 * GIC_SPI 321). idx 0 (WIFI_EINT) and the gpio_combo_* pins are not
++	 * sourceable to the stock begonia DT, so idx 0 is a placeholder and the
++	 * pins are omitted (missing pins read as DEFAULT_PIN_ID).
++	 */
++	connectivity_combo: connectivity-combo {
++		compatible = "mediatek,connectivity-combo";
++		/* idx 0: WIFI_EINT placeholder (unsourced) ; idx 1: BGF_EINT */
++		interrupts = <GIC_SPI 78 IRQ_TYPE_LEVEL_LOW>,	/* placeholder */
++			     <GIC_SPI 321 IRQ_TYPE_LEVEL_LOW>;	/* BGF_EINT */
++		status = "okay";
++	};
++
+ 	volume_buttons: volume-buttons {
+ 		compatible = "gpio-keys";
+ 		pinctrl-names = "default";
+@@ -731,3 +750,29 @@
+ 	vusb33-supply = <&mt6359_vusb_ldo_reg>;
+ 	status = "okay";
+ };
++
++&{/reserved-memory} {
++	/* CONNSYS EMI carveout - 4 MB at the FIXED vendor base 0xab000000.
++	 * Must be fixed, not a dynamic allocation: the conn-MCU EMI path + secure
++	 * EMI-MPU only serve the conn region at this base. The conninfra driver
++	 * programs the remap INFRACFG_AO(0x10001000)+0x380 = (base >> 16); blobs
++	 * land at carveout + (patch_addr & 0x00FF0000): ram_mcu +0x0,
++	 * ram_wifi +0x140000, ram_bt +0x80000. */
++	consys_reserved: consys@ab000000 {
++		compatible = "mediatek,mt6785-consys-reserved";
++		no-map;
++		reg = <0 0xab000000 0 0x400000>;
++	};
++
++	/* gen4m WLAN HIF DMA pool (separate from the conn-MCU EMI carveout above).
++	 * The gen4m AXI HIF calls of_reserved_mem_device_init() on this
++	 * memory-region for DMA-coherent allocations. Dynamic shared-dma-pool per
++	 * stock begonia-r-oss wifi-reserve-memory. */
++	wifi_mem: wifi-reserve-memory {
++		compatible = "shared-dma-pool";
++		no-map;
++		size = <0 0x300000>;
++		alignment = <0 0x1000000>;
++		alloc-ranges = <0 0x40000000 0 0x80000000>;
++	};
++};
