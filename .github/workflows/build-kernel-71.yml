@@ -300,6 +300,17 @@ jobs:
             | grep -q 'aarch64-unknown-linux-gnu-bin-.*\.pkg\.tar' \
             || { echo "::error::toolchain aarch64 ausente"; exit 1; }
 
+      - name: Limpiar paquete del kernel en cache (forzar reconstruccion)
+        run: |
+          # kupferbootstrap se salta el build si encuentra el paquete en su
+          # linux.db con el checksum intacto, aunque el PKGBUILD cambie
+          # (visto en el run 39160497003: pkgrel=2 y aun asi entrego 7.1.0-1).
+          # La cache ps-restaurada trae el .pkg.tar.xz de un run anterior, asi que
+          # se borra para obligar a reconstruir. El ccache no se toca.
+          PD="$HOME/.cache/kupferbootstrap/packages"
+          find "$PD" -name 'linux-mt6785-*.pkg.tar.*' -delete 2>/dev/null || true
+          echo "paquetes linux-mt6785 en cache tras limpiar: $(find "$PD" -name 'linux-mt6785-*' 2>/dev/null | wc -l)"
+
       - name: Build kernel package
         working-directory: kupferbootstrap
         run: |
