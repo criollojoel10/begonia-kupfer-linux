@@ -1,0 +1,417 @@
+--- a/drivers/misc/mediatek/connectivity/common/common_detect/wmt_gpio.h
++++ b/drivers/misc/mediatek/connectivity/common/common_detect/wmt_gpio.h
+@@ -16,7 +16,7 @@
+ #define _WMT_GPIO_H_
+ 
+ #include <linux/of.h>
+-#include <linux/of_gpio.h>
++#include "mtk-conn-gpio.h" /* 7.1: of_gpio.h eliminado */
+ #include <linux/pinctrl/consumer.h>
+ #include <linux/pinctrl/pinctrl.h>
+ #include <linux/gpio.h>
+--- a/drivers/misc/mediatek/connectivity/common/common_main/platform/mtk_wcn_consys_hw.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/platform/mtk_wcn_consys_hw.c
+@@ -42,7 +42,7 @@
+ #include "wmt_ic.h"
+ #include <linux/of_reserved_mem.h>
+ #include <linux/pinctrl/consumer.h>
+-#include <linux/of_gpio.h>
++#include "mtk-conn-gpio.h" /* 7.1: of_gpio.h eliminado */
+ #include <linux/syscore_ops.h>
+ #include <connectivity_build_in_adapter.h>
+ #include "wmt_lib.h"
+@@ -151,9 +151,26 @@
+ 		   },
+ };
+ 
++/* 7.1 cambio la API syscore: syscore_ops.suspend/resume reciben un void *data
++ * y el registro se hace con un struct syscore (register_syscore()) en lugar de
++ * register_syscore_ops(). Adaptamos sin tocar las funciones originales. */
++static int mtk_wmt_suspend_71(void *data)
++{
++	return mtk_wmt_suspend();
++}
++
++static void mtk_wmt_resume_71(void *data)
++{
++	mtk_wmt_resume();
++}
++
+ static struct syscore_ops wmt_dbg_syscore_ops = {
+-	.suspend = mtk_wmt_suspend,
+-	.resume = mtk_wmt_resume,
++	.suspend = mtk_wmt_suspend_71,
++	.resume = mtk_wmt_resume_71,
++};
++
++static struct syscore wmt_dbg_syscore = {
++	.ops = &wmt_dbg_syscore_ops,
+ };
+ 
+ /* GPIO part */
+@@ -955,7 +972,7 @@
+ 			retry++;
+ 			WMT_PLAT_PR_INFO("g_probe_called = 0, retry = %d\n", retry);
+ 		}
+-		register_syscore_ops(&wmt_dbg_syscore_ops);
++		register_syscore(&wmt_dbg_syscore);
+ 	}
+ 
+ 	return iRet;
+@@ -974,7 +991,7 @@
+ #endif
+ 
+ 	platform_driver_unregister(&mtk_wmt_dev_drv);
+-	unregister_syscore_ops(&wmt_dbg_syscore_ops);
++	unregister_syscore(&wmt_dbg_syscore);
+ 
+ 	if (wmt_consys_ic_ops)
+ 		wmt_consys_ic_ops = NULL;
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_cfg80211.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_cfg80211.c
+@@ -6532,7 +6532,7 @@
+ }
+ 
+ int mtk_cfg_add_key(struct wiphy *wiphy,
+-		    struct net_device *ndev,
++		    struct wireless_dev *wdev,
+ #if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
+ 		    int link_id,
+ #endif
+@@ -6540,6 +6540,7 @@
+ 		    bool pairwise, const u8 *mac_addr,
+ 		    struct key_params *params)
+ {
++	struct net_device *ndev = wdev->netdev;
+ 	struct GLUE_INFO *prGlueInfo = NULL;
+ #if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
+ 	(void)link_id;	/* single-link device */
+@@ -6563,7 +6564,7 @@
+ }
+ 
+ int mtk_cfg_get_key(struct wiphy *wiphy,
+-		    struct net_device *ndev,
++		    struct wireless_dev *wdev,
+ #if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
+ 		    int link_id,
+ #endif
+@@ -6571,6 +6572,7 @@
+ 		    bool pairwise, const u8 *mac_addr, void *cookie,
+ 		    void (*callback)(void *cookie, struct key_params *))
+ {
++	struct net_device *ndev = wdev->netdev;
+ 	struct GLUE_INFO *prGlueInfo = NULL;
+ #if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
+ 	(void)link_id;	/* single-link device */
+@@ -6593,13 +6595,14 @@
+ }
+ 
+ int mtk_cfg_del_key(struct wiphy *wiphy,
+-		    struct net_device *ndev,
++		    struct wireless_dev *wdev,
+ #if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
+ 		    int link_id,
+ #endif
+ 		    u8 key_index,
+ 		    bool pairwise, const u8 *mac_addr)
+ {
++	struct net_device *ndev = wdev->netdev;
+ 	struct GLUE_INFO *prGlueInfo = NULL;
+ #if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
+ 	(void)link_id;	/* single-link device */
+@@ -6650,12 +6653,13 @@
+ }
+ 
+ int mtk_cfg_set_default_mgmt_key(struct wiphy *wiphy,
+-		struct net_device *ndev,
++		struct wireless_dev *wdev,
+ #if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
+ 		int link_id,
+ #endif
+ 		u8 key_index)
+ {
++	struct net_device *ndev = wdev->netdev;
+ 	struct GLUE_INFO *prGlueInfo = NULL;
+ #if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
+ 	(void)link_id;	/* single-link device */
+@@ -6677,7 +6681,7 @@
+ 
+ #if KERNEL_VERSION(3, 16, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_get_station(struct wiphy *wiphy,
+-			struct net_device *ndev,
++			struct wireless_dev *wdev,
+ 			const u8 *mac, struct station_info *sinfo)
+ #else
+ int mtk_cfg_get_station(struct wiphy *wiphy,
+@@ -6685,6 +6689,7 @@
+ 			u8 *mac, struct station_info *sinfo)
+ #endif
+ {
++	struct net_device *ndev = wdev->netdev;
+ 	struct GLUE_INFO *prGlueInfo = NULL;
+ 
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+@@ -6704,7 +6709,7 @@
+ #if CFG_SUPPORT_TDLS
+ #if KERNEL_VERSION(3, 16, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_change_station(struct wiphy *wiphy,
+-			   struct net_device *ndev,
++			   struct wireless_dev *wdev,
+ 			   const u8 *mac, struct station_parameters *params)
+ #else
+ int mtk_cfg_change_station(struct wiphy *wiphy,
+@@ -6712,6 +6717,7 @@
+ 			   u8 *mac, struct station_parameters *params)
+ #endif
+ {
++	struct net_device *ndev = wdev->netdev;
+ 	struct GLUE_INFO *prGlueInfo = NULL;
+ 
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+@@ -6732,7 +6738,7 @@
+ 
+ #if KERNEL_VERSION(3, 16, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_add_station(struct wiphy *wiphy,
+-			struct net_device *ndev,
++			struct wireless_dev *wdev,
+ 			const u8 *mac, struct station_parameters *params)
+ #else
+ int mtk_cfg_add_station(struct wiphy *wiphy,
+@@ -6740,6 +6746,7 @@
+ 			u8 *mac, struct station_parameters *params)
+ #endif
+ {
++	struct net_device *ndev = wdev->netdev;
+ 	struct GLUE_INFO *prGlueInfo = NULL;
+ 
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+@@ -6846,7 +6853,7 @@
+ 
+ #if KERNEL_VERSION(3, 19, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_del_station(struct wiphy *wiphy,
+-			struct net_device *ndev,
++			struct wireless_dev *wdev,
+ 			struct station_del_parameters *params)
+ #elif KERNEL_VERSION(3, 16, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_del_station(struct wiphy *wiphy,
+@@ -6857,6 +6864,7 @@
+ 			struct net_device *ndev, u8 *mac)
+ #endif
+ {
++	struct net_device *ndev = wdev->netdev;
+ 	struct GLUE_INFO *prGlueInfo = NULL;
+ 
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+@@ -7513,7 +7521,7 @@
+ }
+ 
+ int mtk_cfg_set_wiphy_params(struct wiphy *wiphy,
+-			     u32 changed)
++			     int radio_idx, u32 changed)
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
+ 
+@@ -7559,6 +7567,7 @@
+ 
+ int mtk_cfg_set_txpower(struct wiphy *wiphy,
+ 			struct wireless_dev *wdev,
++			int radio_idx,
+ 			enum nl80211_tx_power_setting type, int mbm)
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
+@@ -7580,6 +7589,7 @@
+ 
+ int mtk_cfg_get_txpower(struct wiphy *wiphy,
+ 			struct wireless_dev *wdev,
++			int radio_idx,
+ #if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
+ 			unsigned int link_id,
+ #endif
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p_kal.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p_kal.c
+@@ -1618,7 +1618,7 @@
+ 			rStationInfo.assoc_req_ies_len =
+ 				prCliStaRec->u2AssocReqIeLen;
+ 
+-			cfg80211_new_sta(prP2pGlueInfo->aprRoleHandler,
++			cfg80211_new_sta(prP2pGlueInfo->aprRoleHandler->ieee80211_ptr,
+ 				/* struct net_device * dev, */
+ 				prCliStaRec->aucMacAddr,
+ 				&rStationInfo, GFP_KERNEL);
+@@ -1632,7 +1632,7 @@
+ 				if (prCliStaRec->fgIsConnected == FALSE)
+ 					break;
+ 				prCliStaRec->fgIsConnected = FALSE;
+-				cfg80211_del_sta(prP2pGlueInfo->aprRoleHandler,
++				cfg80211_del_sta(prP2pGlueInfo->aprRoleHandler->ieee80211_ptr,
+ 					/* struct net_device * dev, */
+ 					prCliStaRec->aucMacAddr, GFP_KERNEL);
+ 			}
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/include/gl_cfg80211.h
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/include/gl_cfg80211.h
+@@ -517,7 +517,7 @@
+ 			 struct vif_params *params);
+ #endif
+ int mtk_cfg_add_key(struct wiphy *wiphy,
+-		    struct net_device *ndev,
++		    struct wireless_dev *wdev,
+ #if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
+ 		    int link_id,
+ #endif
+@@ -525,7 +525,7 @@
+ 		    bool pairwise, const u8 *mac_addr,
+ 		    struct key_params *params);
+ int mtk_cfg_get_key(struct wiphy *wiphy,
+-		    struct net_device *ndev,
++		    struct wireless_dev *wdev,
+ #if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
+ 		    int link_id,
+ #endif
+@@ -533,7 +533,7 @@
+ 		    bool pairwise, const u8 *mac_addr, void *cookie,
+ 		    void (*callback)(void *cookie, struct key_params *));
+ int mtk_cfg_del_key(struct wiphy *wiphy,
+-		    struct net_device *ndev,
++		    struct wireless_dev *wdev,
+ #if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
+ 		    int link_id,
+ #endif
+@@ -547,7 +547,7 @@
+ 			    u8 key_index, bool unicast, bool multicast);
+ 
+ int mtk_cfg_set_default_mgmt_key(struct wiphy *wiphy,
+-		struct net_device *ndev,
++		struct wireless_dev *wdev,
+ #if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
+ 		int link_id,
+ #endif
+@@ -555,31 +555,31 @@
+ 
+ #if KERNEL_VERSION(3, 16, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_get_station(struct wiphy *wiphy,
+-			struct net_device *ndev,
++			struct wireless_dev *wdev,
+ 			const u8 *mac, struct station_info *sinfo);
+ #else
+ int mtk_cfg_get_station(struct wiphy *wiphy,
+-			struct net_device *ndev,
++			struct wireless_dev *wdev,
+ 			u8 *mac, struct station_info *sinfo);
+ #endif
+ 
+ #if CFG_SUPPORT_TDLS
+ #if KERNEL_VERSION(3, 16, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_change_station(struct wiphy *wiphy,
+-			   struct net_device *ndev,
++			   struct wireless_dev *wdev,
+ 			   const u8 *mac, struct station_parameters *params);
+ #else
+ int mtk_cfg_change_station(struct wiphy *wiphy,
+-			   struct net_device *ndev,
++			   struct wireless_dev *wdev,
+ 			   u8 *mac, struct station_parameters *params);
+ #endif
+ #if KERNEL_VERSION(3, 16, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_add_station(struct wiphy *wiphy,
+-			struct net_device *ndev,
++			struct wireless_dev *wdev,
+ 			const u8 *mac, struct station_parameters *params);
+ #else
+ int mtk_cfg_add_station(struct wiphy *wiphy,
+-			struct net_device *ndev,
++			struct wireless_dev *wdev,
+ 			u8 *mac, struct station_parameters *params);
+ #endif
+ #if KERNEL_VERSION(3, 16, 0) <= CFG80211_VERSION_CODE
+@@ -623,15 +623,15 @@
+ 
+ #if KERNEL_VERSION(3, 19, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_del_station(struct wiphy *wiphy,
+-			struct net_device *ndev,
++			struct wireless_dev *wdev,
+ 			struct station_del_parameters *params);
+ #elif KERNEL_VERSION(3, 16, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_del_station(struct wiphy *wiphy,
+-			struct net_device *ndev,
++			struct wireless_dev *wdev,
+ 			const u8 *mac);
+ #else
+ int mtk_cfg_del_station(struct wiphy *wiphy,
+-			struct net_device *ndev, u8 *mac);
++			struct wireless_dev *wdev, u8 *mac);
+ #endif
+ int mtk_cfg_scan(struct wiphy *wiphy,
+ 		 struct cfg80211_scan_request *request);
+@@ -786,7 +786,7 @@
+ #endif
+ 		    );
+ int mtk_cfg_set_wiphy_params(struct wiphy *wiphy,
+-			     u32 changed);
++			     int radio_idx, u32 changed);
+ int mtk_cfg_set_bitrate_mask(struct wiphy *wiphy,
+ 			     struct net_device *dev,
+ #if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
+@@ -796,9 +796,11 @@
+ 			     const struct cfg80211_bitrate_mask *mask);
+ int mtk_cfg_set_txpower(struct wiphy *wiphy,
+ 			struct wireless_dev *wdev,
++			int radio_idx,
+ 			enum nl80211_tx_power_setting type, int mbm);
+ int mtk_cfg_get_txpower(struct wiphy *wiphy,
+ 			struct wireless_dev *wdev,
++			int radio_idx,
+ #if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
+ 			unsigned int link_id,
+ #endif
+--- a/drivers/misc/mediatek/connectivity/compat/include/mtk-conn-gpio.h
++++ b/drivers/misc/mediatek/connectivity/compat/include/mtk-conn-gpio.h
+@@ -0,0 +1,49 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * Puente device_node -> numero de GPIO para el port conn/WiFi vendor en 7.1.
++ *
++ * El kernel 7.1 elimino include/linux/of_gpio.h y con el las helpers legacy
++ * of_get_named_gpio()/of_get_gpio(). El codigo vendor sigue trabajando con
++ * numeros de GPIO (gpio_request/gpio_direction_output/...), API que sigue viva
++ * en include/linux/gpio.h, asi que lo unico que hay que reconstruir es el
++ * puente con la API nueva de fwnode + desc_to_gpio().
++ *
++ * El descriptor se libera inmediatamente: el codigo vendor vuelve a pedir el
++ * GPIO por numero mas tarde, y si lo dejasemos reclamado (claimed) ese
++ * gpio_request() posterior fallaria con -EBUSY.
++ */
++#ifndef _MTK_CONN_GPIO_COMPAT_H_
++#define _MTK_CONN_GPIO_COMPAT_H_
++
++#include <linux/device.h>
++#include <linux/err.h>
++#include <linux/gpio/consumer.h>
++#include <linux/of.h>
++
++static inline int mtk_conn_of_get_named_gpio(struct device_node *np,
++					     const char *propname, int index)
++{
++	struct gpio_desc *desc;
++	int gpio;
++
++	if (!np)
++		return -ENODEV;
++
++	desc = fwnode_gpiod_get_index(of_fwnode_handle(np), propname, index,
++				      GPIOD_ASIS, "mtk-conn");
++	if (IS_ERR(desc))
++		return PTR_ERR(desc);
++
++	gpio = desc_to_gpio(desc);
++	gpiod_put(desc);
++
++	return gpio;
++}
++
++/* El codigo vendor llamaba of_get_named_gpio(): se conserva el nombre para no
++ * tener que tocar los sitios de llamada, solo la cabecera que se incluye.
++ */
++#define of_get_named_gpio(np, prop, idx) \
++	mtk_conn_of_get_named_gpio(np, prop, idx)
++
++#endif /* _MTK_CONN_GPIO_COMPAT_H_ */

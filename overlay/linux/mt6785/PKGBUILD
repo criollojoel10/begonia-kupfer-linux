@@ -49,11 +49,13 @@ source=(
     90-linux.hook
     000-meow-btf.patch
     010-dts-conn-7.1.patch
+    zz-conn-7.1-api.patch
     #PATCHES#
 )
 # Los dos primeros son remotos: su sha se imprime en el log del workflow
 # (ruta 7.1-r0 y commit de pmaports quedan fijados, así que son reproducibles).
 sha256sums=(
+    SKIP
     SKIP
     SKIP
     SKIP

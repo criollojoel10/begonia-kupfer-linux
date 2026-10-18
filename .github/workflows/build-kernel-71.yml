@@ -303,6 +303,7 @@ jobs:
       - name: Build kernel package
         working-directory: kupferbootstrap
         run: |
+          set -o pipefail   # sin esto el '| tee' se come el fallo y el paso pasaria por bueno
           script -qec ".venv/bin/kupferbootstrap -v packages build --arch aarch64 linux/mt6785" /dev/null \
             2>&1 | tee kernel-build.log
           echo "--- log tail ---"; tail -30 kernel-build.log
