@@ -1,0 +1,112 @@
+From 809a95478088522e8c4ee960165bc2651bc969bc Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 08:18:26 +0200
+Subject: [PATCH 32/51] begonia-wifi (fwport): register BTIF HIF before func_on
+ (replaces userspace launcher)
+
+wmt_core_stp_init aborted with "no hif info!" (WMT_OP_HIF_BIT unset) so STP never
+used BTIF and the rom-patch command timed out. On stock that bit is set by the
+userspace wmt_launcher daemon issuing WMT_IOCTL_SET_STP_MODE at boot; this headless
+bring-up has no launcher.
+
+Add wmt_dev_set_hif_btif() - the in-kernel equivalent of that ioctl
+(wmt_lib_set_hif(0x23 = STP_BTIF_FULL|WMT_FM_COMM<<4) + WMT_OPID_HIF_CONF op) - and
+call it from the /dev/wmtWifi trigger before func_on so the trigger is self-sufficient.
+
+Verified on hardware: this clears the "no hif info" gate; STP/BTIF now activates
+([STP-BTIF] messages, dbg ctrl ok). Next gate (separate): BTIF TX write returns 0
+(mtk_wcn_consys_stp_btif_tx "written(0)"), BTIF TX DMA not enabled (dmaen4c=0) -> the
+BTIF transport is not fully turned ON, so chip-id hw_check fails. Investigate the
+BTIF open/enable/DMA-on sequence next.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../common/common_main/linux/wmt_dev.c        | 46 +++++++++++++++++++
+ .../common_main/linux/wmt_wifi_trigger.c      |  7 +++
+ 2 files changed, 53 insertions(+)
+
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
+index 7421b0a6d..fa62c61a2 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
+@@ -1795,6 +1795,52 @@ VOID mtk_wcn_common_drv_exit(VOID)
+ }
+ EXPORT_SYMBOL(mtk_wcn_common_drv_exit);
+ 
++/*
++ * begonia fwport: programmatic equivalent of the WMT_IOCTL_SET_STP_MODE ioctl
++ * that the userspace wmt_launcher daemon normally issues at boot. There is no
++ * launcher in this headless bring-up, so without this the BTIF HIF is never
++ * registered with the WMT core (WMT_OP_HIF_BIT unset) and wmt_core_stp_init
++ * aborts with "no hif info". Registers BTIF as the STP transport so the
++ * `echo 1 > /dev/wmtWifi` trigger is self-sufficient.
++ * hifconf = STP_BTIF_FULL(0x3) | (WMT_FM_COMM(2) << 4) = 0x23.
++ */
++int wmt_dev_set_hif_btif(void)
++{
++	P_OSAL_OP pOp;
++	MTK_WCN_BOOL bRet;
++	P_WMT_HIF_CONF pHif;
++	INT32 iRet;
++
++	if (hif_info == 1)
++		return 0;
++
++	iRet = wmt_lib_set_hif(0x23);
++	if (iRet) {
++		WMT_ERR_FUNC("set_hif_btif: wmt_lib_set_hif fail (%d)\n", iRet);
++		return iRet;
++	}
++
++	pOp = wmt_lib_get_free_op();
++	if (!pOp) {
++		WMT_ERR_FUNC("set_hif_btif: get_free_op fail\n");
++		return -1;
++	}
++	pOp->op.opId = WMT_OPID_HIF_CONF;
++	pHif = wmt_lib_get_hif();
++	osal_memcpy(&pOp->op.au4OpData[0], pHif, sizeof(WMT_HIF_CONF));
++	pOp->op.u4InfoBit = WMT_OP_HIF_BIT;
++	pOp->signal.timeoutValue = 0;
++
++	bRet = wmt_lib_put_act_op(pOp);
++	if (bRet == MTK_WCN_BOOL_FALSE) {
++		WMT_ERR_FUNC("set_hif_btif: put_act_op fail\n");
++		return -EFAULT;
++	}
++	hif_info = 1;
++	WMT_INFO_FUNC("set_hif_btif: BTIF HIF registered with WMT core\n");
++	return 0;
++}
++
+ /*
+  * begonia fwport: wmt_drv self-bootstrap.
+  * The vendor stack's ONLY module_init lived in common_detect/wmt_detect.c
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_wifi_trigger.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_wifi_trigger.c
+index d1e991dbe..62ca6b357 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_wifi_trigger.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_wifi_trigger.c
+@@ -25,6 +25,10 @@
+ #include "osal_typedef.h"
+ #include "wmt_exp.h"
+ 
++/* begonia fwport: register the BTIF HIF with the WMT core (wmt_dev.c) before the
++ * first func_on - replaces the userspace launcher's WMT_IOCTL_SET_STP_MODE. */
++int wmt_dev_set_hif_btif(void);
++
+ static ssize_t wmt_wifi_trigger_write(struct file *filp, const char __user *buf,
+ 				      size_t count, loff_t *ppos)
+ {
+@@ -36,6 +40,9 @@ static ssize_t wmt_wifi_trigger_write(struct file *filp, const char __user *buf,
+ 		return -EFAULT;
+ 
+ 	if (c == '1' || c == 1) {
++		/* register BTIF as the STP transport first (else stp_init has no
++		 * hif info); idempotent after the first call. */
++		wmt_dev_set_hif_btif();
+ 		if (mtk_wcn_wmt_func_on(WMTDRV_TYPE_WIFI) == MTK_WCN_BOOL_FALSE) {
+ 			pr_err("[wmtWifi] func_on(WIFI) failed\n");
+ 			return -EIO;
+-- 
+2.56.0
+

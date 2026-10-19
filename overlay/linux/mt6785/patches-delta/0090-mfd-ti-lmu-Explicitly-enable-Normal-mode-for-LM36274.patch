@@ -1,0 +1,49 @@
+From 7f21e0aff230a84c600813be496594ce95493b4a Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sun, 22 Jun 2025 19:50:24 +0200
+Subject: [PATCH 090/115] mfd: ti-lmu: Explicitly enable "Normal mode" for
+ LM36274
+
+Before this change, this driver did not explicitly enable "Normal mode" in
+the LCM_EN field, which is required for correct backlight operation.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/mfd/ti-lmu.c                | 7 +++++++
+ include/linux/mfd/ti-lmu-register.h | 2 ++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/drivers/mfd/ti-lmu.c b/drivers/mfd/ti-lmu.c
+index cfc9f88b9..ef693b236 100644
+--- a/drivers/mfd/ti-lmu.c
++++ b/drivers/mfd/ti-lmu.c
+@@ -40,6 +40,13 @@ static int ti_lmu_enable_hw(struct ti_lmu *lmu, enum ti_lmu_id id)
+ 					  LM3631_LCD_EN_MASK);
+ 	}
+ 
++	/* enable "Normal mode" in LCM_EN field */
++	if (id == LM36274) {
++		return regmap_update_bits(lmu->regmap, LM36274_REG_BIAS_CONFIG_1,
++					  LM36274_EN_LCM_MASK,
++					  LM36274_EN_LCM_NORMAL_MODE);
++	}
++
+ 	return 0;
+ }
+ 
+diff --git a/include/linux/mfd/ti-lmu-register.h b/include/linux/mfd/ti-lmu-register.h
+index 116a749e0..03f31f3ae 100644
+--- a/include/linux/mfd/ti-lmu-register.h
++++ b/include/linux/mfd/ti-lmu-register.h
+@@ -199,6 +199,8 @@
+ #define LM36274_EXT_EN_MASK			BIT(0)
+ #define LM36274_EN_VNEG_MASK			BIT(1)
+ #define LM36274_EN_VPOS_MASK			BIT(2)
++#define LM36274_EN_LCM_MASK			GENMASK(7, 5)
++#define LM36274_EN_LCM_NORMAL_MODE		BIT(7)
+ 
+ #define LM36274_REG_BIAS_CONFIG_2		0x0a
+ #define LM36274_REG_BIAS_CONFIG_3		0x0b
+-- 
+2.56.0
+

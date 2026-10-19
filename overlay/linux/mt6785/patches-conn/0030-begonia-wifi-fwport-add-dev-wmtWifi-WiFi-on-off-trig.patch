@@ -1,0 +1,164 @@
+From d17cf98d4e34e6b0ac037bfec186710358ea8881 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 02:27:14 +0200
+Subject: [PATCH 30/51] begonia-wifi (fwport): add /dev/wmtWifi WiFi on/off
+ trigger node
+
+The stock /dev/wmtWifi node (the userspace WiFi-on trigger the working oracle
+uses, `echo 1 > /dev/wmtWifi`) is created by the vendor wlan adaptor
+wmt_chrdev_wifi.c, which is absent from every available source tree and so is
+not part of this forward-port. Without it the loaded stack has no way to kick
+bring-up. Reconstruct it minimally: a misc chrdev "wmtWifi" whose write handler
+calls the verified WMT export mtk_wcn_wmt_func_on/off(WMTDRV_TYPE_WIFI) - the
+exact entry the stock node drives (powers connsys, arms WFSYS, invokes the
+gen4m-registered wlan probe -> wlan0). Compiled into wmt_drv (same module as the
+export, no symbol-version concern); registered from wmt_dev init, torn down in exit.
+RUNTIME-UNPROVEN: compile/link verified; func_on semantics confirmed from
+wmt_exp.c source; end-to-end bring-up must be validated on hardware.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../mediatek/connectivity/common/Makefile     |  2 +
+ .../common/common_main/linux/wmt_dev.c        | 10 +++
+ .../common_main/linux/wmt_wifi_trigger.c      | 81 +++++++++++++++++++
+ 3 files changed, 93 insertions(+)
+ create mode 100644 drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_wifi_trigger.c
+
+diff --git a/drivers/misc/mediatek/connectivity/common/Makefile b/drivers/misc/mediatek/connectivity/common/Makefile
+index 9332baa9c..a9df86ccb 100644
+--- a/drivers/misc/mediatek/connectivity/common/Makefile
++++ b/drivers/misc/mediatek/connectivity/common/Makefile
+@@ -77,6 +77,8 @@ wmt_drv-objs += common_main/linux/wmt_alarm.o
+ wmt_drv-objs += common_main/linux/fw_log_wmt.o
+ wmt_drv-objs += common_main/linux/wmt_step.o
+ wmt_drv-objs += common_main/linux/stp_btif.o
++# begonia fwport: /dev/wmtWifi WiFi on/off trigger (reconstructs the stock node)
++wmt_drv-objs += common_main/linux/wmt_wifi_trigger.o
+ 
+ # debug_utility
+ wmt_drv-objs += debug_utility/ring.o
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
+index 275cda6d1..3b20b271a 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
+@@ -68,6 +68,10 @@
+ #include "wmt_detect.h"
+ #include "hif_sdio.h"
+ #include "wmt_step.h"
++
++/* begonia fwport: /dev/wmtWifi WiFi on/off trigger node (wmt_wifi_trigger.c). */
++int wmt_wifi_trigger_init(void);
++void wmt_wifi_trigger_exit(void);
+ #include "wmt_proc_dbg.h"
+ #include "wmt_alarm.h"
+ 
+@@ -1689,6 +1693,10 @@ static INT32 WMT_init(VOID)
+ 	mtk_wcn_stp_sdio_drv_init();
+ #endif
+ 
++	/* begonia fwport: create /dev/wmtWifi (the stock WiFi on/off trigger the
++	 * un-ported wlan adaptor would otherwise provide). Non-fatal on failure. */
++	wmt_wifi_trigger_init();
++
+ 	return 0;
+ 
+ error:
+@@ -1735,6 +1743,8 @@ static VOID WMT_exit(VOID)
+ 	fb_unregister_client(&wmt_fb_notifier);
+ #endif /* CONFIG_EARLYSUSPEND */
+ 
++	wmt_wifi_trigger_exit();
++
+ 	wmt_dev_patch_info_free();
+ 	mtk_wcn_stp_uart_drv_exit();
+ 	mtk_wcn_stp_sdio_drv_exit();
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_wifi_trigger.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_wifi_trigger.c
+new file mode 100644
+index 000000000..d1e991dbe
+--- /dev/null
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_wifi_trigger.c
+@@ -0,0 +1,81 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * wmt_wifi_trigger.c - minimal /dev/wmtWifi WiFi on/off control node for the
++ * begonia (MT6785) vendor WMT/connsys forward-port.
++ *
++ * The stock /dev/wmtWifi node is created by the vendor wlan adaptor
++ * (wmt_chrdev_wifi.c), which is not present in any available source tree and is
++ * therefore not part of this forward-port. This is a faithful, minimal
++ * reconstruction of that node's WiFi power control: a write of '1' / '0' drives
++ * mtk_wcn_wmt_func_on/off(WMTDRV_TYPE_WIFI) - the same exported WMT entry the
++ * stock node uses, and exactly what the working stock oracle does
++ * (`echo 1 > /dev/wmtWifi`). func_on(WIFI) powers connsys, arms the WFSYS, and
++ * invokes the gen4m-registered wlan probe -> wlan0. Compiled INTO wmt_drv so it
++ * links the export directly (no cross-module symbol-version concerns).
++ *
++ * RUNTIME-UNPROVEN: compile/link verified only. Validate on hardware (the exact
++ * func_on ordering / return semantics are confirmed from wmt_exp.c source, but
++ * the end-to-end bring-up has not been exercised on a device).
++ */
++#include <linux/fs.h>
++#include <linux/miscdevice.h>
++#include <linux/uaccess.h>
++#include <linux/printk.h>
++
++#include "osal_typedef.h"
++#include "wmt_exp.h"
++
++static ssize_t wmt_wifi_trigger_write(struct file *filp, const char __user *buf,
++				      size_t count, loff_t *ppos)
++{
++	char c = 0;
++
++	if (count == 0)
++		return 0;
++	if (get_user(c, buf))
++		return -EFAULT;
++
++	if (c == '1' || c == 1) {
++		if (mtk_wcn_wmt_func_on(WMTDRV_TYPE_WIFI) == MTK_WCN_BOOL_FALSE) {
++			pr_err("[wmtWifi] func_on(WIFI) failed\n");
++			return -EIO;
++		}
++		pr_info("[wmtWifi] WIFI function ON\n");
++	} else if (c == '0' || c == 0) {
++		if (mtk_wcn_wmt_func_off(WMTDRV_TYPE_WIFI) == MTK_WCN_BOOL_FALSE) {
++			pr_err("[wmtWifi] func_off(WIFI) failed\n");
++			return -EIO;
++		}
++		pr_info("[wmtWifi] WIFI function OFF\n");
++	}
++	return count;
++}
++
++static const struct file_operations wmt_wifi_trigger_fops = {
++	.owner = THIS_MODULE,
++	.write = wmt_wifi_trigger_write,
++	.llseek = noop_llseek,
++};
++
++static struct miscdevice wmt_wifi_trigger_dev = {
++	.minor = MISC_DYNAMIC_MINOR,
++	.name = "wmtWifi",
++	.fops = &wmt_wifi_trigger_fops,
++	.mode = 0660,
++};
++
++int wmt_wifi_trigger_init(void)
++{
++	int ret = misc_register(&wmt_wifi_trigger_dev);
++
++	if (ret)
++		pr_err("[wmtWifi] misc_register failed (%d)\n", ret);
++	else
++		pr_info("[wmtWifi] /dev/wmtWifi ready (begonia fwport trigger)\n");
++	return ret;
++}
++
++void wmt_wifi_trigger_exit(void)
++{
++	misc_deregister(&wmt_wifi_trigger_dev);
++}
+-- 
+2.56.0
+

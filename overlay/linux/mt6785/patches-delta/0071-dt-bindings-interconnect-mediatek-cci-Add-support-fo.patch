@@ -1,0 +1,31 @@
+From 2b08b28458da043e94c7e1d3c572218671ab846f Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 9 Jul 2025 16:47:56 +0200
+Subject: [PATCH 071/115] dt-bindings: interconnect: mediatek,cci: Add support
+ for MT6785
+
+Add mediatek,mt6785-cci compatible with mediatek,mt8186-cci fallback.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../devicetree/bindings/interconnect/mediatek,cci.yaml        | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/interconnect/mediatek,cci.yaml b/Documentation/devicetree/bindings/interconnect/mediatek,cci.yaml
+index 4d72525f4..7b9d712db 100644
+--- a/Documentation/devicetree/bindings/interconnect/mediatek,cci.yaml
++++ b/Documentation/devicetree/bindings/interconnect/mediatek,cci.yaml
+@@ -25,6 +25,10 @@ properties:
+           - enum:
+               - mediatek,mt7988-cci
+           - const: mediatek,mt8183-cci
++      - items:
++          - enum:
++              - mediatek,mt6785-cci
++          - const: mediatek,mt8186-cci
+ 
+   clocks:
+     items:
+-- 
+2.56.0
+

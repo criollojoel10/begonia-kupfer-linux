@@ -1,0 +1,28 @@
+From 66240761c8a97d7d6483540a77382e3eace1c10b Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 9 Jul 2025 17:06:39 +0200
+Subject: [PATCH 004/115] dt-bindings: serial: mediatek,uart: Add support for
+ MT6785
+
+Add mediatek,mt6785-uart compatible with mediatek,mt6577-uart fallback.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ Documentation/devicetree/bindings/serial/mediatek,uart.yaml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/serial/mediatek,uart.yaml b/Documentation/devicetree/bindings/serial/mediatek,uart.yaml
+index 5bd8a8853..8ed6dfec0 100644
+--- a/Documentation/devicetree/bindings/serial/mediatek,uart.yaml
++++ b/Documentation/devicetree/bindings/serial/mediatek,uart.yaml
+@@ -32,6 +32,7 @@ properties:
+               - mediatek,mt6755-uart
+               - mediatek,mt6765-uart
+               - mediatek,mt6779-uart
++              - mediatek,mt6785-uart
+               - mediatek,mt6795-uart
+               - mediatek,mt6797-uart
+               - mediatek,mt6893-uart
+-- 
+2.56.0
+

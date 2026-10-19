@@ -1,0 +1,59 @@
+From 74ee4a2d4931b3d0dbaf4a3e75aac327d5876f4b Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 12:21:41 +0200
+Subject: [PATCH 45/51] begonia-wifi (fwport): restore stock debug log levels
+
+These debug-verbosity bumps were accidentally swept into the srh_patch commit
+(0a81ced07). Restore the vendor/stock defaults so the driver behaves like stock:
+gWmtDbgLvl WMT_LOG_LOUD->WMT_LOG_INFO, wmtPlatLogLvl WMT_PLAT_LOG_LOUD->INFO,
+and WMT_PLAT_PR_DBG pr_info->pr_debug. Log level does not affect the datapath.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../mediatek/connectivity/common/common_main/core/wmt_exp.c     | 2 +-
+ .../mediatek/connectivity/common/common_main/include/wmt_plat.h | 2 +-
+ .../connectivity/common/common_main/platform/wmt_plat_alps.c    | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_exp.c b/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_exp.c
+index 4e1ba5d6b..0cc26da0c 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_exp.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_exp.c
+@@ -61,7 +61,7 @@ wmt_wlan_is_wifi_drv_own_cb mtk_wcn_wlan_is_wifi_drv_own;
+ OSAL_BIT_OP_VAR gBtWifiGpsState;
+ OSAL_BIT_OP_VAR gGpsFmState;
+ UINT32 gWifiProbed;
+-INT32 gWmtDbgLvl = WMT_LOG_LOUD;
++INT32 gWmtDbgLvl = WMT_LOG_INFO;
+ MTK_WCN_BOOL g_pwr_off_flag = MTK_WCN_BOOL_TRUE;
+ 
+ /*******************************************************************************
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/include/wmt_plat.h b/drivers/misc/mediatek/connectivity/common/common_main/include/wmt_plat.h
+index 6c386824d..7545d9459 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/include/wmt_plat.h
++++ b/drivers/misc/mediatek/connectivity/common/common_main/include/wmt_plat.h
+@@ -72,7 +72,7 @@ do { \
+ #define WMT_PLAT_PR_DBG(fmt, arg...) \
+ do { \
+ 	if (wmtPlatLogLvl >= WMT_PLAT_LOG_DBG) \
+-		pr_info(DFT_TAG "[D]%s:"  fmt, __func__, ##arg); \
++		pr_debug(DFT_TAG "[D]%s:"  fmt, __func__, ##arg); \
+ } while (0)
+ 
+ #endif
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/platform/wmt_plat_alps.c b/drivers/misc/mediatek/connectivity/common/common_main/platform/wmt_plat_alps.c
+index db8a4ab63..8a057249d 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/platform/wmt_plat_alps.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/platform/wmt_plat_alps.c
+@@ -118,7 +118,7 @@ static INT32 wmt_plat_dump_pin_conf(VOID);
+ INT32 gWmtMergeIfSupport;
+ UINT32 gCoClockFlag;
+ BGF_IRQ_BALANCE g_bgf_irq_lock;
+-INT32 wmtPlatLogLvl = WMT_PLAT_LOG_LOUD;
++INT32 wmtPlatLogLvl = WMT_PLAT_LOG_INFO;
+ 
+ /*******************************************************************************
+ *                           P R I V A T E   D A T A
+-- 
+2.56.0
+

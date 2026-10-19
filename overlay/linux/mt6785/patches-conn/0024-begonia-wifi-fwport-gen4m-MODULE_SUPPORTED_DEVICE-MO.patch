@@ -1,0 +1,52 @@
+From f5bc38ed9eb79a002e1975e5208c24f66dca7e5f Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 01:36:12 +0200
+Subject: [PATCH 24/51] begonia-wifi (fwport-gen4m): MODULE_SUPPORTED_DEVICE +
+ MODULE_IMPORT_NS removal/churn
+
+- MODULE_SUPPORTED_DEVICE() removed in 5.12 (was no-op); guard it out. This was
+  the real cause of the version.h:87 NIC_NAME string-constant error (expansion
+  site gl_init.c:129), not the earlier MODULE_NAME -D.
+- MODULE_IMPORT_NS() takes a string-literal namespace since 6.13; quote the VFS
+  namespace import for kernel_read/write (gl_kal.c).
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c     | 3 +++
+ .../misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_kal.c | 6 +++++-
+ 2 files changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c
+index 45fbb4a1a..85cf478ae 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c
+@@ -126,7 +126,10 @@ struct WLANDEV_INFO {
+ 
+ MODULE_AUTHOR(NIC_AUTHOR);
+ MODULE_DESCRIPTION(NIC_DESC);
++/* MODULE_SUPPORTED_DEVICE() was removed in 5.12 (it had been a no-op). */
++#if KERNEL_VERSION(5, 12, 0) > CFG80211_VERSION_CODE
+ MODULE_SUPPORTED_DEVICE(NIC_NAME);
++#endif
+ 
+ /* MODULE_LICENSE("MTK Propietary"); */
+ MODULE_LICENSE("Dual BSD/GPL");
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_kal.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_kal.c
+index 9ddd195de..1e64b8431 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_kal.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_kal.c
+@@ -8803,6 +8803,10 @@ static void kalDumpHifStats(IN struct ADAPTER *prAdapter)
+ 	kalMemFree(buf, VIR_MEM_TYPE, u4BufferSize);
+ }
+ 
+-#if KERNEL_VERSION(5, 4, 0) <= CFG80211_VERSION_CODE
++/* MODULE_IMPORT_NS() takes the namespace as a string literal since 6.13
++ * (was a bare token before). The VFS namespace gates kernel_read/write. */
++#if KERNEL_VERSION(6, 13, 0) <= CFG80211_VERSION_CODE
++MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
++#elif KERNEL_VERSION(5, 4, 0) <= CFG80211_VERSION_CODE
+ MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
+ #endif
+-- 
+2.56.0
+

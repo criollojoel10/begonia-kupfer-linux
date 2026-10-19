@@ -1,0 +1,99 @@
+From d27c33ee5909895ea3ff2ca830e1398ac318f1a8 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 17 Jun 2026 15:33:16 +0200
+Subject: [PATCH 102/115] arm64: dts: mediatek: mt6785-xiaomi-begonia: Split
+ variants
+
+Split the Xiaomi Begonia board file into a shared one and CSOT/Tianma leaf files.
+Replace the monolithic DTB target with one DTB per panel variant.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ arch/arm64/boot/dts/mediatek/Makefile               |  3 ++-
+ ...egonia.dts => mt6785-xiaomi-begonia-common.dtsi} |  3 ---
+ .../dts/mediatek/mt6785-xiaomi-begonia-csot.dts     | 13 +++++++++++++
+ .../dts/mediatek/mt6785-xiaomi-begonia-tianma.dts   | 13 +++++++++++++
+ 4 files changed, 28 insertions(+), 4 deletions(-)
+ rename arch/arm64/boot/dts/mediatek/{mt6785-xiaomi-begonia.dts => mt6785-xiaomi-begonia-common.dtsi} (97%)
+ create mode 100644 arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-csot.dts
+ create mode 100644 arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-tianma.dts
+
+diff --git a/arch/arm64/boot/dts/mediatek/Makefile b/arch/arm64/boot/dts/mediatek/Makefile
+index 0523b04ae..2b24a6e0c 100644
+--- a/arch/arm64/boot/dts/mediatek/Makefile
++++ b/arch/arm64/boot/dts/mediatek/Makefile
+@@ -2,7 +2,8 @@
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt2712-evb.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6755-evb.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6779-evb.dtb
+-dtb-$(CONFIG_ARCH_MEDIATEK) += mt6785-xiaomi-begonia.dtb
++dtb-$(CONFIG_ARCH_MEDIATEK) += mt6785-xiaomi-begonia-csot.dtb
++dtb-$(CONFIG_ARCH_MEDIATEK) += mt6785-xiaomi-begonia-tianma.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6795-evb.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6795-sony-xperia-m5.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6797-evb.dtb
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+similarity index 97%
+rename from arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts
+rename to arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+index 64c15caa6..03298c252 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+@@ -3,7 +3,6 @@
+  * Copyright (c) 2025 Dinolek <git@dinolek.me>
+  */
+ 
+-/dts-v1/;
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/input/input.h>
+ 
+@@ -11,8 +10,6 @@
+ #include "mt6359.dtsi"
+ 
+ / {
+-	model = "Xiaomi Redmi Note 8 Pro";
+-	compatible = "xiaomi,begonia", "mediatek,mt6785";
+ 	chassis-type = "handset";
+ 
+ 	vibrator {
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-csot.dts b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-csot.dts
+new file mode 100644
+index 000000000..0267f50d2
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-csot.dts
+@@ -0,0 +1,13 @@
++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
++/*
++ * Copyright (c) 2026 Dinolek <git@dinolek.me>
++ */
++
++/dts-v1/;
++
++#include "mt6785-xiaomi-begonia-common.dtsi"
++
++/ {
++	model = "Xiaomi Redmi Note 8 Pro (CSOT)";
++	compatible = "xiaomi,begonia", "mediatek,mt6785";
++};
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-tianma.dts b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-tianma.dts
+new file mode 100644
+index 000000000..5dcd8437d
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-tianma.dts
+@@ -0,0 +1,13 @@
++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
++/*
++ * Copyright (c) 2026 Dinolek <git@dinolek.me>
++ */
++
++/dts-v1/;
++
++#include "mt6785-xiaomi-begonia-common.dtsi"
++
++/ {
++	model = "Xiaomi Redmi Note 8 Pro (Tianma)";
++	compatible = "xiaomi,begonia", "mediatek,mt6785";
++};
+-- 
+2.56.0
+

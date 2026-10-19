@@ -1,0 +1,186 @@
+From 0a9dc6db11242ce9e555d6faed52ddb4fab4c0b3 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 01:32:16 +0200
+Subject: [PATCH 23/51] begonia-wifi (fwport-gen4m): gl_kal.c 4.14->6.16
+ net/uaccess churn
+
+compat shim: set_fs/get_fs/get_ds/mm_segment_t/KERNEL_DS no-op stubs (uaccess
+address-limit removed 5.10; kalFileRead/Write already use kernel_read/write),
+strlcpy->strscpy-semantics, netif_rx_ni->netif_rx.
+gl_kal.c: guard napi_gro_flush (gone 6.1), cfg80211_roam_info.bss->links[0].bss
+(6.0 MLO), cfg80211_ch_switch_notify +link_id (6.1), tx/rx_dropped via
+dev_get_stats (6.1 per-cpu core_stats), compile out wlan_set_rps_map/kalSetRpsMap
+RPS-steering on 5.18+ (private net/core/dev.h internals). Perf-only paths; no
+register value touched.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../compat/include/mtk-bsp-compat.h           | 43 ++++++++++++++++++
+ .../connectivity/wlan/gen4m/os/linux/gl_kal.c | 44 +++++++++++++++++++
+ 2 files changed, 87 insertions(+)
+
+diff --git a/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h b/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
+index ab9d092a8..e23c70909 100644
+--- a/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
++++ b/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
+@@ -141,6 +141,49 @@ static inline void __dma_flush_area(const void *addr, size_t size)
+ #define del_timer_sync(t) timer_delete_sync(t)
+ #endif
+ 
++/* The set_fs()/get_fs()/KERNEL_DS uaccess address-limit mechanism was removed
++ * in 5.10 (arm64 had it gone earlier). The vendor's kalFileRead/Write already
++ * use kernel_read()/kernel_write(), which operate on kernel addresses without
++ * any address-limit override - so the surrounding set_fs() dance is now a
++ * no-op. Provide opaque stubs so the 4.14 source compiles unchanged. These
++ * touch no hardware and change no behaviour (kernel_read/write are correct). */
++#ifndef _COMPAT_SET_FS
++#define _COMPAT_SET_FS
++typedef struct { unsigned long seg; } mm_segment_t;
++static inline mm_segment_t get_fs(void) { mm_segment_t s = { 0 }; return s; }
++static inline mm_segment_t get_ds(void) { mm_segment_t s = { 0 }; return s; }
++static inline void set_fs(mm_segment_t s) { (void)s; }
++#ifndef KERNEL_DS
++#define KERNEL_DS ((mm_segment_t){ 0 })
++#endif
++#endif
++
++/* strlcpy() was removed in 6.8 in favour of strscpy() (which has the same
++ * truncate-and-NUL-terminate semantics; return value differs but the vendor
++ * uses it fire-and-forget). */
++#ifndef strlcpy
++#include <linux/string.h>
++static inline size_t __compat_strlcpy(char *dst, const char *src, size_t size)
++{
++	size_t srclen = strlen(src);
++
++	if (size) {
++		size_t len = (srclen >= size) ? size - 1 : srclen;
++
++		memcpy(dst, src, len);
++		dst[len] = '\0';
++	}
++	return srclen;
++}
++#define strlcpy(d, s, n) __compat_strlcpy((d), (s), (n))
++#endif
++
++/* netif_rx_ni() was folded into netif_rx() in 5.18 (netif_rx() now handles
++ * both process and softirq context). */
++#ifndef netif_rx_ni
++#define netif_rx_ni(skb) netif_rx(skb)
++#endif
++
+ /* fbdev FB_EVENT_BLANK notifier was removed. The wmt fb notifier is never
+  * registered on mainline (no fb_register_client); define the sentinel so the
+  * callback compiles and always early-returns. */
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_kal.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_kal.c
+index d14821174..9ddd195de 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_kal.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_kal.c
+@@ -1073,7 +1073,11 @@ void kal_gro_flush(struct ADAPTER *prAdapter, struct net_device *prDev)
+ 	if (CHECK_FOR_TIMEOUT(kalGetTimeTick(),
+ 		prNetDevPrivate->tmGROFlushTimeout,
+ 		prWifiVar->ucGROFlushTimeout)) {
++		/* napi_gro_flush() was removed from the driver API in 6.1;
++		 * GRO is flushed automatically on napi_complete_done(). */
++#if KERNEL_VERSION(6, 1, 0) > CFG80211_VERSION_CODE
+ 		napi_gro_flush(&prNetDevPrivate->napi, false);
++#endif
+ 		DBGLOG_LIMITED(INIT, TRACE, "napi_gro_flush:%p\n", prDev);
+ 	}
+ 	GET_CURRENT_SYSTIME(&prNetDevPrivate->tmGROFlushTimeout);
+@@ -1511,7 +1515,13 @@ kalIndicateStatusAndComplete(IN struct GLUE_INFO
+ 				aisGetConnSettings(prAdapter, ucBssIndex);
+ 			if (eStatus == WLAN_STATUS_ROAM_OUT_FIND_BEST) {
+ #if KERNEL_VERSION(4, 12, 0) <= CFG80211_VERSION_CODE
++				/* cfg80211_roam_info.bss moved under the
++				 * per-link links[] array in 6.0 (MLO). */
++#if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
++				rRoamInfo.links[0].bss = bss;
++#else
+ 				rRoamInfo.bss = bss;
++#endif
+ 				rRoamInfo.req_ie = prConnSettings->aucReqIe;
+ 				rRoamInfo.req_ie_len =
+ 					prConnSettings->u4ReqIeLength;
+@@ -7678,11 +7688,27 @@ static uint32_t kalPerMonUpdate(IN struct ADAPTER *prAdapter)
+ 	for (i = 0; i < BSS_DEFAULT_NUM; ++i) {
+ 		ndev = wlanGetNetDev(glue, i);
+ 		if (ndev) {
++			/* net_device's standalone atomic_long_t tx_dropped/
++			 * rx_dropped fields were moved into per-cpu core_stats
++			 * in 6.1; the rtnl_link_stats64 view (dev_get_stats)
++			 * still exposes the aggregate. Report that twice to keep
++			 * the 4-field log template stable. */
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++			struct rtnl_link_stats64 _s64;
++
++			dev_get_stats(ndev, &_s64);
++			pos += kalSnprintf(pos, end - pos, "[%lu:%llu:%lu:%llu]",
++				ndev->stats.tx_dropped,
++				_s64.tx_dropped,
++				ndev->stats.rx_dropped,
++				_s64.rx_dropped);
++#else
+ 			pos += kalSnprintf(pos, end - pos, "[%lu:%lu:%lu:%lu]",
+ 				ndev->stats.tx_dropped,
+ 				atomic_long_read(&ndev->tx_dropped),
+ 				ndev->stats.rx_dropped,
+ 				atomic_long_read(&ndev->rx_dropped));
++#endif
+ 		}
+ 	}
+ 
+@@ -7940,6 +7966,14 @@ int32_t __weak kalCheckTputLoad(IN struct ADAPTER *prAdapter,
+ 	return FALSE;
+ }
+ 
++/* mimic store_rps_map as net-sysfs.c does.
++ *
++ * RPS CPU-steering is a throughput optimisation, not core functionality. The
++ * primitives this reimplementation needs (struct rps_map, RPS_MAP_SIZE(),
++ * the rps_needed static key, struct netdev_rx_queue::rps_map) were moved into
++ * the private net/core/dev.h in 5.18 and are not accessible to modules. On
++ * 5.18+ compile this out and leave RPS unconfigured (kernel default). */
++#if KERNEL_VERSION(5, 18, 0) > CFG80211_VERSION_CODE
+ /* mimic store_rps_map as net-sysfs.c does */
+ int wlan_set_rps_map(struct netdev_rx_queue *queue, unsigned long rps_value)
+ {
+@@ -7999,9 +8033,11 @@ int wlan_set_rps_map(struct netdev_rx_queue *queue, unsigned long rps_value)
+ 	return 0;
+ #endif
+ }
++#endif /* < 5.18: RPS internals private since 5.18 */
+ 
+ void kalSetRpsMap(IN struct GLUE_INFO *glue, IN unsigned long value)
+ {
++#if KERNEL_VERSION(5, 18, 0) > CFG80211_VERSION_CODE
+ 	int32_t i = 0, j = 0;
+ 	struct net_device *dev = NULL;
+ 
+@@ -8012,6 +8048,9 @@ void kalSetRpsMap(IN struct GLUE_INFO *glue, IN unsigned long value)
+ 				wlan_set_rps_map(&dev->_rx[j], value);
+ 		}
+ 	}
++#else
++	(void)glue; (void)value;	/* RPS steering unavailable to modules */
++#endif
+ }
+ 
+ int32_t kalPerMonSetForceEnableFlag(uint8_t uFlag)
+@@ -8141,7 +8180,12 @@ void kalIndicateChannelSwitch(IN struct GLUE_INFO *prGlueInfo,
+ 	DBGLOG(REQ, STATE, "DFS channel switch to %d\n", ucChannelNum);
+ 
+ 	cfg80211_chandef_create(&chandef, prChannel, rChannelType);
++	/* cfg80211_ch_switch_notify() gained a link_id arg in 6.1. */
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++	cfg80211_ch_switch_notify(prGlueInfo->prDevHandler, &chandef, 0);
++#else
+ 	cfg80211_ch_switch_notify(prGlueInfo->prDevHandler, &chandef);
++#endif
+ }
+ #endif
+ 
+-- 
+2.56.0
+

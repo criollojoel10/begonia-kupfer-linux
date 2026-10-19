@@ -1,0 +1,36 @@
+From b1905b6d97e1573523495e6364763be9efbebb0b Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sun, 6 Jul 2025 20:19:49 +0200
+Subject: [PATCH 114/115] drm/mediatek: ovl: Add optional reset support
+
+This is needed when the bootloader leaves it in the wrong state.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/gpu/drm/mediatek/mtk_disp_ovl.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
+index 97a899e4b..72c3ebdba 100644
+--- a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
++++ b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
+@@ -13,6 +13,7 @@
+ #include <linux/of.h>
+ #include <linux/platform_device.h>
+ #include <linux/pm_runtime.h>
++#include <linux/reset.h>
+ #include <linux/soc/mediatek/mtk-cmdq.h>
+ 
+ #include "mtk_crtc.h"
+@@ -594,7 +595,7 @@ void mtk_ovl_bgclr_in_off(struct device *dev)
+ static int mtk_disp_ovl_bind(struct device *dev, struct device *master,
+ 			     void *data)
+ {
+-	return 0;
++	return device_reset_optional(dev);
+ }
+ 
+ static void mtk_disp_ovl_unbind(struct device *dev, struct device *master,
+-- 
+2.56.0
+

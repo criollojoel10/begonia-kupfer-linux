@@ -1,0 +1,37 @@
+From 2939787317bf03c8a18037d5d0fae69371ac1d61 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Thu, 19 Jun 2025 17:24:35 +0200
+Subject: [PATCH 022/115] drm/mediatek: add MT6785 SoC support
+
+Add DRM support for MT6785 SoC.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/gpu/drm/mediatek/mtk_drm_drv.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/gpu/drm/mediatek/mtk_drm_drv.c b/drivers/gpu/drm/mediatek/mtk_drm_drv.c
+index dc8e3e917..f0cc13765 100644
+--- a/drivers/gpu/drm/mediatek/mtk_drm_drv.c
++++ b/drivers/gpu/drm/mediatek/mtk_drm_drv.c
+@@ -338,6 +338,8 @@ static const struct of_device_id mtk_drm_of_ids[] = {
+ 	  .data = &mt7623_mmsys_driver_data},
+ 	{ .compatible = "mediatek,mt2712-mmsys",
+ 	  .data = &mt2712_mmsys_driver_data},
++	{ .compatible = "mediatek,mt6785-mmsys",
++	  .data = &mt8365_mmsys_driver_data},
+ 	{ .compatible = "mediatek,mt8167-mmsys",
+ 	  .data = &mt8167_mmsys_driver_data},
+ 	{ .compatible = "mediatek,mt8173-mmsys",
+@@ -744,6 +746,8 @@ static const struct of_device_id mtk_ddp_comp_dt_ids[] = {
+ 	  .data = (void *)MTK_DISP_MUTEX },
+ 	{ .compatible = "mediatek,mt2712-disp-mutex",
+ 	  .data = (void *)MTK_DISP_MUTEX },
++	{ .compatible = "mediatek,mt6785-disp-mutex",
++	  .data = (void *)MTK_DISP_MUTEX },
+ 	{ .compatible = "mediatek,mt8167-disp-mutex",
+ 	  .data = (void *)MTK_DISP_MUTEX },
+ 	{ .compatible = "mediatek,mt8173-disp-mutex",
+-- 
+2.56.0
+

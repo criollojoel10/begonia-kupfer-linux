@@ -1,0 +1,136 @@
+From 367828cc1bcb48fa850e355fd25a3bf404ed3bbd Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 01:50:16 +0200
+Subject: [PATCH 28/51] begonia-wifi (fwport-gen4m): resolve modpost undefined
+ symbols (link stage)
+
+All 93 TUs compile; this fixes the link/modpost stage:
+- gen4m_compat_stubs.c: __weak no-op stubs for vendor cross-module bridge
+  symbols declared extern in gl_os.h/gl_rst.h but defined in connsys/WMT
+  modules absent from this port (wifi_reset_start/end, get_low_latency_mode,
+  update_driver_loaded_status, register_set_p2p_mode_handler,
+  register_file_buf_handler, connectivity_export_show_stack). Inert; no HW
+  touched. __weak so a real provider overrides later.
+- gl_init.c: guard the unconditional kalMetRemoveProcfs() error-cleanup call
+  under CFG_MET_PACKET_TRACE_SUPPORT (its def is MET-gated; vendor masked this
+  by always building MET=1).
+- defconfig: CONFIG_CFG80211_WEXT=y so wireless_send_event resolves (fullmac
+  WEXT event path).
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../mediatek/connectivity/wlan/gen4m/Makefile |  3 +
+ .../wlan/gen4m/os/linux/gen4m_compat_stubs.c  | 72 +++++++++++++++++++
+ .../wlan/gen4m/os/linux/gl_init.c             |  5 ++
+ 3 files changed, 80 insertions(+)
+ create mode 100644 drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gen4m_compat_stubs.c
+
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/Makefile b/drivers/misc/mediatek/connectivity/wlan/gen4m/Makefile
+index 67c3b7362..7d141026f 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/Makefile
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/Makefile
+@@ -151,3 +151,6 @@ $(MODULE_NAME)-objs += os/linux/hif/common/hal_pdma.o os/linux/hif/common/kal_pd
+ 
+ # os/linux/plat/mt6785
+ $(MODULE_NAME)-objs += os/linux/plat/mt6785/plat_priv.o
++
++# forward-port link stubs for vendor cross-module bridge symbols
++$(MODULE_NAME)-objs += os/linux/gen4m_compat_stubs.o
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gen4m_compat_stubs.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gen4m_compat_stubs.c
+new file mode 100644
+index 000000000..ddcbde465
+--- /dev/null
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gen4m_compat_stubs.c
+@@ -0,0 +1,72 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * gen4m_compat_stubs.c - begonia (MT6785) gen4m forward-port link stubs.
++ *
++ * The vendor gen4m driver declares (in gl_os.h / gl_rst.h) a handful of
++ * symbols as `extern` that are *defined in other vendor connectivity modules*
++ * (the connsys/WMT integration glue, MET tracing, and the gps/md coex cdevs)
++ * which are not part of this forward-port. gen4m *calls* them; without a
++ * provider modpost fails with "undefined!".
++ *
++ * These are bring-up-time link stubs so the module loads. They are inert
++ * no-ops: none touch a connectivity register, an EMI seed, or a PMIC/clk
++ * rail. The real wiring (e.g. routing wifi_reset_start() into the Stage-1
++ * wmt_drv reset path) is a later integration step, intentionally out of scope
++ * for the Stage-2 "gen4m compiles + links" milestone.
++ *
++ * Each is __weak: if a real provider is linked in later, it overrides these.
++ */
++
++#include "gl_os.h"
++
++/* connsys -> gen4m: request a WiFi subsystem reset. The vendor connsys driver
++ * calls these; the bodies live in gen4m's gl_rst.c reset state machine only
++ * when CFG_WMT_RESET_API_SUPPORT pulls them in. Stub returns "reset complete"
++ * so callers proceed; no actual reset is performed here. */
++int __weak wifi_reset_start(void)
++{
++	return 0;
++}
++
++int __weak wifi_reset_end(enum ENUM_RESET_STATUS status)
++{
++	(void)status;
++	return 0;
++}
++
++/* connsys/cdev -> gen4m: low-latency-mode query. Default: not in LL mode. */
++uint32_t __weak get_low_latency_mode(void)
++{
++	return 0;
++}
++
++/* wmtWifi cdev <-> gen4m registration glue (provided by the vendor wmt char
++ * device in production). No-op: the begonia bring-up path enables WiFi via the
++ * Stage-1 wmt_drv / /dev/wmtWifi, not these gen4m-registered callbacks. */
++void __weak update_driver_loaded_status(uint8_t loaded)
++{
++	(void)loaded;
++}
++
++void __weak register_set_p2p_mode_handler(set_p2p_mode handler)
++{
++	(void)handler;
++}
++
++void __weak register_file_buf_handler(file_buf_handler handler,
++				      void *ctx, uint8_t ucType)
++{
++	(void)handler;
++	(void)ctx;
++	(void)ucType;
++}
++
++/* connectivity_export_show_stack(): a debug helper that dumps a task's kernel
++ * stack; its body lives in the Stage-1 connectivity_build_in_adapter, which is
++ * not linked into this module. Stub to a no-op (debug-only path). */
++void __weak connectivity_export_show_stack(struct task_struct *tsk,
++					   unsigned long *sp)
++{
++	(void)tsk;
++	(void)sp;
++}
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c
+index 85cf478ae..4ddbfe97c 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c
+@@ -4986,7 +4986,12 @@ static int32_t wlanProbe(void *pvData, void *pvDriverData)
+ 		switch (eFailReason) {
+ 		case FAIL_BY_RESET:
+ 		case FAIL_MET_INIT_PROCFS:
++			/* kalMetRemoveProcfs() is only defined under
++			 * CFG_MET_PACKET_TRACE_SUPPORT; guard the call to match
++			 * (vendor always built with MET=1, masking this). */
++#if CFG_MET_PACKET_TRACE_SUPPORT
+ 			kalMetRemoveProcfs();
++#endif
+ 		case PROC_INIT_FAIL:
+ 			wlanNetUnregister(prWdev);
+ 		case NET_REGISTER_FAIL:
+-- 
+2.56.0
+

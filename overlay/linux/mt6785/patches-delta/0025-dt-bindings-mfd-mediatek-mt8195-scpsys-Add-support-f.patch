@@ -1,0 +1,29 @@
+From 38225b859605cea73a537c1718f35ea7f74838b6 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Fri, 11 Jul 2025 13:50:26 +0200
+Subject: [PATCH 025/115] dt-bindings: mfd: mediatek,mt8195-scpsys: Add support
+ for MT6785
+
+Add mediatek,mt6785-scpsys compatible with syscon and simple-mfd
+fallbacks.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../devicetree/bindings/mfd/mediatek,mt8195-scpsys.yaml          | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/mfd/mediatek,mt8195-scpsys.yaml b/Documentation/devicetree/bindings/mfd/mediatek,mt8195-scpsys.yaml
+index 4cafa3819..87d82ece4 100644
+--- a/Documentation/devicetree/bindings/mfd/mediatek,mt8195-scpsys.yaml
++++ b/Documentation/devicetree/bindings/mfd/mediatek,mt8195-scpsys.yaml
+@@ -19,6 +19,7 @@ properties:
+   compatible:
+     items:
+       - enum:
++          - mediatek,mt6785-scpsys
+           - mediatek,mt6795-scpsys
+           - mediatek,mt6893-scpsys
+           - mediatek,mt8167-scpsys
+-- 
+2.56.0
+

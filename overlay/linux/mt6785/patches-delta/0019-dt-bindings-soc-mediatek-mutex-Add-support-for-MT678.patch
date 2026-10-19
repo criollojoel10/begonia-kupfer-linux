@@ -1,0 +1,28 @@
+From 2cfd0c5339fcfe96d7b640a40302b179ea2d1e52 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Mon, 28 Apr 2025 01:29:00 +0200
+Subject: [PATCH 019/115] dt-bindings: soc: mediatek: mutex: Add support for
+ MT6785
+
+Add mediatek,mt6785-mutex compatible.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../devicetree/bindings/soc/mediatek/mediatek,mutex.yaml         | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/soc/mediatek/mediatek,mutex.yaml b/Documentation/devicetree/bindings/soc/mediatek/mediatek,mutex.yaml
+index 5267cfe92..a0988fb1a 100644
+--- a/Documentation/devicetree/bindings/soc/mediatek/mediatek,mutex.yaml
++++ b/Documentation/devicetree/bindings/soc/mediatek/mediatek,mutex.yaml
+@@ -26,6 +26,7 @@ properties:
+     enum:
+       - mediatek,mt2701-disp-mutex
+       - mediatek,mt2712-disp-mutex
++      - mediatek,mt6785-disp-mutex
+       - mediatek,mt6795-disp-mutex
+       - mediatek,mt8167-disp-mutex
+       - mediatek,mt8173-disp-mutex
+-- 
+2.56.0
+

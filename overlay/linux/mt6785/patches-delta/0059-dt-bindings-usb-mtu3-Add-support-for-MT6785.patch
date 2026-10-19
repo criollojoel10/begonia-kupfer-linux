@@ -1,0 +1,27 @@
+From e72d59e0e926ed5d6e70cdbb31b88da729022487 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 9 Jul 2025 17:07:52 +0200
+Subject: [PATCH 059/115] dt-bindings: usb: mtu3: Add support for MT6785
+
+Add mediatek,mt6785-mtu3 compatible with mediatek,mtu3 fallback.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ Documentation/devicetree/bindings/usb/mediatek,mtu3.yaml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/usb/mediatek,mtu3.yaml b/Documentation/devicetree/bindings/usb/mediatek,mtu3.yaml
+index 21fc6bbe9..df2aff61d 100644
+--- a/Documentation/devicetree/bindings/usb/mediatek,mtu3.yaml
++++ b/Documentation/devicetree/bindings/usb/mediatek,mtu3.yaml
+@@ -22,6 +22,7 @@ properties:
+     items:
+       - enum:
+           - mediatek,mt2712-mtu3
++          - mediatek,mt6785-mtu3
+           - mediatek,mt8173-mtu3
+           - mediatek,mt8183-mtu3
+           - mediatek,mt8186-mtu3
+-- 
+2.56.0
+

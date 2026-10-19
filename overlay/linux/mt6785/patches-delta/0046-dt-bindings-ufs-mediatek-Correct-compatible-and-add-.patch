@@ -1,0 +1,74 @@
+From 5c27c1b45d2b067b3d17d7526926f422148c0c86 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Fri, 4 Jul 2025 22:15:08 +0200
+Subject: [PATCH 046/115] dt-bindings: ufs: mediatek: Correct compatible and
+ add capabilities
+
+Driver only supports mediatek,mt8183-ufshci compatible, make
+mediatek,mt8192-ufshci use it as fallback.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../devicetree/bindings/ufs/mediatek,ufs.yaml | 39 +++++++++++++++++--
+ 1 file changed, 35 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/ufs/mediatek,ufs.yaml b/Documentation/devicetree/bindings/ufs/mediatek,ufs.yaml
+index 15c347f5e..a58261ec8 100644
+--- a/Documentation/devicetree/bindings/ufs/mediatek,ufs.yaml
++++ b/Documentation/devicetree/bindings/ufs/mediatek,ufs.yaml
+@@ -12,10 +12,13 @@ maintainers:
+ 
+ properties:
+   compatible:
+-    enum:
+-      - mediatek,mt8183-ufshci
+-      - mediatek,mt8192-ufshci
+-      - mediatek,mt8195-ufshci
++    oneOf:
++      - const: mediatek,mt8183-ufshci
++      - const: mediatek,mt8195-ufshci
++      - items:
++          - enum:
++              - mediatek,mt8192-ufshci
++          - const: mediatek,mt8183-ufshci
+ 
+   clocks:
+     minItems: 1
+@@ -37,6 +40,34 @@ properties:
+     $ref: /schemas/types.yaml#/definitions/flag
+     description: The mask to disable MCQ (Multi-Circular Queue) for UFS host.
+ 
++  mediatek,ufs-boost-crypt:
++    description: Enable boost for crypto engine.
++    type: boolean
++
++  mediatek,ufs-support-va09:
++    description: Enable VA09 power control support.
++    type: boolean
++
++  mediatek,ufs-disable-ah8:
++    description: Disable auto-hibernation (AH8).
++    type: boolean
++
++  mediatek,ufs-broken-vcc:
++    description: Indicates that VCC is broken and needs a workaround.
++    type: boolean
++
++  mediatek,ufs-pmc-via-fastauto:
++    description: Enable power mode change via FASTAUTO mode.
++    type: boolean
++
++  mediatek,ufs-tx-skew-fix:
++    description: Enable fix for TX skew issue.
++    type: boolean
++
++  mediatek,ufs-rtff-mtcmos:
++    description: Enable RTFF MTCMOS power control.
++    type: boolean
++
+ required:
+   - compatible
+   - clocks
+-- 
+2.56.0
+

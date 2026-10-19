@@ -1,0 +1,36 @@
+From 0f3afae06fed02028ce53d751f152188da9eb003 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Mon, 7 Jul 2025 17:10:52 +0200
+Subject: [PATCH 053/115] arm64: dts: mediatek: mt6785: Support MIPI TX
+
+Add mipi_tx node for MT6785 SoC.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ arch/arm64/boot/dts/mediatek/mt6785.dtsi | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785.dtsi b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+index 6149af87e..447068318 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+@@ -805,6 +805,16 @@ ufshci: ufshci@11270000 {
+ 			status = "disabled";
+ 		};
+ 
++		mipi_tx0: dsi-phy@11e50000 {
++			compatible = "mediatek,mt8183-mipi-tx";
++			reg = <0 0x11e50000 0 0x1000>;
++			clocks = <&apmixedsys CLK_APMIXED_MIPID0>;
++			#clock-cells = <0>;
++			#phy-cells = <0>;
++			clock-output-names = "mipi_tx0_pll";
++			status = "disabled";
++		};
++
+ 		ufsphy: ufs-phy@11fa0000 {
+ 			compatible = "mediatek,mt6785-ufsphy", "mediatek,mt8183-ufsphy";
+ 			reg = <0 0x11fa0000 0 0xc000>;
+-- 
+2.56.0
+

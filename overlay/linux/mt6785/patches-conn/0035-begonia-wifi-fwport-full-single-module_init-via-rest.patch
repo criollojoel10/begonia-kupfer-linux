@@ -1,0 +1,116 @@
+From 5058aa09c4b75cdf1d5ab819f0a3c406d29ecf2a Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 08:59:07 +0200
+Subject: [PATCH 35/51] begonia-wifi (fwport-full): single module_init via
+ restored wmt_detect.c
+
+Reconcile the module entry to the faithful vendor layout (Option 1):
+
+ - wmt_detect.c regains its real module_init(wmt_detect_driver_init) - the
+   stack ONLY module_init - which creates /dev/wmtdetect exactly like stock.
+   Ported class_create() to the 6.x single-arg form.
+ - At the end of wmt_detect_driver_init() success path, replay the userspace
+   wmt_launcher handshake in-kernel (headless: there is no launcher):
+     GET_SOC_CHIP_ID -> wmt_plat_get_soc_chipid()  (compile-time PLATFORM_SOC_CHIP)
+     SET_CHIP_ID     -> mtk_wcn_wmt_set_chipid() + wmt_detect_set_chip_type()
+     DO_MODULE_INIT  -> mtk_wcn_common_drv_init() -> WMT_init
+   Without SET_CHIP_ID, g_chip_type stays INVALID and WMT_init never takes the
+   SOC path; this restores the chip-type that the removed weak stub used to
+   force. Mirrors the blessed wmt_dev_set_hif_btif() in-kernel-launcher pattern.
+ - wmt_dev.c: remove the temporary self-bootstrap module_init/module_exit
+   (a module may have only one module_init); leave a pointer comment.
+
+Bring-up chain now reaches WMT_init entirely in-kernel, no launcher dependency.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../common/common_detect/wmt_detect.c         | 29 ++++++++++++++++++-
+ .../common/common_main/linux/wmt_dev.c        | 27 ++++-------------
+ 2 files changed, 34 insertions(+), 22 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/common/common_detect/wmt_detect.c b/drivers/misc/mediatek/connectivity/common/common_detect/wmt_detect.c
+index ee8647f2d..60239a5e5 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_detect/wmt_detect.c
++++ b/drivers/misc/mediatek/connectivity/common/common_detect/wmt_detect.c
+@@ -326,7 +326,8 @@ static int wmt_detect_driver_init(void)
+ 		goto err1;
+ 	}
+ 
+-	pDetectClass = class_create(THIS_MODULE, WMT_DETECT_DEVICE_NAME);
++	/* 4.14->6.x: class_create() no longer takes an owner argument. */
++	pDetectClass = class_create(WMT_DETECT_DEVICE_NAME);
+ 	if (IS_ERR(pDetectClass)) {
+ 		WMT_DETECT_PR_ERR("class create fail, error code(%ld)\n", PTR_ERR(pDetectClass));
+ 		goto err1;
+@@ -340,6 +341,32 @@ static int wmt_detect_driver_init(void)
+ 
+ 	WMT_DETECT_PR_DBG("driver(major %d) installed success\n", gWmtDetectMajor);
+ 
++	/*
++	 * headless fwport: no userspace wmt_launcher daemon exists in this bring-up.
++	 * On stock the launcher opens /dev/wmtdetect and issues, in order:
++	 *   COMBO_IOCTL_GET_SOC_CHIP_ID  -> wmt_plat_get_soc_chipid()
++	 *   COMBO_IOCTL_SET_CHIP_ID(id)  -> mtk_wcn_wmt_set_chipid()+wmt_detect_set_chip_type()
++	 *   COMBO_IOCTL_DO_MODULE_INIT   -> mtk_wcn_common_drv_init() -> WMT_init
++	 * WMT_init reads wmt_detect_get_chip_type() (which returns g_chip_type, set by
++	 * SET_CHIP_ID) to select the SOC vs COMBO path; without the SET_CHIP_ID step
++	 * g_chip_type stays WMT_CHIP_TYPE_INVALID and the SOC branches never run.
++	 * Replay that handshake in-kernel here. wmt_plat_get_soc_chipid() returns the
++	 * compile-time PLATFORM_SOC_CHIP (no MMIO), so it is safe pre-WMT_init; the
++	 * non-combo id maps to WMT_CHIP_TYPE_SOC in wmt_detect_set_chip_type().
++	 */
++	{
++		int soc_chipid = wmt_plat_get_soc_chipid();
++
++		mtk_wcn_wmt_set_chipid(soc_chipid);
++		wmt_detect_set_chip_type(soc_chipid);
++		WMT_DETECT_PR_INFO("headless SET_CHIP_ID soc_chipid=0x%x type=%d\n",
++				   soc_chipid, wmt_detect_get_chip_type());
++	}
++
++	ret = mtk_wcn_common_drv_init();
++	if (ret)
++		WMT_DETECT_PR_ERR("headless DO_MODULE_INIT (common_drv_init) fail ret:%d\n", ret);
++
+ 	return 0;
+ 
+ err2:
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
+index fa62c61a2..e28d02dd4 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
+@@ -1842,25 +1842,10 @@ int wmt_dev_set_hif_btif(void)
+ }
+ 
+ /*
+- * begonia fwport: wmt_drv self-bootstrap.
+- * The vendor stack's ONLY module_init lived in common_detect/wmt_detect.c
+- * (wmt_detect_driver_init -> do_common_drv_init -> mtk_wcn_common_drv_init ->
+- * WMT_init). common_detect is not part of this forward-port build, so wmt_drv
+- * otherwise has no init entry and WMT_init never runs (no consys platform driver
+- * registered, no /dev/stpwmt, no chip bring-up). Register the bring-up directly
+- * as wmt_drv's module init. Chip type is SOC (begonia) via the weak
+- * wmt_detect_get_chip_type stub, so wmt_plat_init takes the consys path and
+- * registers the "mtk_wmt" platform driver that binds 18002000.consys.
++ * NOTE (begonia fwport): wmt_drv's single module_init now lives in the restored
++ * common_detect/wmt_detect.c (wmt_detect_driver_init), exactly as in the vendor
++ * stack. It creates /dev/wmtdetect and, headless (no userspace wmt_launcher),
++ * issues the DO_MODULE_INIT bring-up in-kernel via mtk_wcn_common_drv_init().
++ * The temporary self-bootstrap module_init/module_exit that previously lived
++ * here was removed (a module may have only one module_init).
+  */
+-static int __init wmt_drv_module_init(void)
+-{
+-	return mtk_wcn_common_drv_init();
+-}
+-module_init(wmt_drv_module_init);
+-
+-static void __exit wmt_drv_module_exit(void)
+-{
+-	mtk_wcn_common_drv_exit();
+-}
+-module_exit(wmt_drv_module_exit);
+-
+-- 
+2.56.0
+

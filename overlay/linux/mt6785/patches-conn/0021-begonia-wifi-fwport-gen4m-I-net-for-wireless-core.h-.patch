@@ -1,0 +1,61 @@
+From 8c702d828bb082fa322fb8af9faeb0b2db20cff8 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 01:20:06 +0200
+Subject: [PATCH 21/51] begonia-wifi (fwport-gen4m): -I net for
+ wireless/core.h, sched_clock header, drop MODULE_NAME -D
+
+- Add -I$(srctree)/net so gen4ms scan-cache path reaches cfg80211 private
+  wireless/core.h (in-tree path, not BSP).
+- Force-include <linux/sched/clock.h> in the compat shim: 4.14 vendor called
+  sched_clock() with an implicit prototype (debug.c, wlan_lib.c).
+- Drop -DMODULE_NAME: it collided with version.h NIC_NAME token expansion;
+  gen4m only needs MODULE_NAME as a make-level module name, not a C macro.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../mediatek/connectivity/compat/include/mtk-bsp-compat.h    | 5 +++++
+ drivers/misc/mediatek/connectivity/wlan/gen4m/Makefile       | 5 ++++-
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h b/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
+index 3131b30ee..ab9d092a8 100644
+--- a/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
++++ b/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
+@@ -29,6 +29,11 @@
+ #include <linux/types.h>
+ #include <linux/io.h>
+ 
++/* sched_clock() is declared in <linux/sched/clock.h>; the 4.14 vendor code
++ * called it expecting an implicit prototype. Pull the header so gen4m's
++ * debug/wlan_lib timestamp paths resolve it. */
++#include <linux/sched/clock.h>
++
+ /* --- 4.14 -> 6.16 API churn --------------------------------------------- */
+ /* ioremap_nocache() was removed in 5.6; ioremap() is now always non-cached. */
+ #ifndef ioremap_nocache
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/Makefile b/drivers/misc/mediatek/connectivity/wlan/gen4m/Makefile
+index 8216f173f..67c3b7362 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/Makefile
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/Makefile
+@@ -79,7 +79,6 @@ ccflags-y += -DCONFIG_NUM_OF_WFDMA_RX_RING=1
+ 
+ # AXI HIF
+ ccflags-y += -D_HIF_AXI=1
+-ccflags-y += -DMODULE_NAME="\"$(MODULE_NAME)\""
+ 
+ # silence vendor warnings (it builds with -Werror upstream; we drop -Werror
+ # during the port and keep the warning suppressions it relied on)
+@@ -94,6 +93,10 @@ ccflags-y += -I$(src)/os -I$(src)/os/linux/include
+ ccflags-y += -I$(src)/os/linux/hif/common/include
+ ccflags-y += -I$(src)/os/linux/hif/axi/include
+ 
++# net/ : gen4m reaches cfg80211's private wireless/core.h (scan-cache path).
++# In-tree path, not a BSP path.
++ccflags-y += -I$(srctree)/net
++
+ # WMT bridge: pull the Stage-1 wmt_drv export headers (wmt_exp.h, stp_exp.h ...)
+ ccflags-y += -I$(srctree)/drivers/misc/mediatek/connectivity/common/common_main/include
+ ccflags-y += -I$(srctree)/drivers/misc/mediatek/connectivity/common/common_main/linux/include
+-- 
+2.56.0
+

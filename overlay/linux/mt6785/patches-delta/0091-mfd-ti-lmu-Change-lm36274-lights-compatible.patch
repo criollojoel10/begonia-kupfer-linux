@@ -1,0 +1,29 @@
+From f64e9349fe364e21c3e6ee69ba163509a81d9dce Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Thu, 10 Jul 2025 17:00:53 +0200
+Subject: [PATCH 091/115] mfd: ti-lmu: Change lm36274 lights compatible
+
+Change name from lm36274-leds to lm36274-backlight to reflect changes
+in driver.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/mfd/ti-lmu.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/mfd/ti-lmu.c b/drivers/mfd/ti-lmu.c
+index ef693b236..aa9df0d31 100644
+--- a/drivers/mfd/ti-lmu.c
++++ b/drivers/mfd/ti-lmu.c
+@@ -119,7 +119,7 @@ static const struct mfd_cell lm36274_devices[] = {
+ 	LM363X_REGULATOR(LM36274_LDO_POS),
+ 	LM363X_REGULATOR(LM36274_LDO_NEG),
+ 	{
+-		.name          = "lm36274-leds",
++		.name          = "lm36274-backlight",
+ 		.id            = LM36274,
+ 		.of_compatible = "ti,lm36274-backlight",
+ 	},
+-- 
+2.56.0
+

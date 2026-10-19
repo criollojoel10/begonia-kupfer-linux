@@ -1,0 +1,28 @@
+From d675585d663bf2c72050d45956733c1267e5f8d8 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 9 Jul 2025 16:50:52 +0200
+Subject: [PATCH 015/115] dt-bindings: watchdog: mediatek,mtk-wdt: Add support
+ for MT6785
+
+Add mediatek,mt6785-wdt compatible.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ Documentation/devicetree/bindings/watchdog/mediatek,mtk-wdt.yaml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/watchdog/mediatek,mtk-wdt.yaml b/Documentation/devicetree/bindings/watchdog/mediatek,mtk-wdt.yaml
+index 953629cb9..d92072a6f 100644
+--- a/Documentation/devicetree/bindings/watchdog/mediatek,mtk-wdt.yaml
++++ b/Documentation/devicetree/bindings/watchdog/mediatek,mtk-wdt.yaml
+@@ -23,6 +23,7 @@ properties:
+           - mediatek,mt2712-wdt
+           - mediatek,mt6589-wdt
+           - mediatek,mt6735-wdt
++          - mediatek,mt6785-wdt
+           - mediatek,mt6795-wdt
+           - mediatek,mt7986-wdt
+           - mediatek,mt7988-wdt
+-- 
+2.56.0
+

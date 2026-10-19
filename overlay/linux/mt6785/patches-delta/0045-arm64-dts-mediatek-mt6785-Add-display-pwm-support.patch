@@ -1,0 +1,38 @@
+From 6579c5da073348ed2acd0db1b2028dac4bb0d404 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Mon, 7 Jul 2025 14:24:29 +0200
+Subject: [PATCH 045/115] arm64: dts: mediatek: mt6785: Add display pwm support
+
+Add display pwm node.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ arch/arm64/boot/dts/mediatek/mt6785.dtsi | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785.dtsi b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+index e2ff4627c..8ab876d5b 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+@@ -602,6 +602,18 @@ spi0: spi@1100a000 {
+ 			status = "disabled";
+ 		};
+ 
++		pwm1: pwm@1100e000 {
++			compatible = "mediatek,mt6785-disp-pwm",
++				     "mediatek,mt8183-disp-pwm";
++			reg = <0 0x1100e000 0 0x1000>;
++			interrupts = <GIC_SPI 151 IRQ_TYPE_LEVEL_LOW>;
++			#pwm-cells = <2>;
++			clocks = <&topckgen CLK_TOP_DISP_PWM>,
++				 <&infracfg CLK_INFRA_DISP_PWM>;
++			clock-names = "main", "mm";
++			status = "disabled";
++		};
++
+ 		i2c3: i2c@1100f000 {
+ 			compatible = "mediatek,mt6785-i2c", "mediatek,mt8186-i2c";
+ 			reg = <0 0x1100f000 0 0x1000>, <0 0x11000300 0 0x80>;
+-- 
+2.56.0
+

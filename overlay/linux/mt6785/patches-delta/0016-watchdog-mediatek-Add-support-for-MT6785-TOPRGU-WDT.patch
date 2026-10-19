@@ -1,0 +1,46 @@
+From 271d7d50ad0eb039a576021e0e3ff1f1dfe21a29 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sun, 6 Jul 2025 20:08:41 +0200
+Subject: [PATCH 016/115] watchdog: mediatek: Add support for MT6785 TOPRGU/WDT
+
+Add support for the Top Reset Generation Unit/Watchdog found on MT6785.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/watchdog/mtk_wdt.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/watchdog/mtk_wdt.c b/drivers/watchdog/mtk_wdt.c
+index 91d110646..d10d523a6 100644
+--- a/drivers/watchdog/mtk_wdt.c
++++ b/drivers/watchdog/mtk_wdt.c
+@@ -11,6 +11,7 @@
+ 
+ #include <dt-bindings/reset/mt2712-resets.h>
+ #include <dt-bindings/reset/mediatek,mt6735-wdt.h>
++#include <dt-bindings/reset/mediatek,mt6785-resets.h>
+ #include <dt-bindings/reset/mediatek,mt6795-resets.h>
+ #include <dt-bindings/reset/mt7986-resets.h>
+ #include <dt-bindings/reset/mt8183-resets.h>
+@@ -92,6 +93,10 @@ static const struct mtk_wdt_data mt6735_data = {
+ 	.toprgu_sw_rst_num = MT6735_TOPRGU_RST_NUM,
+ };
+ 
++static const struct mtk_wdt_data mt6785_data = {
++	.toprgu_sw_rst_num = MT6785_TOPRGU_RST_NUM,
++};
++
+ static const struct mtk_wdt_data mt6795_data = {
+ 	.toprgu_sw_rst_num = MT6795_TOPRGU_SW_RST_NUM,
+ };
+@@ -495,6 +500,7 @@ static const struct of_device_id mtk_wdt_dt_ids[] = {
+ 	{ .compatible = "mediatek,mt2712-wdt", .data = &mt2712_data },
+ 	{ .compatible = "mediatek,mt6589-wdt" },
+ 	{ .compatible = "mediatek,mt6735-wdt", .data = &mt6735_data },
++	{ .compatible = "mediatek,mt6785-wdt", .data = &mt6785_data },
+ 	{ .compatible = "mediatek,mt6795-wdt", .data = &mt6795_data },
+ 	{ .compatible = "mediatek,mt7986-wdt", .data = &mt7986_data },
+ 	{ .compatible = "mediatek,mt7988-wdt", .data = &mt7988_data },
+-- 
+2.56.0
+

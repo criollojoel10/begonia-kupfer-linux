@@ -1,0 +1,60 @@
+From 4d4403a459bf6e9aab54661e5027c50d14d83d9e Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Tue, 16 Jun 2026 17:26:48 +0200
+Subject: [PATCH 03/51] arm64: dts: mt6785-xiaomi-begonia: pin CONNSYS EMI
+ carveout to fixed 0xab000000
+
+The consys EMI carveout was a dynamic reserved-memory allocation (size +
+alloc-ranges), which lands at 0xbc000000 on this kernel. That is stock's WiFi
+EMI region, not the conn-MCU region: the conn-MCU hardware EMI path + secure
+EMI-MPU only serve the conn firmware at the vendor consys-reserve-memory base
+0xab000000 (stock boot log: "reserve_memory_consys_fn ... base: 0xab000000").
+At 0xbc000000 the conn-MCU cannot fetch its firmware after reset-release and
+hangs with COM_REG0=0x4fd0 (CPU running neither ROM nor overlay) instead of
+reaching idle 0x1d1e.
+
+Pin it to the fixed vendor base. Verified: conn-MCU now reaches idle
+(COM_REG0=0x1d1e, PC histogram ROM+EMI) again.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../mt6785-xiaomi-begonia-common.dtsi         | 22 ++++++++++---------
+ 1 file changed, 12 insertions(+), 10 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+index b4fe73ab3..da1606aa6 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+@@ -733,17 +733,19 @@ &xhci {
+ };
+ 
+ &{/reserved-memory} {
+-	/* CONNSYS EMI carveout — 4 MB, 16 MB-aligned. AP-side physical DRAM
+-	 * the conn MCU + WFSYS reach through their 0xf0000000 EMI window once
+-	 * the conninfra driver programs the remap: INFRACFG_AO(0x10001000)+0x380
+-	 * = (this base >> 16). Blobs land at carveout + (patch_addr & 0x00FF0000):
+-	 * ram_mcu +0x0, ram_wifi +0x140000, ram_bt +0x80000 (conninfra
+-	 * mtk_conninfra_emi_load). This is the single shared conn EMI carveout. */
+-	consys_reserved: consys@0 {
++	/* CONNSYS EMI carveout — 4 MB at the FIXED vendor base 0xab000000.
++	 * MUST be fixed, not a dynamic size+alloc-ranges allocation: the conn-MCU
++	 * hardware EMI path + secure EMI-MPU only serve the conn region at the
++	 * vendor's consys-reserve-memory base (stock boot log: base 0xab000000).
++	 * A dynamic alloc lands at 0xbc000000 (stock's *WiFi* EMI region), where
++	 * the conn-MCU cannot fetch its firmware → COM_REG0 stuck at 0x4fd0 instead
++	 * of reaching idle 0x1d1e (verified: r76 working trace used 0xab000000).
++	 * The conninfra driver programs the remap INFRACFG_AO(0x10001000)+0x380 =
++	 * (this base >> 16). Blobs land at carveout + (patch_addr & 0x00FF0000):
++	 * ram_mcu +0x0, ram_wifi +0x140000, ram_bt +0x80000. */
++	consys_reserved: consys@ab000000 {
+ 		compatible = "mediatek,mt6785-consys-reserved";
+ 		no-map;
+-		size = <0 0x400000>;
+-		alignment = <0 0x1000000>;
+-		alloc-ranges = <0 0x40000000 0 0x80000000>;
++		reg = <0 0xab000000 0 0x400000>;
+ 	};
+ };
+-- 
+2.56.0
+

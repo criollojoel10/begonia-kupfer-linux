@@ -1,0 +1,30 @@
+From 2f653935d5b99b56d04e70a16f63b52799357b59 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 9 Jul 2025 16:55:13 +0200
+Subject: [PATCH 037/115] dt-bindings: i2c: i2c-mt65xx: Add support for MT6785
+
+Add mediatek,mt6785-i2c compatible with mediatek,mt8186-i2c fallback.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ Documentation/devicetree/bindings/i2c/i2c-mt65xx.yaml | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/i2c/i2c-mt65xx.yaml b/Documentation/devicetree/bindings/i2c/i2c-mt65xx.yaml
+index ecd5783f0..ccec8aedd 100644
+--- a/Documentation/devicetree/bindings/i2c/i2c-mt65xx.yaml
++++ b/Documentation/devicetree/bindings/i2c/i2c-mt65xx.yaml
+@@ -31,6 +31,10 @@ properties:
+       - const: mediatek,mt8186-i2c
+       - const: mediatek,mt8188-i2c
+       - const: mediatek,mt8192-i2c
++      - items:
++          - enum:
++              - mediatek,mt6785-i2c
++          - const: mediatek,mt8186-i2c
+       - items:
+           - enum:
+               - mediatek,mt7629-i2c
+-- 
+2.56.0
+

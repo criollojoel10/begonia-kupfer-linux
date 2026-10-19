@@ -1,0 +1,60 @@
+From 18019f754db909952ec95882d0791debac82f91e Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 00:27:44 +0200
+Subject: [PATCH 14/51] begonia-wifi (fwport): match compat stub signatures to
+ vendor headers
+
+mtk-bsp-compat.c: include hif_sdio.h; give stp_sdio_rw_retry /
+mtk_wcn_hif_sdio_wmt_control / wmt_export_platform_bridge_register the exact
+typedef-d signatures from stp_sdio.h/hif_sdio.h/wmt_build_in_adapter.h (the
+prior plain-int stubs conflicted once those headers were included).
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../mediatek/connectivity/common/mtk-bsp-compat.c | 15 ++++++++-------
+ 1 file changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c b/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c
+index 3926edbed..956eddae5 100644
+--- a/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c
++++ b/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c
+@@ -25,6 +25,7 @@
+ #include "wmt_detect.h"
+ #include "wmt_gpio.h"
+ #include "stp_sdio.h"
++#include "hif_sdio.h"
+ #include "wmt_build_in_adapter.h"
+ 
+ /* ---- connectivity_build_in_adapter export wrappers (no-op) -------------- */
+@@ -72,21 +73,21 @@ int  __weak stp_sdio_retry_flag_get(void) { return 0; }
+ void __weak stp_sdio_dump_register(void) { }
+ void __weak stp_sdio_txdbg_dump(void) { }
+ int  __weak stp_sdio_wake_up_ctrl(unsigned int ctx) { (void)ctx; return 0; }
+-int  __weak stp_sdio_rw_retry(int type, unsigned int retry_limit,
+-			      unsigned int ctx, unsigned int offset,
+-			      void *pvalue, int wait)
++INT32 __weak stp_sdio_rw_retry(ENUM_STP_SDIO_HIF_TYPE_T type, UINT32 retry_limit,
++			       MTK_WCN_HIF_SDIO_CLTCTX ctx, UINT32 offset,
++			       PUINT32 pvalue, UINT32 wait)
+ { (void)type; (void)retry_limit; (void)ctx; (void)offset; (void)pvalue; (void)wait; return 0; }
+ 
+ int  __weak mtk_wcn_hif_sdio_drv_init(void) { return 0; }
+ void __weak mtk_wcn_hif_sdio_driver_exit(void) { }
+-int  __weak mtk_wcn_hif_sdio_f0_readb(unsigned int ctx, unsigned int offset, unsigned char *pvb)
++INT32 __weak mtk_wcn_hif_sdio_f0_readb(MTK_WCN_HIF_SDIO_CLTCTX ctx, UINT32 offset, PUINT8 pvb)
+ { (void)ctx; (void)offset; if (pvb) *pvb = 0; return 0; }
+-int  __weak mtk_wcn_hif_sdio_update_cb_reg(int (*ts_update)(void)) { (void)ts_update; return 0; }
+-int  __weak mtk_wcn_hif_sdio_wmt_control(int func_type, int is_on)
++INT32 __weak mtk_wcn_hif_sdio_update_cb_reg(INT32 (*ts_update)(VOID)) { (void)ts_update; return 0; }
++INT32 __weak mtk_wcn_hif_sdio_wmt_control(WMT_SDIO_FUNC_TYPE func_type, MTK_WCN_BOOL is_on)
+ { (void)func_type; (void)is_on; return 0; }
+ 
+ /* adapter platform-bridge (wmt_build_in_adapter.c, connadp module) */
+-void __weak wmt_export_platform_bridge_register(void *cb) { (void)cb; }
++void __weak wmt_export_platform_bridge_register(struct wmt_platform_bridge *cb) { (void)cb; }
+ void __weak wmt_export_platform_bridge_unregister(void) { }
+ void __weak wmt_export_mtk_wcn_cmb_sdio_disable_eirq(void) { }
+ 
+-- 
+2.56.0
+

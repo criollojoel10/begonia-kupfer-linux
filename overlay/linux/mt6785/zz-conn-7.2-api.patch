@@ -1,0 +1,352 @@
+diff --git a/drivers/misc/mediatek/btif/common/mtk_btif.c b/drivers/misc/mediatek/btif/common/mtk_btif.c
+index c6a91fe67..6a804eee2 100644
+--- a/drivers/misc/mediatek/btif/common/mtk_btif.c
++++ b/drivers/misc/mediatek/btif/common/mtk_btif.c
+@@ -845,7 +845,7 @@ static ssize_t driver_flag_set(struct device_driver *drv,
+ 		return -1;
+ 	}
+ 
+-	strncpy(buf, buffer, len);
++	strscpy(buf, buffer, len);
+ 	buf[len] = '\0';
+ 	p_buf = buf;
+ 
+diff --git a/drivers/misc/mediatek/btif/common/mtk_btif_exp.c b/drivers/misc/mediatek/btif/common/mtk_btif_exp.c
+index 1e86523ac..66ff72513 100644
+--- a/drivers/misc/mediatek/btif/common/mtk_btif_exp.c
++++ b/drivers/misc/mediatek/btif/common/mtk_btif_exp.c
+@@ -123,7 +123,7 @@ int mtk_wcn_btif_open(char *p_owner, unsigned long *p_id)
+ 		p_new_user->enable = false;
+ 		p_new_user->p_btif = p_btif;
+ 		p_new_user->u_id = (unsigned long)p_new_user;
+-		strncpy(p_new_user->u_name, p_owner,
++		strscpy(p_new_user->u_name, p_owner,
+ 				sizeof(p_new_user->u_name) - 1);
+ 		p_new_user->u_name[sizeof(p_new_user->u_name) - 1] = '\0';
+ 		BTIF_DBG_FUNC("owner name:%s, recorded name:%s\n",
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_ctrl.c b/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_ctrl.c
+index 07f73692e..31e2a25c1 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_ctrl.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_ctrl.c
+@@ -445,7 +445,7 @@ INT32 wmt_ctrl_ul_cmd(P_DEV_WMT pWmtDev, const PUINT8 pCmdStr)
+ #if 0
+ 	INIT_COMPLETION(pWmtDev->cmd_comp);
+ 	pWmtDev->cmd_result = -1;
+-	strncpy(pWmtDev->cCmd, pCmdStr, NAME_MAX);
++	strscpy(pWmtDev->cCmd, pCmdStr, NAME_MAX);
+ 	pWmtDev->cCmd[NAME_MAX] = '\0';
+ 	wake_up_interruptible(&pWmtDev->cmd_wq);
+ #endif
+@@ -453,7 +453,7 @@ INT32 wmt_ctrl_ul_cmd(P_DEV_WMT pWmtDev, const PUINT8 pCmdStr)
+ 	pCmdSignal = &pWmtDev->cmdResp;
+ 	osal_signal_init(pCmdSignal);
+ 	pCmdSignal->timeoutValue = 6000;
+-	osal_strncpy(pWmtDev->cCmd, pCmdStr, NAME_MAX);
++	osal_strscpy(pWmtDev->cCmd, pCmdStr, NAME_MAX);
+ 	pWmtDev->cCmd[NAME_MAX] = '\0';
+ 
+ 	pCmdReq = &pWmtDev->cmdReq;
+@@ -686,7 +686,7 @@ static INT32 wmt_ctrl_srh_rom_patch_headless(P_DEV_WMT pDev)
+ 		info.addRess[1] = (emiOffset >> 8) & 0xFF;
+ 		info.addRess[2] = (emiOffset >> 16) & 0xFF;
+ 		info.addRess[3] = 0;
+-		osal_strncpy(info.patchName, (PUINT8)patches[i].name,
++		osal_strscpy(info.patchName, (PUINT8)patches[i].name,
+ 			     osal_sizeof(info.patchName) - 1);
+ 
+ 		wmt_lib_set_rom_patch_info(&info, patches[i].type);
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_lib.c b/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_lib.c
+index 273d0cc92..e43be600b 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_lib.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_lib.c
+@@ -311,7 +311,7 @@ INT32 wmt_lib_init(VOID)
+ 	pThread = &gDevWmt.thread;
+ 
+ 	/* Create mtk_wmtd thread */
+-	osal_strncpy(pThread->threadName, "mtk_wmtd", sizeof(pThread->threadName));
++	osal_strscpy(pThread->threadName, "mtk_wmtd", sizeof(pThread->threadName));
+ 	pThread->pThreadData = (PVOID) pDevWmt;
+ 	pThread->pThreadFunc = (PVOID) wmtd_thread;
+ 	iRet = osal_thread_create(pThread);
+@@ -328,7 +328,7 @@ INT32 wmt_lib_init(VOID)
+ 	INIT_WORK(&pDevWmt->wmtd_worker_thread_work, wmt_lib_wmtd_worker_thread_work_handler);
+ 
+ 	/* Create wmtd_worker thread */
+-	osal_strncpy(pWorkerThread->threadName, "mtk_wmtd_worker", sizeof(pWorkerThread->threadName));
++	osal_strscpy(pWorkerThread->threadName, "mtk_wmtd_worker", sizeof(pWorkerThread->threadName));
+ 	pWorkerThread->pThreadData = (PVOID) pDevWmt;
+ 	pWorkerThread->pThreadFunc = (PVOID) wmtd_worker_thread;
+ 	iRet = osal_thread_create(pWorkerThread);
+@@ -620,7 +620,7 @@ P_OSAL_EVENT wmt_lib_get_cmd_event(VOID)
+ 
+ INT32 wmt_lib_set_patch_name(PUINT8 cPatchName)
+ {
+-	osal_strncpy(gDevWmt.cPatchName, cPatchName, NAME_MAX);
++	osal_strscpy(gDevWmt.cPatchName, cPatchName, NAME_MAX);
+ 	return 0;
+ }
+ 
+@@ -630,7 +630,7 @@ INT32 wmt_lib_set_uart_name(PINT8 cUartName)
+ 
+ 	WMT_DBG_FUNC("orig uart: %s\n", wmt_uart_port_desc);
+ #endif
+-	osal_strncpy(gDevWmt.cUartName, cUartName, NAME_MAX);
++	osal_strscpy(gDevWmt.cUartName, cUartName, NAME_MAX);
+ #if WMT_PLAT_ALPS
+ 	wmt_uart_port_desc = gDevWmt.cUartName;
+ 	WMT_DBG_FUNC("new uart: %s\n", wmt_uart_port_desc);
+@@ -2943,7 +2943,7 @@ INT32 wmt_lib_met_ctrl(INT32 met_ctrl, INT32 log_ctrl)
+ 	if (met_ctrl & 0x1) {
+ 		/*met enable*/
+ 		/* Create mtk_wmt_met thread */
+-		osal_strncpy(p_thread->threadName, "mtk_wmt_met", sizeof(p_thread->threadName));
++		osal_strscpy(p_thread->threadName, "mtk_wmt_met", sizeof(p_thread->threadName));
+ 		p_devwmt->met_log_ctrl = log_ctrl;
+ 		p_thread->pThreadData = (PVOID) p_devwmt;
+ 		p_thread->pThreadFunc = (PVOID) met_thread;
+@@ -3164,8 +3164,8 @@ INT32 wmt_lib_set_vendor_patch_version(struct wmt_vendor_patch *p)
+ 	/* copy patch info to table */
+ 	patch = patch + table->num;
+ 	patch->type = p->type;
+-	osal_strncpy(patch->file_name, p->file_name, sizeof(p->file_name));
+-	osal_strncpy(patch->version, p->version, sizeof(p->version));
++	osal_strscpy(patch->file_name, p->file_name, sizeof(p->file_name));
++	osal_strscpy(patch->version, p->version, sizeof(p->version));
+ 
+ 	table->num++;
+ 	WMT_INFO_FUNC("set version %s %s %d",
+@@ -3223,7 +3223,7 @@ INT32 wmt_lib_set_active_patch_version(struct wmt_vendor_patch *p)
+ 		return 0;
+ 
+ 	wmt_lib_set_need_update_patch_version(1);
+-	osal_strncpy(table->active_version[p->id], p->version, WMT_FIRMWARE_VERSION_LENGTH + 1);
++	osal_strscpy(table->active_version[p->id], p->version, WMT_FIRMWARE_VERSION_LENGTH + 1);
+ 	return 0;
+ }
+ 
+@@ -3242,7 +3242,7 @@ INT32 wmt_lib_get_active_patch_version(struct wmt_vendor_patch *p)
+ 	}
+ 
+ 	osal_memcpy(p, &table->patch[id], sizeof(struct wmt_vendor_patch));
+-	osal_strncpy(p->version, table->active_version[id],
++	osal_strscpy(p->version, table->active_version[id],
+ 		WMT_FIRMWARE_VERSION_LENGTH + 1);
+ 	WMT_INFO_FUNC("get active version: %s %s t:%d id:%d",
+ 		p->file_name, p->version, p->type, id);
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/include/osal.h b/drivers/misc/mediatek/connectivity/common/common_main/linux/include/osal.h
+index c006d2f5c..69db60732 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/include/osal.h
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/include/osal.h
+@@ -293,7 +293,7 @@ UINT32 osal_strlen(const PINT8 str);
+ INT32 osal_strcmp(const PINT8 dst, const PINT8 src);
+ INT32 osal_strncmp(const PINT8 dst, const PINT8 src, UINT32 len);
+ PINT8 osal_strcpy(PINT8 dst, const PINT8 src);
+-PINT8 osal_strncpy(PINT8 dst, const PINT8 src, UINT32 len);
++PINT8 osal_strscpy(PINT8 dst, const PINT8 src, UINT32 len);
+ PINT8 osal_strcat(PINT8 dst, const PINT8 src);
+ PINT8 osal_strncat(PINT8 dst, const PINT8 src, UINT32 len);
+ PINT8 osal_strchr(const PINT8 str, UINT8 c);
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/osal.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/osal.c
+index 2d323c692..0587f8801 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/osal.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/osal.c
+@@ -120,12 +120,14 @@ INT32 osal_strncmp(const PINT8 dst, const PINT8 src, UINT32 len)
+ 
+ PINT8 osal_strcpy(PINT8 dst, const PINT8 src)
+ {
+-	return strncpy(dst, src, strlen(src)+1);
++	strscpy(dst, src, strlen(src)+1);
++	return dst;
+ }
+ 
+-PINT8 osal_strncpy(PINT8 dst, const PINT8 src, UINT32 len)
++PINT8 osal_strscpy(PINT8 dst, const PINT8 src, UINT32 len)
+ {
+-	return strncpy(dst, src, len);
++	strscpy(dst, src, len);
++	return dst;
+ }
+ 
+ PINT8 osal_strcat(PINT8 dst, const PINT8 src)
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/stp_btif.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/stp_btif.c
+index 3d26156b8..64a20931a 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/stp_btif.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/stp_btif.c
+@@ -90,7 +90,7 @@ INT32 mtk_wcn_consys_stp_btif_open(VOID)
+ 		return -1;
+ 	}
+ 
+-	osal_strncpy(thread->threadName, thread->pThread->comm, sizeof(thread->pThread->comm));
++	osal_strscpy(thread->threadName, thread->pThread->comm, sizeof(thread->pThread->comm));
+ 	mtk_wcn_stp_register_if_tx(STP_BTIF_IF_TX, (MTK_WCN_STP_IF_TX) mtk_wcn_consys_stp_btif_tx);
+ 	mtk_wcn_stp_register_rx_has_pending_data(STP_BTIF_IF_TX,
+ 		(MTK_WCN_STP_RX_HAS_PENDING_DATA) mtk_wcn_consys_stp_btif_rx_has_pending_data);
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/stp_dbg.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/stp_dbg.c
+index cc1a8a43f..29c73a76a 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/stp_dbg.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/stp_dbg.c
+@@ -670,7 +670,7 @@ INT32 stp_dbg_trigger_collect_ftrace(PUINT8 pbuf, INT32 len)
+ 		return -1;
+ 
+ 	if (g_core_dump) {
+-		osal_strncpy(&g_core_dump->info[0], pbuf, len);
++		osal_strscpy(&g_core_dump->info[0], pbuf, len);
+ #if IS_ENABLED(CONFIG_MTK_AEE_AED)
+ 		aed_combo_exception(NULL, 0, (const PINT32)pbuf, len, (const PINT8)g_core_dump->info);
+ #endif
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_alarm.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_alarm.c
+index d96768368..07b9ae57a 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_alarm.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_alarm.c
+@@ -74,7 +74,7 @@ static void alarm_timer_handler(struct alarm *alarm,
+ 
+ 	schedule_work(&g_wmt_alarm.dmp_info_worker);
+ 	kt = ktime_set(g_wmt_alarm.alarm_sec, 0);
+-	alarm_start_relative(&g_wmt_alarm.alarm_timer, kt);
++	alarm_start_timer(&g_wmt_alarm.alarm_timer, kt, true);
+ 
+ 	spin_unlock_irqrestore(&g_wmt_alarm.alarm_lock, g_wmt_alarm.flags);
+ 
+@@ -86,7 +86,7 @@ static int _wmt_alarm_start_timer_nolock(unsigned int sec)
+ 
+ 	g_wmt_alarm.alarm_sec = sec;
+ 	kt = ktime_set(g_wmt_alarm.alarm_sec, 0);
+-	alarm_start_relative(&g_wmt_alarm.alarm_timer, kt);
++	alarm_start_timer(&g_wmt_alarm.alarm_timer, kt, true);
+ 	g_wmt_alarm.alarm_state = WMT_ALARM_STATE_ENABLE;
+ 
+ 	pr_info("[wmt_alarm] alarm timer enabled timeout=[%d]", g_wmt_alarm.alarm_sec);
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
+index e42aeb579..5bc23a666 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
+@@ -480,7 +480,7 @@ INT32 wmt_dev_srh_patch_headless(VOID)
+ 	pPatchInfo[0].addRess[1] = (connac_patch_addr >> 8) & 0xFF;
+ 	pPatchInfo[0].addRess[2] = (connac_patch_addr >> 16) & 0xFF;
+ 	pPatchInfo[0].addRess[3] = (connac_patch_addr >> 24) & 0xFF;
+-	osal_strncpy(pPatchInfo[0].patchName, (PUINT8)patch_name,
++	osal_strscpy(pPatchInfo[0].patchName, (PUINT8)patch_name,
+ 		     osal_sizeof(pPatchInfo[0].patchName) - 1);
+ 
+ 	wmt_lib_set_patch_num(pAtchNum);
+diff --git a/drivers/misc/mediatek/connectivity/common/debug_utility/connsys_debug_utility.c b/drivers/misc/mediatek/connectivity/common/debug_utility/connsys_debug_utility.c
+index fa9b12483..863ec5cea 100644
+--- a/drivers/misc/mediatek/connectivity/common/debug_utility/connsys_debug_utility.c
++++ b/drivers/misc/mediatek/connectivity/common/debug_utility/connsys_debug_utility.c
+@@ -556,7 +556,7 @@ static int connlog_set_alarm_timer(void)
+ 	ktime_t kt;
+ 
+ 	kt = ktime_set(gDev.log_alarm.alarm_sec, 0);
+-	alarm_start_relative(&gDev.log_alarm.alarm_timer, kt);
++	alarm_start_timer(&gDev.log_alarm.alarm_timer, kt, true);
+ 
+ 	pr_debug("[connsys_log_alarm] alarm timer enabled timeout=[%d]", gDev.log_alarm.alarm_sec);
+ 	return 0;
+@@ -695,7 +695,7 @@ static void alarm_timer_handler(struct alarm *alarm,
+ 
+ 	spin_lock_irqsave(&gDev.log_alarm.alarm_lock, gDev.log_alarm.flags);
+ 	kt = ktime_set(gDev.log_alarm.alarm_sec, 0);
+-	alarm_start_relative(&gDev.log_alarm.alarm_timer, kt);
++	alarm_start_timer(&gDev.log_alarm.alarm_timer, kt, true);
+ 	spin_unlock_irqrestore(&gDev.log_alarm.alarm_lock, gDev.log_alarm.flags);
+ 
+ }
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/common/wlan_lib.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/common/wlan_lib.c
+index de1de59a2..79810deaf 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/common/wlan_lib.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/common/wlan_lib.c
+@@ -8676,7 +8676,7 @@ uint32_t wlanCfgParseToFW(int8_t **args, int8_t *args_size,
+ 	}
+ 
+ 	cmd_v1.itemStringLength = args_size[ED_STRING_SITE];
+-	strncpy(cmd_v1.itemString, args[ED_STRING_SITE],
++	strscpy(cmd_v1.itemString, args[ED_STRING_SITE],
+ 		cmd_v1.itemStringLength);
+ 	DBGLOG(INIT, INFO, "itemString:");
+ 	for (i = 0; i <  cmd_v1.itemStringLength; i++)
+@@ -8733,7 +8733,7 @@ uint32_t wlanCfgParseToFW(int8_t **args, int8_t *args_size,
+ 		cmd_v1.itemValueLength = bufferindex;
+ 	} else if (cmd_v1.itemType == ITEM_TYPE_STR) {
+ 		cmd_v1.itemValueLength = args_size[ED_VALUE_SITE];
+-		strncpy(cmd_v1.itemValue, args[ED_VALUE_SITE],
++		strscpy(cmd_v1.itemValue, args[ED_VALUE_SITE],
+ 			cmd_v1.itemValueLength);
+ 	}
+ 
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_cfg80211.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_cfg80211.c
+index 39d7c70d7..83b385738 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_cfg80211.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_cfg80211.c
+@@ -7219,10 +7219,13 @@ int mtk_cfg_assoc(struct wiphy *wiphy,
+ int mtk_cfg_remain_on_channel(struct wiphy *wiphy,
+ 			      struct wireless_dev *wdev,
+ 			      struct ieee80211_channel *chan,
+-			      unsigned int duration, u64 *cookie)
++			      unsigned int duration, u64 *cookie,
++			      const u8 *rx_addr)
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
+ 
++	(void)rx_addr; /* 7.2: ROC con direccion remota; el vendor no la usa */
++
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+ 
+ 	if ((!prGlueInfo) || (prGlueInfo->u4ReadyFlag == 0)) {
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_wext.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_wext.c
+index 59a99640f..9ceef7e6a 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_wext.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_wext.c
+@@ -1116,22 +1116,22 @@ wext_get_name(IN struct net_device *prNetDev,
+ 
+ 		switch (eNetWorkType) {
+ 		case PARAM_NETWORK_TYPE_DS:
+-			strncpy(pcName, "IEEE 802.11b", pcNameSize);
++			strscpy(pcName, "IEEE 802.11b", pcNameSize);
+ 			break;
+ 		case PARAM_NETWORK_TYPE_OFDM24:
+-			strncpy(pcName, "IEEE 802.11bgn", pcNameSize);
++			strscpy(pcName, "IEEE 802.11bgn", pcNameSize);
+ 			break;
+ 		case PARAM_NETWORK_TYPE_AUTOMODE:
+ 		case PARAM_NETWORK_TYPE_OFDM5:
+-			strncpy(pcName, "IEEE 802.11abgn", pcNameSize);
++			strscpy(pcName, "IEEE 802.11abgn", pcNameSize);
+ 			break;
+ 		case PARAM_NETWORK_TYPE_FH:
+ 		default:
+-			strncpy(pcName, "IEEE 802.11", pcNameSize);
++			strscpy(pcName, "IEEE 802.11", pcNameSize);
+ 			break;
+ 		}
+ 	} else {
+-		strncpy(pcName, "Disconnected", pcNameSize);
++		strscpy(pcName, "Disconnected", pcNameSize);
+ 	}
+ 
+ 	pcName[pcNameSize - 1] = '\0';
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/include/gl_cfg80211.h b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/include/gl_cfg80211.h
+index ea88093a4..f6db43f2e 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/include/gl_cfg80211.h
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/include/gl_cfg80211.h
+@@ -693,7 +693,7 @@ int mtk_cfg_remain_on_channel(struct wiphy *wiphy,
+ 			      struct wireless_dev *wdev,
+ 			      struct ieee80211_channel *chan,
+ 			      unsigned int duration,
+-			      u64 *cookie);
++			      u64 *cookie, const u8 *rx_addr);
+ int mtk_cfg_cancel_remain_on_channel(struct wiphy *wiphy,
+ 				     struct wireless_dev *wdev, u64 cookie);
+ uint16_t cfg80211_get_non_wfa_vendor_ie(
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/include/gl_kal.h b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/include/gl_kal.h
+index 104c412b0..deef89731 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/include/gl_kal.h
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/include/gl_kal.h
+@@ -858,7 +858,7 @@ static inline void kalCfg80211ScanDone(struct cfg80211_scan_request *request,
+ 
+ /* string operation */
+ #define kalStrCpy(dest, src)               strcpy(dest, src)
+-#define kalStrnCpy(dest, src, n)           strncpy(dest, src, n)
++#define kalStrnCpy(dest, src, n)           strscpy(dest, src, n)
+ #define kalStrCmp(ct, cs)                  strcmp(ct, cs)
+ #define kalStrnCmp(ct, cs, n)              strncmp(ct, cs, n)
+ #define kalStrChr(s, c)                    strchr(s, c)

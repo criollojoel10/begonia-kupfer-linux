@@ -1,0 +1,38 @@
+From 9b786d4888ee85db92c8ebb8782142f1753f2e99 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sun, 11 Jan 2026 17:15:10 +0100
+Subject: [PATCH 038/115] Revert "i2c: mediatek: mt65xx: add optional
+ vbus-supply"
+
+This reverts commit 9029b9b2ae1355366530e43890fd6aa5db39e91e,
+Breaks mt6360 tcpc vbus support, by binding to vbus supply in tcpc node which
+depends on supply provided by mt6360 charger.
+5a7b95fb993ec399c8a685552aa6a8fc995c40bd was reverted from i2c core, so this
+does nothing now.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/i2c/busses/i2c-mt65xx.c | 7 -------
+ 1 file changed, 7 deletions(-)
+
+diff --git a/drivers/i2c/busses/i2c-mt65xx.c b/drivers/i2c/busses/i2c-mt65xx.c
+index 307925fb7..85ba8bf55 100644
+--- a/drivers/i2c/busses/i2c-mt65xx.c
++++ b/drivers/i2c/busses/i2c-mt65xx.c
+@@ -1415,13 +1415,6 @@ static int mtk_i2c_probe(struct platform_device *pdev)
+ 	i2c->adap.quirks = i2c->dev_comp->quirks;
+ 	i2c->adap.timeout = 2 * HZ;
+ 	i2c->adap.retries = 1;
+-	i2c->adap.bus_regulator = devm_regulator_get_optional(&pdev->dev, "vbus");
+-	if (IS_ERR(i2c->adap.bus_regulator)) {
+-		if (PTR_ERR(i2c->adap.bus_regulator) == -ENODEV)
+-			i2c->adap.bus_regulator = NULL;
+-		else
+-			return PTR_ERR(i2c->adap.bus_regulator);
+-	}
+ 
+ 	ret = mtk_i2c_parse_dt(pdev->dev.of_node, i2c);
+ 	if (ret)
+-- 
+2.56.0
+

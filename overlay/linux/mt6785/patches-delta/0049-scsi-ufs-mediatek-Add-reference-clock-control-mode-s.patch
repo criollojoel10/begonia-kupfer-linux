@@ -1,0 +1,110 @@
+From 415a9a16daf44ded229d2b799e6388d439983dc9 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sun, 22 Jun 2025 16:32:10 +0200
+Subject: [PATCH 049/115] scsi: ufs: mediatek: Add reference clock control mode
+ support
+
+Add three modes of control based on downstream kernel.
+Assign hardware clock control for mt8183 to keep same behavior.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/ufs/host/ufs-mediatek.c | 23 ++++++++++++++++++-----
+ drivers/ufs/host/ufs-mediatek.h | 18 ++++++++++++++++++
+ 2 files changed, 36 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/ufs/host/ufs-mediatek.c b/drivers/ufs/host/ufs-mediatek.c
+index a2defbe3b..cb260b29d 100644
+--- a/drivers/ufs/host/ufs-mediatek.c
++++ b/drivers/ufs/host/ufs-mediatek.c
+@@ -48,9 +48,13 @@ static const struct ufs_dev_quirk ufs_mtk_dev_fixups[] = {
+ 	{}
+ };
+ 
++static const struct ufs_mtk_drv_data ufs_mtk_mt8183_drv_data = {
++	.ref_clk_ctrl_mode = REF_CLK_CTRL_HW_MODE,
++};
++
+ static const struct of_device_id ufs_mtk_of_match[] = {
+-	{ .compatible = "mediatek,mt8183-ufshci" },
+-	{ .compatible = "mediatek,mt8195-ufshci" },
++	{ .compatible = "mediatek,mt8183-ufshci", .data = &ufs_mtk_mt8183_drv_data },
++	{ .compatible = "mediatek,mt8195-ufshci", .data = &ufs_mtk_mt8183_drv_data },
+ 	{},
+ };
+ MODULE_DEVICE_TABLE(of, ufs_mtk_of_match);
+@@ -349,6 +353,16 @@ static int ufs_mtk_setup_ref_clk(struct ufs_hba *hba, bool on)
+ 
+ 	ufs_mtk_ref_clk_notify(on, PRE_CHANGE, res);
+ 
++	switch (host->drv_data->ref_clk_ctrl_mode) {
++	case REF_CLK_CTRL_SW_MODE:
++		goto out;
++	case REF_CLK_CTRL_HALF_HW_MODE:
++		ufshcd_writel(hba, REFCLK_RELEASE, REG_UFS_REFCLK_CTRL);
++		goto out;
++	default:
++		break;
++	}
++
+ 	if (on) {
+ 		ufshcd_writel(hba, REFCLK_REQUEST, REG_UFS_REFCLK_CTRL);
+ 	} else {
+@@ -1227,7 +1241,6 @@ static void ufs_mtk_init_mcq_irq(struct ufs_hba *hba)
+  */
+ static int ufs_mtk_init(struct ufs_hba *hba)
+ {
+-	const struct of_device_id *id;
+ 	struct device *dev = hba->dev;
+ 	struct ufs_mtk_host *host;
+ 	struct Scsi_Host *shost = hba->host;
+@@ -1244,8 +1257,8 @@ static int ufs_mtk_init(struct ufs_hba *hba)
+ 	host->hba = hba;
+ 	ufshcd_set_variant(hba, host);
+ 
+-	id = of_match_device(ufs_mtk_of_match, dev);
+-	if (!id) {
++	host->drv_data = device_get_match_data(hba->dev);
++	if (!host->drv_data) {
+ 		err = -EINVAL;
+ 		goto out;
+ 	}
+diff --git a/drivers/ufs/host/ufs-mediatek.h b/drivers/ufs/host/ufs-mediatek.h
+index 8547a6f04..026ad3289 100644
+--- a/drivers/ufs/host/ufs-mediatek.h
++++ b/drivers/ufs/host/ufs-mediatek.h
+@@ -172,6 +172,23 @@ struct ufs_mtk_mcq_intr_info {
+ 	u8 qid;
+ };
+ 
++/**
++ * enum ufs_mtk_ref_clk_ctrl_mode - Reference clock control mode
++ *
++ * @REF_CLK_CTRL_SW_MODE: Use software to control
++ * @REF_CLK_CTRL_HALF_HW_MODE: Use register to control, but cannot turn off
++ * @REF_CLK_CTRL_HW_MODE: Use register to control
++ */
++enum ufs_mtk_ref_clk_ctrl_mode {
++	REF_CLK_CTRL_SW_MODE,
++	REF_CLK_CTRL_HALF_HW_MODE,
++	REF_CLK_CTRL_HW_MODE,
++};
++
++struct ufs_mtk_drv_data {
++	enum ufs_mtk_ref_clk_ctrl_mode ref_clk_ctrl_mode;
++};
++
+ struct ufs_mtk_host {
+ 	struct phy *mphy;
+ 	struct regulator *reg_va09;
+@@ -183,6 +200,7 @@ struct ufs_mtk_host {
+ 	struct ufs_mtk_crypt_cfg *crypt;
+ 	struct ufs_mtk_clk mclk;
+ 	struct ufs_mtk_hw_ver hw_ver;
++	const struct ufs_mtk_drv_data *drv_data;
+ 	enum ufs_mtk_host_caps caps;
+ 	bool mphy_powered_on;
+ 	bool unipro_lpm;
+-- 
+2.56.0
+

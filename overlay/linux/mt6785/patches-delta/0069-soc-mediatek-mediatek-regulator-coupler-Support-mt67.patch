@@ -1,0 +1,30 @@
+From d220a518bc13afea6aa9a2ed2eb899faf158975c Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sat, 21 Jun 2025 23:52:56 +0200
+Subject: [PATCH 069/115] soc: mediatek: mediatek-regulator-coupler: Support
+ mt6785
+
+The Mali GPU in mt6785 also requires coupled power supplies.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/soc/mediatek/mtk-regulator-coupler.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/soc/mediatek/mtk-regulator-coupler.c b/drivers/soc/mediatek/mtk-regulator-coupler.c
+index 0b6a28841..4f9534683 100644
+--- a/drivers/soc/mediatek/mtk-regulator-coupler.c
++++ b/drivers/soc/mediatek/mtk-regulator-coupler.c
+@@ -145,7 +145,8 @@ static struct mediatek_regulator_coupler mediatek_coupler = {
+ 
+ static int mediatek_regulator_coupler_init(void)
+ {
+-	if (!of_machine_is_compatible("mediatek,mt8183") &&
++	if (!of_machine_is_compatible("mediatek,mt6785") &&
++	    !of_machine_is_compatible("mediatek,mt8183") &&
+ 	    !of_machine_is_compatible("mediatek,mt8186") &&
+ 	    !of_machine_is_compatible("mediatek,mt8188") &&
+ 	    !of_machine_is_compatible("mediatek,mt8192"))
+-- 
+2.56.0
+

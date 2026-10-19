@@ -1,0 +1,126 @@
+From 07b9e5cfb80af88ddafd30c766aae6256a21c16a Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 00:01:43 +0200
+Subject: [PATCH 06/51] begonia-wifi (fwport): fix Makefile separator +
+ 4.14->6.x churn (thermal, remove, timeval)
+
+- common/Makefile:39 had a mangled "n#" line (bad sed insert) that aborted
+  the whole build at parse time with missing-separator - fixed.
+- consys_hw.c: thermal_zone_of_device_ops -> thermal_zone_device_ops;
+  devm_thermal_zone_of_sensor_register -> devm_thermal_of_zone_register;
+  .get_temp cb signature (struct thermal_zone_device *, int *);
+  platform_driver .remove returns void (6.11+).
+- compat header: struct timeval restored as classic {sec,usec} for the osal
+  time wrappers (Y2038 removal); osal_do_gettimeofday backed by ktime.
+
+No register address/value/bitfield altered.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../misc/mediatek/connectivity/common/Makefile   |  3 ++-
+ .../common_main/platform/mtk_wcn_consys_hw.c     | 16 +++++++++-------
+ .../connectivity/compat/include/mtk-bsp-compat.h | 12 ++++++++++++
+ 3 files changed, 23 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/common/Makefile b/drivers/misc/mediatek/connectivity/common/Makefile
+index 0143167d0..9332baa9c 100644
+--- a/drivers/misc/mediatek/connectivity/common/Makefile
++++ b/drivers/misc/mediatek/connectivity/common/Makefile
+@@ -36,7 +36,8 @@ ccflags-y += -I$(srctree)/drivers/misc/mediatek/connectivity/compat/include
+ ccflags-y += -include $(srctree)/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
+ 
+ obj-$(CONFIG_MTK_WMT_DRV) += wmt_drv.o
+-n# compat: no-op bodies for connectivity_build_in_adapter export wrappers
++
++# compat: no-op bodies for connectivity_build_in_adapter export wrappers
+ wmt_drv-objs += mtk-bsp-compat.o
+ 
+ # cmb_stub implementation (provides mtk_wcn_cmb_stub_reg/unreg/aif_ctrl etc.)
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/platform/mtk_wcn_consys_hw.c b/drivers/misc/mediatek/connectivity/common/common_main/platform/mtk_wcn_consys_hw.c
+index b4112d002..c40e66583 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/platform/mtk_wcn_consys_hw.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/platform/mtk_wcn_consys_hw.c
+@@ -73,7 +73,7 @@
+ ********************************************************************************
+ */
+ static INT32 mtk_wmt_probe(struct platform_device *pdev);
+-static INT32 mtk_wmt_remove(struct platform_device *pdev);
++static void mtk_wmt_remove(struct platform_device *pdev);
+ static INT32 mtk_wmt_suspend(VOID);
+ static void mtk_wmt_resume(VOID);
+ 
+@@ -166,8 +166,10 @@ static void plat_resume_handler(struct work_struct *work);
+ struct regmap *g_regmap;
+ #endif
+ 
+-static int wmt_thermal_get_temp_cb(void *data, int *temp);
+-static const struct thermal_zone_of_device_ops tz_wmt_thermal_ops = {
++/* 4.14->6.x: thermal_zone_of_device_ops -> thermal_zone_device_ops;
++ * .get_temp now takes (struct thermal_zone_device *, int *). */
++static int wmt_thermal_get_temp_cb(struct thermal_zone_device *tz, int *temp);
++static const struct thermal_zone_device_ops tz_wmt_thermal_ops = {
+ 	.get_temp = wmt_thermal_get_temp_cb,
+ };
+ 
+@@ -267,7 +269,7 @@ static INT32 wmt_allocate_connsys_emi(struct platform_device *pdev)
+ 	return 0;
+ }
+ 
+-static int wmt_thermal_get_temp_cb(void *data, int *temp)
++static int wmt_thermal_get_temp_cb(struct thermal_zone_device *tz, int *temp)
+ {
+ 	if (temp) {
+ 		*temp = wmt_lib_tm_temp_query() * 1000;
+@@ -282,7 +284,7 @@ static INT32 wmt_thermal_register(struct platform_device *pdev)
+ 	int ret;
+ 
+ 	/* register thermal zone */
+-	tz = devm_thermal_zone_of_sensor_register(
++	tz = devm_thermal_of_zone_register(
+ 		&pdev->dev, 0, NULL, &tz_wmt_thermal_ops);
+ 
+ 	if (IS_ERR(tz)) {
+@@ -414,7 +416,8 @@ static INT32 mtk_wmt_probe(struct platform_device *pdev)
+ 	return 0;
+ }
+ 
+-static INT32 mtk_wmt_remove(struct platform_device *pdev)
++/* 4.14->6.11: platform_driver.remove callback now returns void. */
++static void mtk_wmt_remove(struct platform_device *pdev)
+ {
+ 	if (wmt_consys_ic_ops->consys_ic_need_store_pdev) {
+ 		if (wmt_consys_ic_ops->consys_ic_need_store_pdev() == MTK_WCN_BOOL_TRUE)
+@@ -435,7 +438,6 @@ static INT32 mtk_wmt_remove(struct platform_device *pdev)
+ 	osal_sleepable_lock_deinit(&g_adie_chipid_lock);
+ 
+ 	atomic_set(&g_probe_called, 0);
+-	return 0;
+ }
+ 
+ static INT32 mtk_wmt_suspend(VOID)
+diff --git a/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h b/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
+index e055a1b7d..d8f8e421a 100644
+--- a/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
++++ b/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
+@@ -35,6 +35,18 @@
+ #define ioremap_nocache(addr, size) ioremap((addr), (size))
+ #endif
+ 
++/* struct timeval was removed (Y2038). The vendor osal exposes
++ * osal_do_gettimeofday(struct timeval *) and several TUs use struct timeval as
++ * a plain {sec,usec} pair. Provide the classic layout so those compile
++ * unchanged; osal_do_gettimeofday() is backed by ktime_get_real_ts64(). */
++#ifndef _COMPAT_STRUCT_TIMEVAL
++#define _COMPAT_STRUCT_TIMEVAL
++struct timeval {
++	long	tv_sec;
++	long	tv_usec;
++};
++#endif
++
+ /* --- adapter KERNEL_* macros the adapter header leaves UNDEFINED ---------- *
+  * (clk_buf / pmic_ldo blocks are gated on CONFIG_MACH_* / CONFIG_MTK_PMIC_CHIP_*
+  * which are unset on mainline). No-op at the API level - no hardware touched.  */
+-- 
+2.56.0
+

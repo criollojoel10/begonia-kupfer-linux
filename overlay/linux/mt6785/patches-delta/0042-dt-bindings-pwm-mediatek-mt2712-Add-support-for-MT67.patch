@@ -1,0 +1,28 @@
+From e750974085c7634d97a1f548df724e481d9f143d Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 9 Jul 2025 17:11:16 +0200
+Subject: [PATCH 042/115] dt-bindings: pwm: mediatek,mt2712: Add support for
+ MT6785
+
+Add mediatek,mt6785-pwm compatible with mediatek,mt8183-pwm fallback.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ Documentation/devicetree/bindings/pwm/mediatek,mt2712-pwm.yaml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/pwm/mediatek,mt2712-pwm.yaml b/Documentation/devicetree/bindings/pwm/mediatek,mt2712-pwm.yaml
+index fc31758a4..38436929c 100644
+--- a/Documentation/devicetree/bindings/pwm/mediatek,mt2712-pwm.yaml
++++ b/Documentation/devicetree/bindings/pwm/mediatek,mt2712-pwm.yaml
+@@ -31,6 +31,7 @@ properties:
+           - mediatek,mt8516-pwm
+       - items:
+           - enum:
++              - mediatek,mt6785-pwm
+               - mediatek,mt8195-pwm
+           - const: mediatek,mt8183-pwm
+       - items:
+-- 
+2.56.0
+

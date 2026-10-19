@@ -1,0 +1,61 @@
+From b92c255170898ac9463ebe5152b2483dfb8259d4 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Tue, 26 Aug 2025 13:14:40 +0200
+Subject: [PATCH 110/115] arm64: dts: mediatek: mt6785-xiaomi-begonia: Enable
+ NFC
+
+Enable NXP Semiconductors NCI NFC controller on i2c3.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../mt6785-xiaomi-begonia-common.dtsi         | 27 +++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+index 2fc991a9f..1c9cd06b4 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+@@ -204,6 +204,25 @@ proximity@47 {
+ 	};
+ };
+ 
++&i2c3 {
++	clock-frequency = <400000>;
++
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c3_pins>;
++
++	status = "okay";
++
++	nfc@28 {
++		compatible = "nxp,nxp-nci-i2c";
++		reg = <0x28>;
++
++		interrupts-extended = <&pio 88 IRQ_TYPE_EDGE_FALLING>;
++
++		enable-gpios = <&pio 168 GPIO_ACTIVE_HIGH>;
++		firmware-gpios = <&pio 87 GPIO_ACTIVE_HIGH>;
++	};
++};
++
+ &i2c5 {
+ 	clock-frequency = <3400000>;
+ 
+@@ -475,6 +494,14 @@ pins-bus {
+ 		};
+ 	};
+ 
++	i2c3_pins: i2c3-pins {
++		pins-bus {
++			pinmux = <PINMUX_GPIO55__FUNC_SCL3>,
++				 <PINMUX_GPIO56__FUNC_SDA3>;
++			bias-pull-up;
++		};
++	};
++
+ 	i2c5_pins: i2c5-pins {
+ 		pins-bus {
+ 			pinmux = <PINMUX_GPIO28__FUNC_SCL5>,
+-- 
+2.56.0
+

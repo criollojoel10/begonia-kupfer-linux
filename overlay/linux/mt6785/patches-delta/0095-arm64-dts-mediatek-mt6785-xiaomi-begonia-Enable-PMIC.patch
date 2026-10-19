@@ -1,0 +1,72 @@
+From accf722079cb991adc2f13a5dbb508965eedf0b3 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sat, 12 Jul 2025 17:27:36 +0200
+Subject: [PATCH 095/115] arm64: dts: mediatek: mt6785-xiaomi-begonia: Enable
+ PMIC
+
+This smartphone uses the MT6785 standard MT6359 PMIC.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../dts/mediatek/mt6785-xiaomi-begonia.dts    | 42 +++++++++++++++++++
+ 1 file changed, 42 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts
+index 120761db1..7281f60e6 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts
+@@ -5,9 +5,51 @@
+ 
+ /dts-v1/;
+ #include "mt6785.dtsi"
++#include "mt6359.dtsi"
+ 
+ / {
+ 	model = "Xiaomi Redmi Note 8 Pro";
+ 	compatible = "xiaomi,begonia", "mediatek,mt6785";
+ 	chassis-type = "handset";
+ };
++
++&mt6359_vcore_buck_reg {
++	regulator-always-on;
++};
++
++&mt6359_vgpu11_buck_reg {
++	regulator-name = "vgpu";
++	regulator-min-microvolt = <550000>;
++	regulator-max-microvolt = <875000>;
++
++	regulator-coupled-with = <&mt6359_vpu_buck_reg>;
++	regulator-coupled-max-spread = <100000>;
++};
++
++&mt6359_vproc1_buck_reg {
++	regulator-name = "vproc_b";
++	regulator-always-on;
++};
++
++&mt6359_vproc2_buck_reg {
++	regulator-name = "vproc_l";
++	regulator-always-on;
++};
++
++&mt6359_vpu_buck_reg {
++	regulator-name = "vsram_gpu";
++	regulator-min-microvolt = <850000>;
++	regulator-max-microvolt = <975000>;
++
++	regulator-coupled-with = <&mt6359_vgpu11_buck_reg>;
++	regulator-coupled-max-spread = <100000>;
++};
++
++&mt6359_vsram_others_ldo_reg {
++	regulator-name = "vsram_core";
++	regulator-always-on;
++};
++
++&pmic {
++	interrupts-extended = <&pio 193 IRQ_TYPE_LEVEL_HIGH>;
++};
+-- 
+2.56.0
+

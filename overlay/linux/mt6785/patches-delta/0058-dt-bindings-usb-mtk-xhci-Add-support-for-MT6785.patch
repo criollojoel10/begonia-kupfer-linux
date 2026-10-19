@@ -1,0 +1,27 @@
+From 5ac023bdb7ed8c5ba76a5879f909768183c2a6e2 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 9 Jul 2025 17:10:04 +0200
+Subject: [PATCH 058/115] dt-bindings: usb: mtk-xhci: Add support for MT6785
+
+Add mediatek,mt6785-xhci compatible with mediatek,mtk-xhci fallback.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ Documentation/devicetree/bindings/usb/mediatek,mtk-xhci.yaml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/usb/mediatek,mtk-xhci.yaml b/Documentation/devicetree/bindings/usb/mediatek,mtk-xhci.yaml
+index 231e6f35a..735aefe05 100644
+--- a/Documentation/devicetree/bindings/usb/mediatek,mtk-xhci.yaml
++++ b/Documentation/devicetree/bindings/usb/mediatek,mtk-xhci.yaml
+@@ -25,6 +25,7 @@ properties:
+       - enum:
+           - mediatek,mt2701-xhci
+           - mediatek,mt2712-xhci
++          - mediatek,mt6785-xhci
+           - mediatek,mt7622-xhci
+           - mediatek,mt7623-xhci
+           - mediatek,mt7629-xhci
+-- 
+2.56.0
+

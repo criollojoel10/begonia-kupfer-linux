@@ -1,0 +1,71 @@
+From 91ddd87ff25f1b17b3eaf005b0efaa5e2f375a99 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 00:12:18 +0200
+Subject: [PATCH 08/51] begonia-wifi (fwport): alarmtimer handler -> void (6.16
+ removed enum alarmtimer_restart)
+
+wmt_alarm.c + connsys_debug_utility.c: alarm.function callback now returns
+void; drop enum alarmtimer_restart return type and return ALARMTIMER_NORESTART.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../connectivity/common/common_main/linux/wmt_alarm.c       | 4 ++--
+ .../common/debug_utility/connsys_debug_utility.c            | 6 +++---
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_alarm.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_alarm.c
+index 1ad1c2631..d96768368 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_alarm.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_alarm.c
+@@ -64,7 +64,8 @@ static void wmt_alarm_dmp_info_handler(struct work_struct *work)
+ 	}
+ }
+ 
+-static enum alarmtimer_restart alarm_timer_handler(struct alarm *alarm,
++/* 6.16: enum alarmtimer_restart removed; alarm.function now returns void. */
++static void alarm_timer_handler(struct alarm *alarm,
+ 	ktime_t now)
+ {
+ 	ktime_t kt;
+@@ -77,7 +78,6 @@ static enum alarmtimer_restart alarm_timer_handler(struct alarm *alarm,
+ 
+ 	spin_unlock_irqrestore(&g_wmt_alarm.alarm_lock, g_wmt_alarm.flags);
+ 
+-	return ALARMTIMER_NORESTART;
+ }
+ 
+ static int _wmt_alarm_start_timer_nolock(unsigned int sec)
+diff --git a/drivers/misc/mediatek/connectivity/common/debug_utility/connsys_debug_utility.c b/drivers/misc/mediatek/connectivity/common/debug_utility/connsys_debug_utility.c
+index 54f624e7c..fa9b12483 100644
+--- a/drivers/misc/mediatek/connectivity/common/debug_utility/connsys_debug_utility.c
++++ b/drivers/misc/mediatek/connectivity/common/debug_utility/connsys_debug_utility.c
+@@ -132,7 +132,8 @@ static void connlog_emi_status_dump(void);
+ 
+ /* connlog when suspend */
+ static int connlog_alarm_init(void);
+-static enum alarmtimer_restart alarm_timer_handler(struct alarm *alarm, ktime_t);
++/* 6.16: enum alarmtimer_restart removed; alarm.function now returns void. */
++static void alarm_timer_handler(struct alarm *alarm, ktime_t);
+ static inline bool connlog_is_alarm_enable(void);
+ static int connlog_set_alarm_timer(void);
+ static int connlog_cancel_alarm_timer(void);
+@@ -677,7 +678,7 @@ EXPORT_SYMBOL(connsys_log_blank_state_changed);
+ * RETURNS
+ *  void
+ *****************************************************************************/
+-static enum alarmtimer_restart alarm_timer_handler(struct alarm *alarm,
++static void alarm_timer_handler(struct alarm *alarm,
+ 	ktime_t now)
+ {
+ 	ktime_t kt;
+@@ -697,7 +698,6 @@ static enum alarmtimer_restart alarm_timer_handler(struct alarm *alarm,
+ 	alarm_start_relative(&gDev.log_alarm.alarm_timer, kt);
+ 	spin_unlock_irqrestore(&gDev.log_alarm.alarm_lock, gDev.log_alarm.flags);
+ 
+-	return ALARMTIMER_NORESTART;
+ }
+ 
+ /*****************************************************************************
+-- 
+2.56.0
+

@@ -1,0 +1,127 @@
+From a0d7c133f8f049eea9f9900b347209f149b7b857 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Fri, 19 Jun 2026 15:16:38 +0200
+Subject: [PATCH 51/51] begonia-wifi (fwport): trim verbose DT bring-up
+ comments
+
+Shorten the begonia DT comments: keep all inline reg/irq/clock labels and
+the load-bearing rationale (fixed EMI base 0xab000000, reg-order-by-index,
+required clock names, gen4m/consys region overlap, why the reimpl wmac node
+is disabled), drop the bring-up forensic narrative (r76 traces, COM_REG0
+values, Stage-1/2 references, report pointers). Comment-only: compiled DTB
+is byte-identical to before. -38 net lines.
+---
+ arch/arm64/boot/dts/mediatek/mt6785.dtsi | 66 +++++++++---------------
+ 1 file changed, 24 insertions(+), 42 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785.dtsi b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+index f32c9a2f7..c56cd4f9d 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+@@ -1993,19 +1993,13 @@ larb6: larb@1a001000 {
+ };
+ 
+ &soc {
+-	/* gen4m fullmac WLAN device (vendor forward-port, Stage 2). The gen4m
+-	 * AXI HIF (os/linux/hif/axi/axi.c) is a standalone platform_driver that
+-	 * binds compatible "mediatek,wifi": it of_iomap()s reg[0] (WF CSR
+-	 * window), irq_of_parse_and_map()s interrupt 0 + request_irq()s it, and
+-	 * of_reserved_mem_device_init()s memory-region for its DMA pool.
+-	 * reg/irq/memory-region match stock begonia-r-oss mt6785.dts
+-	 * "mediatek,wifi" node. Must be a &soc child (not nested under consys)
+-	 * so of_platform_populate() creates its platform_device. The 1 MB reg
+-	 * overlaps the consys sub-regions (MCU 0x18002000, HIF 0x18004/7000,
+-	 * TOP_MISC 0x180b/c000), which is SAFE: both drivers map via
+-	 * non-exclusive of_iomap and gen4m ignores its unchecked
+-	 * request_mem_region result — identical to the stock layout. The reimpl
+-	 * mt76 "mediatek,mt6785-wmac" node (also at 0x18000000) stays disabled. */
++	/* gen4m fullmac WLAN device. The gen4m AXI HIF is a platform_driver that
++	 * binds "mediatek,wifi": of_iomap reg[0] (WF CSR window), maps interrupt 0,
++	 * and of_reserved_mem_device_init() for its DMA pool. reg/irq/memory-region
++	 * match stock begonia-r-oss. Must be a &soc child (not under consys) so
++	 * of_platform_populate() creates its platform_device. The 1 MB reg overlaps
++	 * the consys sub-regions, which is safe: both map via non-exclusive
++	 * of_iomap, matching the stock layout. */
+ 	wifi: wifi@18000000 {
+ 		compatible = "mediatek,wifi";
+ 		reg = <0 0x18000000 0 0x100000>;
+@@ -2021,17 +2015,13 @@ consys: consys@18002000 {
+ 		#size-cells = <2>;
+ 		ranges;
+ 		/*
+-		 * REG ORDER IS STOCK-ORDER, not reimpl-order. The vendor WMT
+-		 * driver (consys_read_reg_from_dts in mt6785.c) iomaps these by
+-		 * NUMERIC index via the CONSYS_BASE_ADDRESS_INDEX enum, and
+-		 * mtk_wcn_consys_reg_ctrl() re-reads the raw "reg" array by the
+-		 * same index. The ordering below matches stock begonia-r-oss
+-		 * mt6785.dts consys@18002000 (reg index -> physaddr) exactly:
++		 * Reg order is load-bearing: the vendor WMT driver
++		 * (consys_read_reg_from_dts in mt6785.c) iomaps these by numeric
++		 * index (CONSYS_BASE_ADDRESS_INDEX), matching stock begonia-r-oss
++		 * consys@18002000:
+ 		 *   0 MCU_BASE 1 TOP_RGU 2 INFRACFG_AO 3 SPM 4 CONN_HIF_ON
+ 		 *   5 TOP_MISC_OFF 6 MCU_CFG_ON 7 MCU_CIRQ 8 TOP_MISC_ON
+ 		 *   9 CONN_HIF_PDMA 10 AP_PCCIF4 11 INFRA_AO_PERICFG
+-		 * The previous (reimpl) order scrambled indices 1,2,3,10,11 and
+-		 * dropped AP_PCCIF4 (0x1024c000) -> would iomap wrong regions.
+ 		 */
+ 		reg = <0 0x18002000 0 0x1000>,	/* 0  CONN_MCU_CONFIG_BASE */
+ 		      <0 0x10007000 0 0x0100>,	/* 1  TOP_RGU_BASE */
+@@ -2051,14 +2041,11 @@ consys: consys@18002000 {
+ 			     <GIC_SPI 78 IRQ_TYPE_LEVEL_LOW>,	/* WDT_EINT */
+ 			     <GIC_SPI 323 IRQ_TYPE_EDGE_RISING>;	/* conn2ap_sw_irq */
+ 		/*
+-		 * Vendor consys_clk_get_from_dts() requires clocks named "conn"
+-		 * AND "ccif" or probe aborts. "ccif" = INFRACFG CCIF4 AP gate
+-		 * (stock INFRACFG_AO_CCIF4_AP_CG). "conn" was stock's
+-		 * <&scpsys SCP_SYS_CONN> clock-wrapper around the conn power
+-		 * domain; mainline models conn power as the genpd
+-		 * power-domains phandle below, so there is no 1:1 mainline
+-		 * "conn" CLOCK. See report: the "conn" clock is the one
+-		 * UNRESOLVED probe blocker (cannot be sourced DT-only).
++		 * Vendor consys_clk_get_from_dts() requires clocks "conn" and
++		 * "ccif" or probe aborts. "ccif" = INFRACFG CCIF4 AP gate. Stock's
++		 * "conn" clock wrapped the conn power domain; mainline models that
++		 * as the power-domains phandle below, so there is no 1:1 "conn"
++		 * clock here.
+ 		 */
+ 		clocks = <&infracfg CLK_INFRA_CCIF4_AP>;
+ 		clock-names = "ccif";
+@@ -2069,10 +2056,9 @@ consys: consys@18002000 {
+ 		 * non-co-clock so the vendor runtime relies on the preloader
+ 		 * leaving it HW-on; mainline has no mt6359 clk-buf driver. */
+ 		mediatek,pmic = <&pmic>;
+-		/* HYGIENE: vendor mtk_wcn_get_regmap() reads the property name
+-		 * "pmic" (not "mediatek,pmic"); provide both so the vendor finds
+-		 * the mt6359 regmap. Non-fatal if absent (logs INFO, continues
+-		 * with g_regmap=NULL), so this is hygiene, not a probe gate. */
++		/* Vendor mtk_wcn_get_regmap() reads the property "pmic" (not
++		 * "mediatek,pmic"); provide both so the vendor finds the mt6359
++		 * regmap. Non-fatal if absent. */
+ 		pmic = <&pmic>;
+ 		/* BTIF (WMT control channel to the conn MCU). The conninfra driver
+ 		 * sends the WMT FUNCTION_CTRL command that arms the WFSYS over this. */
+@@ -2122,15 +2108,11 @@ wmac: wmac@18000000 {
+ 		 * mt76 FWDL ring (DMA), not the carveout. */
+ 		power-domains = <&spm MT6785_POWER_DOMAIN_CONN>;
+ 		/*
+-		 * Stage-1 vendor-WMT forward-port: DISABLED. This reimpl mt76
+-		 * node ("mediatek,mt6785-wmac") maps the 16 MB conn window
+-		 * 0x18000000..0x19000000, which OVERLAPS the vendor consys
+-		 * regions (MCU 0x18002000, HIF_ON 0x18007000, HIF_PDMA
+-		 * 0x18004000, TOP_MISC_* 0x180b/c000). With the vendor stack
+-		 * driving conn bring-up, this node must not also probe and
+-		 * claim/power-cycle the shared conn power-domain. Re-enable in
+-		 * Stage 2 when gen4m owns the wlan MAC. Driver also disabled via
+-		 * CONFIG_MT7615_MT6785_WMAC=n in pmaports.
++		 * Disabled: this reimpl mt76 node maps the 16 MB conn window
++		 * at 0x18000000, overlapping the vendor consys regions. With
++		 * the vendor stack driving conn bring-up, this node must not
++		 * also probe and claim the shared conn power-domain. Also
++		 * disabled via CONFIG_MT7615_MT6785_WMAC=n in pmaports.
+ 		 */
+ 		status = "disabled";
+ 	};
+-- 
+2.56.0
+

@@ -1,0 +1,27 @@
+From 75b9f39976b3475834a50b4fe9b96110e19cfdd9 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Thu, 10 Jul 2025 10:47:52 +0200
+Subject: [PATCH 047/115] dt-bindings: ufs: mediatek: Add support for MT6785
+
+Add mediatek,mt6785-ufshci compatible and more clocks.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ Documentation/devicetree/bindings/ufs/mediatek,ufs.yaml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/ufs/mediatek,ufs.yaml b/Documentation/devicetree/bindings/ufs/mediatek,ufs.yaml
+index a58261ec8..03db03961 100644
+--- a/Documentation/devicetree/bindings/ufs/mediatek,ufs.yaml
++++ b/Documentation/devicetree/bindings/ufs/mediatek,ufs.yaml
+@@ -13,6 +13,7 @@ maintainers:
+ properties:
+   compatible:
+     oneOf:
++      - const: mediatek,mt6785-ufshci
+       - const: mediatek,mt8183-ufshci
+       - const: mediatek,mt8195-ufshci
+       - items:
+-- 
+2.56.0
+

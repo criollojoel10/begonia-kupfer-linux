@@ -1,0 +1,39 @@
+From 8511535db9d111dd1068bb0ba4835cdacbdd11ba Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Mon, 7 Jul 2025 18:15:46 +0200
+Subject: [PATCH 056/115] arm64: dts: mediatek: mt6785: Add PMIC Wrapper
+ support
+
+Add the pwrap node: this is used to communicate with the PMIC(s).
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ arch/arm64/boot/dts/mediatek/mt6785.dtsi | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785.dtsi b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+index 447068318..bb6fa67b3 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+@@ -474,6 +474,18 @@ apmixedsys: clock-controller@1000c000 {
+ 			#clock-cells = <1>;
+ 		};
+ 
++		pwrap: pwrap@1000d000 {
++			compatible = "mediatek,mt6785-pwrap";
++			reg = <0 0x1000d000 0 0x1000>;
++			reg-names = "pwrap";
++			interrupts = <GIC_SPI 212 IRQ_TYPE_LEVEL_HIGH>;
++			clocks = <&infracfg CLK_INFRA_PMIC_AP>,
++				 <&infracfg CLK_INFRA_PMIC_TMR>;
++			clock-names = "spi", "wrap";
++			resets = <&infracfg MT6785_INFRA_PMIC_WRAP_RST>;
++			reset-names = "pwrap";
++		};
++
+ 		systimer: timer@10017000 {
+ 			compatible = "mediatek,mt6785-timer", "mediatek,mt6765-timer";
+ 			reg = <0 0x10017000 0 0x1000>;
+-- 
+2.56.0
+

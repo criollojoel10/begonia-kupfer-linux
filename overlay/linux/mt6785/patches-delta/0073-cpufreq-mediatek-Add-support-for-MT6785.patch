@@ -1,0 +1,41 @@
+From e7dbe132b2f2b994aba38b488ca315ddc1cae71b Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sun, 22 Jun 2025 23:00:49 +0200
+Subject: [PATCH 073/115] cpufreq: mediatek: Add support for MT6785
+
+Add compatible string to mediatek-cpufreq driver and cpufreq-dt-platdev
+blocklist.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/cpufreq/cpufreq-dt-platdev.c | 1 +
+ drivers/cpufreq/mediatek-cpufreq.c   | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/drivers/cpufreq/cpufreq-dt-platdev.c b/drivers/cpufreq/cpufreq-dt-platdev.c
+index ff1204c66..cea47b5a5 100644
+--- a/drivers/cpufreq/cpufreq-dt-platdev.c
++++ b/drivers/cpufreq/cpufreq-dt-platdev.c
+@@ -132,6 +132,7 @@ static const struct of_device_id blocklist[] __initconst = {
+ 
+ 	{ .compatible = "mediatek,mt2701", },
+ 	{ .compatible = "mediatek,mt2712", },
++	{ .compatible = "mediatek,mt6785", },
+ 	{ .compatible = "mediatek,mt7622", },
+ 	{ .compatible = "mediatek,mt7623", },
+ 	{ .compatible = "mediatek,mt8167", },
+diff --git a/drivers/cpufreq/mediatek-cpufreq.c b/drivers/cpufreq/mediatek-cpufreq.c
+index 052ca7cd2..50feadfdc 100644
+--- a/drivers/cpufreq/mediatek-cpufreq.c
++++ b/drivers/cpufreq/mediatek-cpufreq.c
+@@ -747,6 +747,7 @@ static const struct mtk_cpufreq_platform_data mt8516_platform_data = {
+ static const struct of_device_id mtk_cpufreq_machines[] __initconst __maybe_unused = {
+ 	{ .compatible = "mediatek,mt2701", .data = &mt2701_platform_data },
+ 	{ .compatible = "mediatek,mt2712", .data = &mt2701_platform_data },
++	{ .compatible = "mediatek,mt6785", .data = &mt8186_platform_data },
+ 	{ .compatible = "mediatek,mt7622", .data = &mt7622_platform_data },
+ 	{ .compatible = "mediatek,mt7623", .data = &mt7623_platform_data },
+ 	{ .compatible = "mediatek,mt7988a", .data = &mt7988_platform_data },
+-- 
+2.56.0
+

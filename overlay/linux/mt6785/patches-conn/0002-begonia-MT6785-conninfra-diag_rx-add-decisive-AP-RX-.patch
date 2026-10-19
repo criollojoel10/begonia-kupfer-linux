@@ -1,0 +1,67 @@
+From f65c1267f5c8be4a2280aa94682b1dbb98495af6 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Tue, 16 Jun 2026 11:25:21 +0200
+Subject: [PATCH 02/51] =?UTF-8?q?begonia=20(MT6785):=20conninfra=20diag=5F?=
+ =?UTF-8?q?rx=20=E2=80=94=20add=20decisive=20AP-RX=20DMA=20write-pointer?=
+ =?UTF-8?q?=20read?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+After a WMT command times out (n=-110), the AP recv consumed nothing, so a
+non-zero AP rx-DMA write-pointer (0x11000c00 + VFF_WPT 0x2c) can ONLY mean the
+conn replied and the AP DMA captured the frame. This is a mainline-only binary
+that splits the bring-up gate without a stock comparison (no consumer ran to
+reset the pointer, so no sampling artifact):
+
+  WPT != 0  -> conn replies, DMA captured it; gate is our poll-recv parsing
+               (port stock btif_rxd faithfully).
+  WPT == 0  -> conn never replied (confirm RX EN live + conn-side TX silent);
+               gate is an AP-provided input difference, not an AP-RX bug.
+
+Read-only instrumentation in the existing diag_rx handler (fires per WMT
+retry), atomic with the conn-side + AP-TX reads already there. No driver
+behaviour change.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ drivers/soc/mediatek/mtk-conninfra-mt6785.c | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+ mode change 100755 => 100644 drivers/soc/mediatek/mtk-conninfra-mt6785.c
+
+diff --git a/drivers/soc/mediatek/mtk-conninfra-mt6785.c b/drivers/soc/mediatek/mtk-conninfra-mt6785.c
+old mode 100755
+new mode 100644
+index 983800d0f..2f12cb1e3
+--- a/drivers/soc/mediatek/mtk-conninfra-mt6785.c
++++ b/drivers/soc/mediatek/mtk-conninfra-mt6785.c
+@@ -1925,6 +1925,26 @@ static void mtk_conninfra_diag_rx(struct mtk_conninfra *c, const char *label)
+ 		if (core)
+ 			iounmap(core);
+ 	}
++	/* r117 DECISIVE reception-vs-delivery split: AP-RX DMA write-pointer.  The
++	 * recv() just timed out (n=-110), so NOTHING on the AP consumed a reply —
++	 * therefore a non-zero RX WPT can ONLY mean the conn replied and the AP DMA
++	 * captured it (gate = our poll-recv parsing).  WPT==0 with EN live + the
++	 * conn-side TX silent = the conn never replied (gate is an AP-provided input
++	 * difference, not an AP-RX bug).  Mainline-only binary read — no stock
++	 * comparison, so no consumer-resets-the-meter artifact. */
++	{
++		void __iomem *rvff = ioremap(0x11000c00u, 0x80);
++
++		if (rvff)
++			dev_info(c->dev,
++				 "diag_rx[%s] AP-RX: VFF EN=0x%08x WPT=0x%08x RPT=0x%08x VALID=0x%08x ADDR=0x%08x LEN=0x%08x INTBUF=0x%08x\n",
++				 label, readl(rvff + 0x08), readl(rvff + 0x2c),
++				 readl(rvff + 0x30), readl(rvff + 0x3c),
++				 readl(rvff + 0x1c), readl(rvff + 0x24),
++				 readl(rvff + 0x38));
++		if (rvff)
++			iounmap(rvff);
++	}
+ }
+ 
+ /* Send one WMT command (raw SDU payload) over STP/BTIF and collect the event
+-- 
+2.56.0
+

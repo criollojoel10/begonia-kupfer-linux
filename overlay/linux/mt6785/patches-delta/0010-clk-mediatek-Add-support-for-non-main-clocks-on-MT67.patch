@@ -1,0 +1,829 @@
+From f27dc45fbd4ef10589df4a673a4f02e429416622 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Mon, 28 Apr 2025 01:10:04 +0200
+Subject: [PATCH 010/115] clk: mediatek: Add support for non-main clocks on
+ MT6785
+
+This commit adds support for various subsystem clocks on the MT6785
+platform, including AI Processing Unit, Audio, Camera, Image,
+MicroController Unit, MFlexGraphics, MultiMedia, Video Decoders and
+Video Encoders clocks.
+
+These changes are required to enable proper clock management for different
+hardware blocks beyond the main clock controller.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/clk/mediatek/Kconfig           |  63 +++++++++++++++
+ drivers/clk/mediatek/Makefile          |   9 +++
+ drivers/clk/mediatek/clk-mt6785-apu.c  |  92 +++++++++++++++++++++
+ drivers/clk/mediatek/clk-mt6785-aud.c  | 108 +++++++++++++++++++++++++
+ drivers/clk/mediatek/clk-mt6785-cam.c  |  57 +++++++++++++
+ drivers/clk/mediatek/clk-mt6785-img.c  |  57 +++++++++++++
+ drivers/clk/mediatek/clk-mt6785-mcu.c  |  60 ++++++++++++++
+ drivers/clk/mediatek/clk-mt6785-mfg.c  |  49 +++++++++++
+ drivers/clk/mediatek/clk-mt6785-mm.c   | 107 ++++++++++++++++++++++++
+ drivers/clk/mediatek/clk-mt6785-vdec.c |  59 ++++++++++++++
+ drivers/clk/mediatek/clk-mt6785-venc.c |  51 ++++++++++++
+ 11 files changed, 712 insertions(+)
+ create mode 100644 drivers/clk/mediatek/clk-mt6785-apu.c
+ create mode 100644 drivers/clk/mediatek/clk-mt6785-aud.c
+ create mode 100644 drivers/clk/mediatek/clk-mt6785-cam.c
+ create mode 100644 drivers/clk/mediatek/clk-mt6785-img.c
+ create mode 100644 drivers/clk/mediatek/clk-mt6785-mcu.c
+ create mode 100644 drivers/clk/mediatek/clk-mt6785-mfg.c
+ create mode 100644 drivers/clk/mediatek/clk-mt6785-mm.c
+ create mode 100644 drivers/clk/mediatek/clk-mt6785-vdec.c
+ create mode 100644 drivers/clk/mediatek/clk-mt6785-venc.c
+
+diff --git a/drivers/clk/mediatek/Kconfig b/drivers/clk/mediatek/Kconfig
+index 10f61eb0a..540929989 100644
+--- a/drivers/clk/mediatek/Kconfig
++++ b/drivers/clk/mediatek/Kconfig
+@@ -311,6 +311,69 @@ config COMMON_CLK_MT6785
+ 	help
+ 	  This driver supports MediaTek MT6785 basic clocks.
+ 
++config COMMON_CLK_MT6785_APU
++	tristate "Clock driver for MediaTek MT6785 AI Processing Unit"
++	depends on COMMON_CLK_MT6785
++	default COMMON_CLK_MT6785
++	help
++	  This driver supports MediaTek MT6785 AI Processing Unit clocks.
++
++config COMMON_CLK_MT6785_AUD
++	tristate "Clock driver for MediaTek MT6785 Audio"
++	depends on COMMON_CLK_MT6785
++	default COMMON_CLK_MT6785
++	help
++	  This driver supports MediaTek MT6785 Audio clocks.
++
++config COMMON_CLK_MT6785_CAM
++	tristate "Clock driver for MediaTek MT6785 Camera"
++	depends on COMMON_CLK_MT6785
++	default COMMON_CLK_MT6785
++	help
++	  This driver supports MediaTek MT6785 Camera clocks.
++
++config COMMON_CLK_MT6785_IMG
++	tristate "Clock driver for MediaTek MT6785 Image"
++	depends on COMMON_CLK_MT6785
++	default COMMON_CLK_MT6785
++	help
++	  This driver supports MediaTek MT6785 Image clocks.
++
++config COMMON_CLK_MT6785_MCU
++	tristate "Clock driver for MediaTek MT6785 MicroController Unit"
++	depends on COMMON_CLK_MT6785
++	default COMMON_CLK_MT6785
++	help
++	  This driver supports MediaTek MT6785 MicroController Unit clocks.
++
++config COMMON_CLK_MT6785_MFG
++	tristate "Clock driver for MediaTek MT6785 MFlexGraphics"
++	depends on COMMON_CLK_MT6785
++	default COMMON_CLK_MT6785
++	help
++	  This driver supports MediaTek MT6785 MFlexGraphics clocks.
++
++config COMMON_CLK_MT6785_MM
++	tristate "Clock driver for MediaTek MT6785 MultiMedia"
++	depends on COMMON_CLK_MT6785
++	default COMMON_CLK_MT6785
++	help
++	  This driver supports MediaTek MT6785 MultiMedia clocks.
++
++config COMMON_CLK_MT6785_VDEC
++	tristate "Clock driver for MediaTek MT6785 Video Decoders"
++	depends on COMMON_CLK_MT6785
++	default COMMON_CLK_MT6785
++	help
++	  This driver supports MediaTek MT6785 Video Decoders clocks.
++
++config COMMON_CLK_MT6785_VENC
++	tristate "Clock driver for MediaTek MT6785 Video Encoders"
++	depends on COMMON_CLK_MT6785
++	default COMMON_CLK_MT6785
++	help
++	  This driver supports MediaTek MT6785 Video Encoders clocks.
++
+ config COMMON_CLK_MT6795
+ 	tristate "Clock driver for MediaTek MT6795"
+ 	depends on ARCH_MEDIATEK || COMPILE_TEST
+diff --git a/drivers/clk/mediatek/Makefile b/drivers/clk/mediatek/Makefile
+index b147866a5..a3bfead50 100644
+--- a/drivers/clk/mediatek/Makefile
++++ b/drivers/clk/mediatek/Makefile
+@@ -24,6 +24,15 @@ obj-$(CONFIG_COMMON_CLK_MT6779_VENCSYS) += clk-mt6779-venc.o
+ obj-$(CONFIG_COMMON_CLK_MT6779_MFGCFG) += clk-mt6779-mfg.o
+ obj-$(CONFIG_COMMON_CLK_MT6779_AUDSYS) += clk-mt6779-aud.o
+ obj-$(CONFIG_COMMON_CLK_MT6785) += clk-mt6785-apmixed.o clk-mt6785-infra.o clk-mt6785-top.o
++obj-$(CONFIG_COMMON_CLK_MT6785_APU) += clk-mt6785-apu.o
++obj-$(CONFIG_COMMON_CLK_MT6785_AUD) += clk-mt6785-aud.o
++obj-$(CONFIG_COMMON_CLK_MT6785_CAM) += clk-mt6785-cam.o
++obj-$(CONFIG_COMMON_CLK_MT6785_IMG) += clk-mt6785-img.o
++obj-$(CONFIG_COMMON_CLK_MT6785_MCU) += clk-mt6785-mcu.o
++obj-$(CONFIG_COMMON_CLK_MT6785_MFG) += clk-mt6785-mfg.o
++obj-$(CONFIG_COMMON_CLK_MT6785_MM) += clk-mt6785-mm.o
++obj-$(CONFIG_COMMON_CLK_MT6785_VDEC) += clk-mt6785-vdec.o
++obj-$(CONFIG_COMMON_CLK_MT6785_VENC) += clk-mt6785-venc.o
+ obj-$(CONFIG_COMMON_CLK_MT6795) += clk-mt6795-apmixedsys.o clk-mt6795-infracfg.o \
+ 				   clk-mt6795-pericfg.o clk-mt6795-topckgen.o
+ obj-$(CONFIG_COMMON_CLK_MT6795_MFGCFG) += clk-mt6795-mfg.o
+diff --git a/drivers/clk/mediatek/clk-mt6785-apu.c b/drivers/clk/mediatek/clk-mt6785-apu.c
+new file mode 100644
+index 000000000..71505667b
+--- /dev/null
++++ b/drivers/clk/mediatek/clk-mt6785-apu.c
+@@ -0,0 +1,92 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (c) 2025 Dinolek <git@dinolek.me>
++ */
++
++#include <dt-bindings/clock/mediatek,mt6785-clk.h>
++#include <linux/platform_device.h>
++
++#include "clk-gate.h"
++#include "clk-mtk.h"
++
++static const struct mtk_gate_regs apu_cg_regs = {
++	.sta_ofs = 0x0,
++	.clr_ofs = 0x8,
++	.set_ofs = 0x4,
++};
++
++#define GATE_APU(_id, _name, _parent, _shift)               \
++	GATE_MTK(_id, _name, _parent, &apu_cg_regs, _shift, \
++		 &mtk_clk_gate_ops_setclr)
++
++static const struct mtk_gate apu_core0_clks[] = {
++	GATE_APU(CLK_APU_MAIN, "apu0_main", "top_dsp1", 0),
++	GATE_APU(CLK_APU_AXI, "apu0_axi", "top_dsp1", 1),
++	GATE_APU(CLK_APU_JTAG, "apu0_jtag", "top_dsp1", 2),
++};
++
++static const struct mtk_gate apu_core1_clks[] = {
++	GATE_APU(CLK_APU_MAIN, "apu1_main", "top_dsp2", 0),
++	GATE_APU(CLK_APU_AXI, "apu1_axi", "top_dsp2", 1),
++	GATE_APU(CLK_APU_JTAG, "apu1_jtag", "top_dsp2", 2),
++};
++
++static const struct mtk_gate apu_conn_clks[] = {
++	GATE_APU(CLK_APU_CONN_MAIN, "apu_conn_main", "top_dsp1", 0),
++	GATE_APU(CLK_APU_CONN_AHB, "apu_conn_ahb", "top_dsp0", 1),
++	GATE_APU(CLK_APU_CONN_AXI, "apu_conn_axi", "top_dsp0", 2),
++	GATE_APU(CLK_APU_CONN_ISP, "apu_conn_isp", "top_dsp0", 3),
++	GATE_APU(CLK_APU_CONN_CAM_ADL, "apu_conn_cam_adl", "top_dsp0", 4),
++	GATE_APU(CLK_APU_CONN_IMG_ADL, "apu_conn_img_adl", "top_dsp0", 5),
++	GATE_APU(CLK_APU_CONN_EMI_26M, "apu_conn_emi_26m", "top_dsp0", 6),
++	GATE_APU(CLK_APU_CONN_VPU_UDI, "apu_conn_vpu_udi", "top_dsp0", 7),
++};
++
++static const struct mtk_gate apu_vcore_clks[] = {
++	GATE_APU(CLK_APU_VCORE_AHB, "apu_vcore_ahb", "top_ipu_if", 0),
++	GATE_APU(CLK_APU_VCORE_AXI, "apu_vcore_axi", "top_ipu_if", 1),
++	GATE_APU(CLK_APU_VCORE_ADL, "apu_vcore_adl", "top_ipu_if", 2),
++	GATE_APU(CLK_APU_VCORE_QOS, "apu_vcore_qos", "top_ipu_if", 3),
++};
++
++static const struct mtk_clk_desc apu_core0_desc = {
++	.clks = apu_core0_clks,
++	.num_clks = ARRAY_SIZE(apu_core0_clks),
++};
++
++static const struct mtk_clk_desc apu_core1_desc = {
++	.clks = apu_core1_clks,
++	.num_clks = ARRAY_SIZE(apu_core1_clks),
++};
++
++static const struct mtk_clk_desc apu_conn_desc = {
++	.clks = apu_conn_clks,
++	.num_clks = ARRAY_SIZE(apu_conn_clks),
++};
++
++static const struct mtk_clk_desc apu_vcore_desc = {
++	.clks = apu_vcore_clks,
++	.num_clks = ARRAY_SIZE(apu_vcore_clks),
++};
++
++static const struct of_device_id of_match_clk_mt6785_apu[] = {
++	{ .compatible = "mediatek,mt6785-apu_core0", .data = &apu_core0_desc },
++	{ .compatible = "mediatek,mt6785-apu_core1", .data = &apu_core1_desc },
++	{ .compatible = "mediatek,mt6785-apu_conn", .data = &apu_conn_desc },
++	{ .compatible = "mediatek,mt6785-apu_vcore", .data = &apu_vcore_desc },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, of_match_clk_mt6785_apu);
++
++static struct platform_driver clk_mt6785_apu_drv = {
++	.probe = mtk_clk_simple_probe,
++	.remove = mtk_clk_simple_remove,
++	.driver = {
++		.name = "clk-mt6785-apu",
++		.of_match_table = of_match_clk_mt6785_apu,
++	},
++};
++module_platform_driver(clk_mt6785_apu_drv);
++
++MODULE_DESCRIPTION("MediaTek MT6785 AI Processing Unit clocks driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/clk/mediatek/clk-mt6785-aud.c b/drivers/clk/mediatek/clk-mt6785-aud.c
+new file mode 100644
+index 000000000..b195ed198
+--- /dev/null
++++ b/drivers/clk/mediatek/clk-mt6785-aud.c
+@@ -0,0 +1,108 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (c) 2025 Dinolek <git@dinolek.me>
++ */
++
++#include <dt-bindings/clock/mediatek,mt6785-clk.h>
++#include <linux/of_platform.h>
++#include <linux/platform_device.h>
++
++#include "clk-gate.h"
++#include "clk-mtk.h"
++
++static const struct mtk_gate_regs aud0_cg_regs = {
++	.sta_ofs = 0x0,
++	.clr_ofs = 0x0,
++	.set_ofs = 0x0,
++};
++
++static const struct mtk_gate_regs aud1_cg_regs = {
++	.sta_ofs = 0x4,
++	.clr_ofs = 0x4,
++	.set_ofs = 0x4,
++};
++
++#define GATE_AUD0(_id, _name, _parent, _shift)               \
++	GATE_MTK(_id, _name, _parent, &aud0_cg_regs, _shift, \
++		 &mtk_clk_gate_ops_no_setclr)
++
++#define GATE_AUD1(_id, _name, _parent, _shift)               \
++	GATE_MTK(_id, _name, _parent, &aud1_cg_regs, _shift, \
++		 &mtk_clk_gate_ops_no_setclr)
++
++static const struct mtk_gate aud_clks[] = {
++	GATE_AUD0(CLK_AUD_AFE, "aud_afe", "top_audio", 2),
++	GATE_AUD0(CLK_AUD_22M, "aud_22m", "top_audio_eng1", 8),
++	GATE_AUD0(CLK_AUD_24M, "aud_24m", "top_audio_eng2", 9),
++	GATE_AUD0(CLK_AUD_APLL2_TUNER, "aud_apll2_tuner", "top_audio_eng2", 18),
++	GATE_AUD0(CLK_AUD_APLL_TUNER, "aud_apll_tuner", "top_audio_eng1", 19),
++	GATE_AUD0(CLK_AUD_TDM, "aud_tdm", "top_audio_eng1", 20),
++	GATE_AUD0(CLK_AUD_ADC, "aud_adc", "top_audio", 24),
++	GATE_AUD0(CLK_AUD_DAC, "aud_dac", "top_audio", 25),
++	GATE_AUD0(CLK_AUD_DAC_PREDIS, "aud_dac_predis", "top_audio", 26),
++	GATE_AUD0(CLK_AUD_TML, "aud_tml", "top_audio", 27),
++	GATE_AUD0(CLK_AUD_NLE, "aud_nle", "top_audio", 28),
++
++	GATE_AUD1(CLK_AUD_I2S1, "aud_i2s1", "top_audio", 4),
++	GATE_AUD1(CLK_AUD_I2S2, "aud_i2s2", "top_audio", 5),
++	GATE_AUD1(CLK_AUD_I2S3, "aud_i2s3", "top_audio", 6),
++	GATE_AUD1(CLK_AUD_I2S4, "aud_i2s4", "top_audio", 7),
++	GATE_AUD1(CLK_AUD_I2S5, "aud_i2s5", "top_audio", 8),
++	GATE_AUD1(CLK_AUD_CONN_I2S, "aud_conn_i2s", "top_audio", 12),
++	GATE_AUD1(CLK_AUD_GENERAL1, "aud_general1", "top_audio", 13),
++	GATE_AUD1(CLK_AUD_GENERAL2, "aud_general2", "top_audio", 14),
++	GATE_AUD1(CLK_AUD_DAC_HIRES, "aud_dac_hires", "top_audio_hires", 15),
++	GATE_AUD1(CLK_AUD_ADC_HIRES, "aud_adc_hires", "top_audio_hires", 16),
++	GATE_AUD1(CLK_AUD_ADC_HIRES_TML, "aud_adc_hires_tml", "top_audio_hires", 17),
++	GATE_AUD1(CLK_AUD_ADDA6_ADC, "aud_adda6_adc", "top_audio", 20),
++	GATE_AUD1(CLK_AUD_ADDA6_ADC_HIRES, "aud_adda6_adc_hires", "top_audio_hires", 21),
++	GATE_AUD1(CLK_AUD_3RD_DAC, "aud_3rd_dac", "top_audio", 28),
++	GATE_AUD1(CLK_AUD_3RD_DAC_PREDIS, "aud_3rd_dac_predis", "top_audio", 29),
++	GATE_AUD1(CLK_AUD_3RD_DAC_TML, "aud_3rd_dac_tml", "top_audio", 30),
++	GATE_AUD1(CLK_AUD_3RD_DAC_HIRES, "aud_3rd_dac_hires", "top_audio_hires", 31),
++};
++
++static const struct mtk_clk_desc aud_desc = {
++	.clks = aud_clks,
++	.num_clks = ARRAY_SIZE(aud_clks),
++};
++
++static int clk_mt6785_aud_probe(struct platform_device *pdev)
++{
++	int r;
++
++	r = mtk_clk_simple_probe(pdev);
++	if (r)
++		return r;
++
++	r = devm_of_platform_populate(&pdev->dev);
++	if (r)
++		mtk_clk_simple_remove(pdev);
++
++	return r;
++}
++
++static void clk_mt6785_aud_remove(struct platform_device *pdev)
++{
++	of_platform_depopulate(&pdev->dev);
++	mtk_clk_simple_remove(pdev);
++}
++
++static const struct of_device_id of_match_clk_mt6785_aud[] = {
++	{ .compatible = "mediatek,mt6785-audsys", .data = &aud_desc },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, of_match_clk_mt6785_aud);
++
++static struct platform_driver clk_mt6785_aud_drv = {
++	.probe = clk_mt6785_aud_probe,
++	.remove = clk_mt6785_aud_remove,
++	.driver = {
++		.name = "clk-mt6785-aud",
++		.of_match_table = of_match_clk_mt6785_aud,
++	},
++};
++module_platform_driver(clk_mt6785_aud_drv);
++
++MODULE_DESCRIPTION("MediaTek MT6785 Audio clocks driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/clk/mediatek/clk-mt6785-cam.c b/drivers/clk/mediatek/clk-mt6785-cam.c
+new file mode 100644
+index 000000000..3e360c43f
+--- /dev/null
++++ b/drivers/clk/mediatek/clk-mt6785-cam.c
+@@ -0,0 +1,57 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (c) 2025 Dinolek <git@dinolek.me>
++ */
++
++#include <dt-bindings/clock/mediatek,mt6785-clk.h>
++#include <linux/platform_device.h>
++
++#include "clk-gate.h"
++#include "clk-mtk.h"
++
++static const struct mtk_gate_regs cam_cg_regs = {
++	.sta_ofs = 0x0,
++	.clr_ofs = 0x8,
++	.set_ofs = 0x4,
++};
++
++#define GATE_CAM(_id, _name, _parent, _shift)               \
++	GATE_MTK(_id, _name, _parent, &cam_cg_regs, _shift, \
++		 &mtk_clk_gate_ops_setclr)
++
++static const struct mtk_gate cam_clks[] = {
++	GATE_CAM(CLK_CAM_LARB6, "cam_larb6", "top_cam", 0),
++	GATE_CAM(CLK_CAM_LARB7, "cam_larb7", "top_cam", 2),
++	GATE_CAM(CLK_CAM_GALS, "cam_gals", "top_cam", 4),
++	GATE_CAM(CLK_CAM_MAIN, "cam_main", "top_cam", 6),
++	GATE_CAM(CLK_CAM_TG, "cam_tg", "top_cam", 7),
++	GATE_CAM(CLK_CAM_SENINF, "cam_seninf", "top_cam", 8),
++	GATE_CAM(CLK_CAM_SV0, "cam_sv0", "top_cam", 9),
++	GATE_CAM(CLK_CAM_SV1, "cam_sv1", "top_cam", 10),
++	GATE_CAM(CLK_CAM_CCU, "cam_ccu", "top_cam", 12),
++	GATE_CAM(CLK_CAM_FAKE_ENG, "cam_fake_eng", "top_cam", 13),
++};
++
++static const struct mtk_clk_desc cam_desc = {
++	.clks = cam_clks,
++	.num_clks = ARRAY_SIZE(cam_clks),
++};
++
++static const struct of_device_id of_match_clk_mt6785_cam[] = {
++	{ .compatible = "mediatek,mt6785-camsys", .data = &cam_desc },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, of_match_clk_mt6785_cam);
++
++static struct platform_driver clk_mt6785_cam_drv = {
++	.probe = mtk_clk_simple_probe,
++	.remove = mtk_clk_simple_remove,
++	.driver = {
++		.name = "clk-mt6785-cam",
++		.of_match_table = of_match_clk_mt6785_cam,
++	},
++};
++module_platform_driver(clk_mt6785_cam_drv);
++
++MODULE_DESCRIPTION("MediaTek MT6785 Camera clocks driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/clk/mediatek/clk-mt6785-img.c b/drivers/clk/mediatek/clk-mt6785-img.c
+new file mode 100644
+index 000000000..33de8ae6a
+--- /dev/null
++++ b/drivers/clk/mediatek/clk-mt6785-img.c
+@@ -0,0 +1,57 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (c) 2025 Dinolek <git@dinolek.me>
++ */
++
++#include <dt-bindings/clock/mediatek,mt6785-clk.h>
++#include <linux/platform_device.h>
++
++#include "clk-gate.h"
++#include "clk-mtk.h"
++
++static const struct mtk_gate_regs img_cg_regs = {
++	.sta_ofs = 0x0,
++	.clr_ofs = 0x8,
++	.set_ofs = 0x4,
++};
++
++#define GATE_IMG(_id, _name, _parent, _shift)               \
++	GATE_MTK(_id, _name, _parent, &img_cg_regs, _shift, \
++		 &mtk_clk_gate_ops_setclr)
++
++static const struct mtk_gate img_clks[] = {
++	GATE_IMG(CLK_IMG_LARB5, "img_larb5", "top_img", 0),
++	GATE_IMG(CLK_IMG_LARB4, "img_larb4", "top_img", 1),
++	GATE_IMG(CLK_IMG_DIP, "img_dip", "top_img", 2),
++	GATE_IMG(CLK_IMG_FDVT, "img_fdvt", "top_img", 3),
++	GATE_IMG(CLK_IMG_DPE, "img_dpe", "top_img", 4),
++	GATE_IMG(CLK_IMG_RSC, "img_rsc", "top_img", 5),
++	GATE_IMG(CLK_IMG_MFB, "img_mfb", "top_img", 6),
++	GATE_IMG(CLK_IMG_WPE_A, "img_wpe_a", "top_img", 7),
++	GATE_IMG(CLK_IMG_WPE_B, "img_wpe_b", "top_img", 8),
++	GATE_IMG(CLK_IMG_OWE, "img_owe", "top_img", 9),
++};
++
++static const struct mtk_clk_desc img_desc = {
++	.clks = img_clks,
++	.num_clks = ARRAY_SIZE(img_clks),
++};
++
++static const struct of_device_id of_match_clk_mt6785_img[] = {
++	{ .compatible = "mediatek,mt6785-imgsys", .data = &img_desc },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, of_match_clk_mt6785_img);
++
++static struct platform_driver clk_mt6785_img_drv = {
++	.probe = mtk_clk_simple_probe,
++	.remove = mtk_clk_simple_remove,
++	.driver = {
++		.name = "clk-mt6785-img",
++		.of_match_table = of_match_clk_mt6785_img,
++	},
++};
++module_platform_driver(clk_mt6785_img_drv);
++
++MODULE_DESCRIPTION("MediaTek MT6785 Image clocks driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/clk/mediatek/clk-mt6785-mcu.c b/drivers/clk/mediatek/clk-mt6785-mcu.c
+new file mode 100644
+index 000000000..3bc829894
+--- /dev/null
++++ b/drivers/clk/mediatek/clk-mt6785-mcu.c
+@@ -0,0 +1,60 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (c) 2025 Dinolek <git@dinolek.me>
++ */
++
++#include <dt-bindings/clock/mediatek,mt6785-clk.h>
++#include <linux/platform_device.h>
++
++#include "clk-mtk.h"
++
++static const char *const mcu_armpll_ll_parents[] = {
++	"clk26m",
++	"armpll_ll",
++	"armpll_div_pll1",
++	"armpll_div_pll2"
++};
++
++static const char *const mcu_armpll_bl_parents[] = {
++	"clk26m",
++	"armpll_bl",
++	"armpll_div_pll1",
++	"armpll_div_pll2"
++};
++
++static const char *const mcu_armpll_bus_parents[] = {
++	"clk26m",
++	"ccipll",
++	"armpll_div_pll1",
++	"armpll_div_pll2"
++};
++
++static struct mtk_composite mcu_muxes[] = {
++	MUX(CLK_MCU_ARMPLL_LL, "mcu_armpll_ll", mcu_armpll_ll_parents, 0x2a0, 9, 2),
++	MUX(CLK_MCU_ARMPLL_BL, "mcu_armpll_bl", mcu_armpll_bl_parents, 0x2a4, 9, 2),
++	MUX(CLK_MCU_ARMPLL_BUS, "mcu_armpll_bus", mcu_armpll_bus_parents, 0x2e0, 9, 2),
++};
++
++static const struct mtk_clk_desc mcu_desc = {
++	.composite_clks = mcu_muxes,
++	.num_composite_clks = ARRAY_SIZE(mcu_muxes),
++};
++
++static const struct of_device_id of_match_clk_mt6785_mcu[] = {
++	{ .compatible = "mediatek,mt6785-mcusys", .data = &mcu_desc },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, of_match_clk_mt6785_mcu);
++
++static struct platform_driver clk_mt6785_mcu_drv = {
++	.probe = mtk_clk_simple_probe,
++	.remove = mtk_clk_simple_remove,
++	.driver = {
++		.name = "clk-mt6785-mcu",
++		.of_match_table = of_match_clk_mt6785_mcu,
++	},
++};
++module_platform_driver(clk_mt6785_mcu_drv);
++
++MODULE_DESCRIPTION("MediaTek MT6785 MicroController Unit clocks driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/clk/mediatek/clk-mt6785-mfg.c b/drivers/clk/mediatek/clk-mt6785-mfg.c
+new file mode 100644
+index 000000000..52479a958
+--- /dev/null
++++ b/drivers/clk/mediatek/clk-mt6785-mfg.c
+@@ -0,0 +1,49 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (c) 2025 Dinolek <git@dinolek.me>
++ */
++
++#include <dt-bindings/clock/mediatek,mt6785-clk.h>
++#include <linux/platform_device.h>
++
++#include "clk-gate.h"
++#include "clk-mtk.h"
++
++static const struct mtk_gate_regs mfg_cg_regs = {
++	.sta_ofs = 0x0,
++	.clr_ofs = 0x8,
++	.set_ofs = 0x4,
++};
++
++#define GATE_MFG(_id, _name, _parent, _shift)                     \
++	GATE_MTK_FLAGS(_id, _name, _parent, &mfg_cg_regs, _shift, \
++		       &mtk_clk_gate_ops_setclr, CLK_SET_RATE_PARENT)
++
++static const struct mtk_gate mfg_clks[] = {
++	GATE_MFG(CLK_MFG_BG3D, "mfg_bg3d", "top_mfg", 0),
++};
++
++static const struct mtk_clk_desc mfg_desc = {
++	.clks = mfg_clks,
++	.num_clks = ARRAY_SIZE(mfg_clks),
++	.need_runtime_pm = true,
++};
++
++static const struct of_device_id of_match_clk_mt6785_mfg[] = {
++	{ .compatible = "mediatek,mt6785-mfgcfg", .data = &mfg_desc },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, of_match_clk_mt6785_mfg);
++
++static struct platform_driver clk_mt6785_mfg_drv = {
++	.probe = mtk_clk_simple_probe,
++	.remove = mtk_clk_simple_remove,
++	.driver = {
++		.name = "clk-mt6785-mfg",
++		.of_match_table = of_match_clk_mt6785_mfg,
++	},
++};
++module_platform_driver(clk_mt6785_mfg_drv);
++
++MODULE_DESCRIPTION("MediaTek MT6785 GPU MFlexGraphics driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/clk/mediatek/clk-mt6785-mm.c b/drivers/clk/mediatek/clk-mt6785-mm.c
+new file mode 100644
+index 000000000..0bb33cd2c
+--- /dev/null
++++ b/drivers/clk/mediatek/clk-mt6785-mm.c
+@@ -0,0 +1,107 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (c) 2025 Dinolek <git@dinolek.me>
++ */
++
++#include <dt-bindings/clock/mediatek,mt6785-clk.h>
++#include <linux/platform_device.h>
++
++#include "clk-gate.h"
++#include "clk-mtk.h"
++
++static const struct mtk_gate_regs mm0_cg_regs = {
++	.sta_ofs = 0x100,
++	.clr_ofs = 0x108,
++	.set_ofs = 0x104,
++};
++
++static const struct mtk_gate_regs mm1_cg_regs = {
++	.sta_ofs = 0x110,
++	.clr_ofs = 0x118,
++	.set_ofs = 0x114,
++};
++
++#define GATE_MM0(_id, _name, _parent, _shift)               \
++	GATE_MTK(_id, _name, _parent, &mm0_cg_regs, _shift, \
++		 &mtk_clk_gate_ops_setclr)
++
++#define GATE_MM1(_id, _name, _parent, _shift)               \
++	GATE_MTK(_id, _name, _parent, &mm1_cg_regs, _shift, \
++		 &mtk_clk_gate_ops_setclr)
++
++static const struct mtk_gate mm_clks[] = {
++	GATE_MM0(CLK_MM_SMI_COMMON, "mm_smi_common", "top_mm", 0),
++	GATE_MM0(CLK_MM_SMI_LARB0, "mm_smi_larb0", "top_mm", 1),
++	GATE_MM0(CLK_MM_SMI_LARB1, "mm_smi_larb1", "top_mm", 2),
++	GATE_MM0(CLK_MM_GALS_COMM0, "mm_gals_comm0", "top_mm", 3),
++	GATE_MM0(CLK_MM_GALS_COMM1, "mm_gals_comm1", "top_mm", 4),
++	GATE_MM0(CLK_MM_GALS_CCU2MM, "mm_gals_ccu2mm", "top_mm", 5),
++	GATE_MM0(CLK_MM_GALS_IPU12MM, "mm_gals_ipu12mm", "top_mm", 6),
++	GATE_MM0(CLK_MM_GALS_IMG2MM, "mm_gals_img2mm", "top_mm", 7),
++	GATE_MM0(CLK_MM_GALS_CAM2MM, "mm_gals_cam2mm", "top_mm", 8),
++	GATE_MM0(CLK_MM_GALS_IPU2MM, "mm_gals_ipu2mm", "top_mm", 9),
++	GATE_MM0(CLK_MM_MDP_DL_TX, "mm_mdp_dl_tx", "top_mm", 10),
++	GATE_MM0(CLK_MM_IPU_DL_TX, "mm_ipu_dl_tx", "top_mm", 11),
++	GATE_MM0(CLK_MM_MDP_RDMA0, "mm_mdp_rdma0", "top_mm", 12),
++	GATE_MM0(CLK_MM_MDP_RDMA1, "mm_mdp_rdma1", "top_mm", 13),
++	GATE_MM0(CLK_MM_MDP_RSZ0, "mm_mdp_rsz0", "top_mm", 14),
++	GATE_MM0(CLK_MM_MDP_RSZ1, "mm_mdp_rsz1", "top_mm", 15),
++	GATE_MM0(CLK_MM_MDP_TDSHP, "mm_mdp_tdshp", "top_mm", 16),
++	GATE_MM0(CLK_MM_MDP_WROT0, "mm_mdp_wrot0", "top_mm", 17),
++	GATE_MM0(CLK_MM_MDP_WROT1, "mm_mdp_wrot1", "top_mm", 18),
++	GATE_MM0(CLK_MM_FAKE_ENG, "mm_fake_eng", "top_mm", 19),
++	GATE_MM0(CLK_MM_DISP_OVL0, "mm_disp_ovl0", "top_mm", 20),
++	GATE_MM0(CLK_MM_DISP_OVL0_2L, "mm_disp_ovl0_2l", "top_mm", 21),
++	GATE_MM0(CLK_MM_DISP_OVL1_2L, "mm_disp_ovl1_2l", "top_mm", 22),
++	GATE_MM0(CLK_MM_DISP_RDMA0, "mm_disp_rdma0", "top_mm", 23),
++	GATE_MM0(CLK_MM_DISP_RDMA1, "mm_disp_rdma1", "top_mm", 24),
++	GATE_MM0(CLK_MM_DISP_WDMA0, "mm_disp_wdma0", "top_mm", 25),
++	GATE_MM0(CLK_MM_DISP_COLOR0, "mm_disp_color0", "top_mm", 26),
++	GATE_MM0(CLK_MM_DISP_CCORR0, "mm_disp_ccorr0", "top_mm", 27),
++	GATE_MM0(CLK_MM_DISP_AAL0, "mm_disp_aal0", "top_mm", 28),
++	GATE_MM0(CLK_MM_DISP_GAMMA0, "mm_disp_gamma0", "top_mm", 29),
++	GATE_MM0(CLK_MM_DISP_DITHER0, "mm_disp_dither0", "top_mm", 30),
++	GATE_MM0(CLK_MM_DISP_SPLIT, "mm_disp_split", "top_mm", 31),
++
++	GATE_MM1(CLK_MM_DSI_MM, "mm_dsi_mm", "top_mm", 0),
++	GATE_MM1(CLK_MM_DSI_IF, "mm_dsi_if", "top_mm", 1),
++	GATE_MM1(CLK_MM_DPI_MM, "mm_dpi_mm", "top_mm", 2),
++	GATE_MM1(CLK_MM_DPI_IF, "mm_dpi_if", "top_dpi", 3),
++	GATE_MM1(CLK_MM_FAKE_ENG2, "mm_fake_eng2", "top_mm", 4),
++	GATE_MM1(CLK_MM_MDP_DL_RX, "mm_mdp_dl_rx", "top_mm", 5),
++	GATE_MM1(CLK_MM_IPU_DL_RX, "mm_ipu_dl_rx", "top_mm", 6),
++	GATE_MM1(CLK_MM_26M, "mm_26m", "clk26m", 7),
++	GATE_MM1(CLK_MM_R2Y, "mm_r2y", "top_mm", 8),
++	GATE_MM1(CLK_MM_DISP_RSZ, "mm_disp_rsz", "top_mm", 9),
++	GATE_MM1(CLK_MM_MDP_AAL, "mm_mdp_aal", "top_mm", 10),
++	GATE_MM1(CLK_MM_MDP_HDR, "mm_mdp_hdr", "top_mm", 11),
++	GATE_MM1(CLK_MM_DBI_MM, "mm_dbi_mm", "top_mm", 12),
++	GATE_MM1(CLK_MM_DBI_IF, "mm_dbi_if", "top_dpi", 13),
++	GATE_MM1(CLK_MM_DISP_POSTMASK0, "mm_disp_postmask0", "top_mm", 14),
++	GATE_MM1(CLK_MM_DISP_HRT_BW, "mm_disp_hrt_bw", "top_mm", 15),
++	GATE_MM1(CLK_MM_DISP_OVL_FBDC, "mm_disp_ovl_fbdc", "top_mm", 16),
++};
++
++static const struct mtk_clk_desc mm_desc = {
++	.clks = mm_clks,
++	.num_clks = ARRAY_SIZE(mm_clks),
++};
++
++static const struct platform_device_id clk_mt6785_mm_id_table[] = {
++	{ .name = "clk-mt6785-mm", .driver_data = (kernel_ulong_t)&mm_desc },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(platform, clk_mt6785_mm_id_table);
++
++static struct platform_driver clk_mt6785_mm_drv = {
++	.probe = mtk_clk_pdev_probe,
++	.remove = mtk_clk_pdev_remove,
++	.driver = {
++		.name = "clk-mt6785-mm",
++	},
++	.id_table = clk_mt6785_mm_id_table,
++};
++module_platform_driver(clk_mt6785_mm_drv);
++
++MODULE_DESCRIPTION("MediaTek MT6785 MultiMedia clocks driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/clk/mediatek/clk-mt6785-vdec.c b/drivers/clk/mediatek/clk-mt6785-vdec.c
+new file mode 100644
+index 000000000..c11af8deb
+--- /dev/null
++++ b/drivers/clk/mediatek/clk-mt6785-vdec.c
+@@ -0,0 +1,59 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (c) 2025 Dinolek <git@dinolek.me>
++ */
++
++#include <dt-bindings/clock/mediatek,mt6785-clk.h>
++#include <linux/platform_device.h>
++
++#include "clk-gate.h"
++#include "clk-mtk.h"
++
++static const struct mtk_gate_regs vdec_cg_regs = {
++	.sta_ofs = 0x0,
++	.clr_ofs = 0x4,
++	.set_ofs = 0x0,
++};
++
++static const struct mtk_gate_regs larb_cg_regs = {
++	.sta_ofs = 0x8,
++	.clr_ofs = 0xc,
++	.set_ofs = 0x8,
++};
++
++#define GATE_VDEC(_id, _name, _parent, _shift)               \
++	GATE_MTK(_id, _name, _parent, &vdec_cg_regs, _shift, \
++		 &mtk_clk_gate_ops_setclr_inv)
++
++#define GATE_LARB(_id, _name, _parent, _shift)               \
++	GATE_MTK(_id, _name, _parent, &larb_cg_regs, _shift, \
++		 &mtk_clk_gate_ops_setclr_inv)
++
++static const struct mtk_gate vdec_clks[] = {
++	GATE_VDEC(CLK_VDEC_MAIN, "vdec_main", "top_vdec", 0),
++	GATE_LARB(CLK_VDEC_LARB1, "vdec_larb1", "top_vdec", 0),
++};
++
++static const struct mtk_clk_desc vdec_desc = {
++	.clks = vdec_clks,
++	.num_clks = ARRAY_SIZE(vdec_clks),
++};
++
++static const struct of_device_id of_match_clk_mt6785_vdec[] = {
++	{ .compatible = "mediatek,mt6785-vdecsys", .data = &vdec_desc },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, of_match_clk_mt6785_vdec);
++
++static struct platform_driver clk_mt6785_vdec_drv = {
++	.probe = mtk_clk_simple_probe,
++	.remove = mtk_clk_simple_remove,
++	.driver = {
++		.name = "clk-mt6785-vdec",
++		.of_match_table = of_match_clk_mt6785_vdec,
++	},
++};
++module_platform_driver(clk_mt6785_vdec_drv);
++
++MODULE_DESCRIPTION("MediaTek MT6785 Video Decoders clocks driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/clk/mediatek/clk-mt6785-venc.c b/drivers/clk/mediatek/clk-mt6785-venc.c
+new file mode 100644
+index 000000000..675ba8e8d
+--- /dev/null
++++ b/drivers/clk/mediatek/clk-mt6785-venc.c
+@@ -0,0 +1,51 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (c) 2025 Dinolek <git@dinolek.me>
++ */
++
++#include <dt-bindings/clock/mediatek,mt6785-clk.h>
++#include <linux/platform_device.h>
++
++#include "clk-gate.h"
++#include "clk-mtk.h"
++
++static const struct mtk_gate_regs venc_cg_regs = {
++	.sta_ofs = 0x0,
++	.clr_ofs = 0x8,
++	.set_ofs = 0x4,
++};
++
++#define GATE_VENC(_id, _name, _parent, _shift)               \
++	GATE_MTK(_id, _name, _parent, &venc_cg_regs, _shift, \
++		 &mtk_clk_gate_ops_setclr_inv)
++
++static const struct mtk_gate venc_clks[] = {
++	GATE_VENC(CLK_VENC_LARB, "venc_larb", "top_venc", 0),
++	GATE_VENC(CLK_VENC_MAIN, "venc_main", "top_venc", 4),
++	GATE_VENC(CLK_VENC_JPGENC, "venc_jpgenc", "top_venc", 8),
++	GATE_VENC(CLK_VENC_GALS, "venc_gals", "top_venc", 28),
++};
++
++static const struct mtk_clk_desc venc_desc = {
++	.clks = venc_clks,
++	.num_clks = ARRAY_SIZE(venc_clks),
++};
++
++static const struct of_device_id of_match_clk_mt6785_venc[] = {
++	{ .compatible = "mediatek,mt6785-vencsys", .data = &venc_desc },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, of_match_clk_mt6785_venc);
++
++static struct platform_driver clk_mt6785_venc_drv = {
++	.probe = mtk_clk_simple_probe,
++	.remove = mtk_clk_simple_remove,
++	.driver = {
++		.name = "clk-mt6785-venc",
++		.of_match_table = of_match_clk_mt6785_venc,
++	},
++};
++module_platform_driver(clk_mt6785_venc_drv);
++
++MODULE_DESCRIPTION("MediaTek MT6785 Video Encoders clocks driver");
++MODULE_LICENSE("GPL");
+-- 
+2.56.0
+

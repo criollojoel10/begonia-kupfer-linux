@@ -1,0 +1,55 @@
+From 6b5226c303ed28fa13507b050d9abb4cbbb7c428 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Mon, 28 Apr 2025 01:57:38 +0200
+Subject: [PATCH 067/115] dt-bindings: gpu: mali-bifrost: Add support for
+ MT6785
+
+Add mediatek,mt6785-mali compatible with arm,mali-bifrost fallback and set
+power domain count to 4.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../bindings/gpu/arm,mali-bifrost.yaml        | 20 +++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/gpu/arm,mali-bifrost.yaml b/Documentation/devicetree/bindings/gpu/arm,mali-bifrost.yaml
+index 9db9f84ad..8c8ee5201 100644
+--- a/Documentation/devicetree/bindings/gpu/arm,mali-bifrost.yaml
++++ b/Documentation/devicetree/bindings/gpu/arm,mali-bifrost.yaml
+@@ -19,6 +19,7 @@ properties:
+           - enum:
+               - allwinner,sun50i-h616-mali
+               - amlogic,meson-g12a-mali
++              - mediatek,mt6785-mali
+               - mediatek,mt8183-mali
+               - mediatek,mt8183b-mali
+               - mediatek,mt8186-mali
+@@ -206,6 +207,25 @@ allOf:
+     else:
+       properties:
+         sram-supply: false
++  - if:
++      properties:
++        compatible:
++          contains:
++            const: mediatek,mt6785-mali
++    then:
++      properties:
++        power-domains:
++          minItems: 4
++          maxItems: 4
++        power-domain-names:
++          items:
++            - const: core0
++            - const: core1
++            - const: core2
++            - const: core3
++      required:
++        - power-domains
++        - power-domain-names
+   - if:
+       properties:
+         compatible:
+-- 
+2.56.0
+

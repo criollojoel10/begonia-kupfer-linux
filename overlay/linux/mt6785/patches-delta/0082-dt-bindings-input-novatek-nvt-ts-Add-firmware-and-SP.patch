@@ -1,0 +1,42 @@
+From d9d8210ae7f94a5b6f7ce7ddc5510a309f451397 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Thu, 10 Jul 2025 12:37:36 +0200
+Subject: [PATCH 082/115] dt-bindings: input: novatek,nvt-ts: Add firmware and
+ SPI props support
+
+Add optional firmware-name property and add ref to spi-peripheral-props.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../bindings/input/touchscreen/novatek,nvt-ts.yaml        | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/input/touchscreen/novatek,nvt-ts.yaml b/Documentation/devicetree/bindings/input/touchscreen/novatek,nvt-ts.yaml
+index bd6a60486..6c5793f4c 100644
+--- a/Documentation/devicetree/bindings/input/touchscreen/novatek,nvt-ts.yaml
++++ b/Documentation/devicetree/bindings/input/touchscreen/novatek,nvt-ts.yaml
+@@ -11,6 +11,7 @@ maintainers:
+ 
+ allOf:
+   - $ref: touchscreen.yaml#
++  - $ref: /schemas/spi/spi-peripheral-props.yaml#
+ 
+ properties:
+   compatible:
+@@ -30,6 +31,13 @@ properties:
+   vcc-supply: true
+   iovcc-supply: true
+ 
++  firmware-name:
++    maxItems: 1
++    description: |
++      The name of the firmware file to load for this touchscreen controller.
++      This is optional and only needed if the driver requires a firmware file
++      to be loaded at runtime.
++
+ required:
+   - compatible
+   - reg
+-- 
+2.56.0
+

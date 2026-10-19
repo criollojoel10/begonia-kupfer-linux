@@ -1,0 +1,126 @@
+From efe84603df86ea2a68eb2f2aec80dc56d967558d Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 11:17:45 +0200
+Subject: [PATCH 41/51] begonia-wifi (fwport): in-kernel srh_rom_patch
+ (headless launcher-equiv)
+
+wmt_ctrl_get_rom_patch_info delegated srh_rom_patch to the userspace
+stp_uart_launcher via a WMT_CTRL ul_cmd. pmOS has no such daemon, so the
+ul_cmd timed out, pWmtRomPatchInfo[] stayed NULL, and mtk_wcn_soc_rom_patch_dwn
+never loaded the SOC RAM firmware (ram_bt/wifi/mcu) into EMI -> conn never
+booted its fw -> never armed BTIF -> all WMT cmds timed out.
+
+Replay the launcher step in-kernel (same pattern as the headless SET_CHIP_ID /
+DO_MODULE_INIT): request_firmware each SOC RAM patch, parse the wmt_rom_patch
+header, derive the EMI offset from u4PatchAddr (mask 0x00FFFF00, reproduces
+stock EmiOffsets 0x80000/0x140000/0x0), populate pWmtRomPatchInfo[] via
+wmt_lib_set_rom_patch_info.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../common/common_main/core/wmt_ctrl.c        | 74 ++++++++++++++++++-
+ 1 file changed, 70 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_ctrl.c b/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_ctrl.c
+index 8f94dd002..fa8dc32e2 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_ctrl.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_ctrl.c
+@@ -629,6 +629,74 @@ INT32 wmt_ctrl_get_patch_info(P_WMT_CTRL_DATA pWmtCtrlData)
+ 	return 0;
+ }
+ 
++/*
++ * Headless srh_rom_patch.
++ *
++ * On stock Android the WMT_CTRL ul_cmd "srh_rom_patch" is serviced by the
++ * userspace stp_uart_launcher daemon: it scans the firmware directory, parses
++ * each SOC ROM-patch header for its EMI download address, and pushes the result
++ * back into pWmtRomPatchInfo[] via the WMT_IOCTL_SET_ROM_PATCH_INFO ioctl.
++ *
++ * This pmOS bring-up has no such daemon (the same reason SET_CHIP_ID /
++ * DO_MODULE_INIT are replayed in-kernel), so the ul_cmd never completes and the
++ * ROM-patch download is starved. Replay exactly the launcher's srh_rom_patch
++ * step in-kernel: request_firmware each SOC RAM patch, read its wmt_rom_patch
++ * header, derive the EMI offset from u4PatchAddr (conn-EMI view: the 0xF0 region
++ * tag in the top byte and the low flag byte are masked off, reproducing the
++ * stock EmiOffsets 0x80000 / 0x140000 / 0x0), and populate pWmtRomPatchInfo[].
++ */
++static INT32 wmt_ctrl_srh_rom_patch_headless(P_DEV_WMT pDev)
++{
++	static const struct {
++		ENUM_WMTDRV_TYPE_T type;
++		const char *name;
++	} patches[] = {
++		{ WMTDRV_TYPE_BT,   "soc1_0_ram_bt_2a_1_hdr.bin" },
++		{ WMTDRV_TYPE_WIFI, "soc1_0_ram_wifi_2a_1_hdr.bin" },
++		{ WMTDRV_TYPE_WMT,  "soc1_0_ram_mcu_2a_1_hdr.bin" },
++	};
++	UINT32 i;
++
++	for (i = 0; i < sizeof(patches) / sizeof(patches[0]); i++) {
++		osal_firmware *fw = NULL;
++		struct wmt_rom_patch *hdr;
++		struct wmt_rom_patch_info info;
++		UINT32 emiOffset;
++
++		if (pDev->pWmtRomPatchInfo[patches[i].type])
++			continue;
++
++		if (wmt_dev_patch_get((PUINT8)patches[i].name, &fw) != 0 || fw == NULL) {
++			WMT_ERR_FUNC("srh_rom_patch(headless): get %s fail\n", patches[i].name);
++			return -1;
++		}
++		if (fw->size < sizeof(struct wmt_rom_patch)) {
++			WMT_ERR_FUNC("srh_rom_patch(headless): %s too small(%zu)\n",
++				     patches[i].name, fw->size);
++			wmt_dev_patch_put(&fw);
++			return -1;
++		}
++
++		hdr = (struct wmt_rom_patch *)fw->data;
++		emiOffset = hdr->u4PatchAddr & 0x00FFFF00;
++
++		osal_memset(&info, 0, sizeof(info));
++		info.type = patches[i].type;
++		info.addRess[0] = emiOffset & 0xFF;
++		info.addRess[1] = (emiOffset >> 8) & 0xFF;
++		info.addRess[2] = (emiOffset >> 16) & 0xFF;
++		info.addRess[3] = 0;
++		osal_strncpy(info.patchName, (PUINT8)patches[i].name,
++			     osal_sizeof(info.patchName) - 1);
++
++		wmt_lib_set_rom_patch_info(&info, patches[i].type);
++		WMT_INFO_FUNC("srh_rom_patch(headless): %s type=%d emiOffset=0x%x patchAddr=0x%x\n",
++			      patches[i].name, patches[i].type, emiOffset, hdr->u4PatchAddr);
++		wmt_dev_patch_put(&fw);
++	}
++	return 0;
++}
++
+ INT32 wmt_ctrl_get_rom_patch_info(P_WMT_CTRL_DATA pWmtCtrlData)
+ {
+ 	P_DEV_WMT pDev = &gDevWmt;	/* single instance */
+@@ -637,7 +705,6 @@ INT32 wmt_ctrl_get_rom_patch_info(P_WMT_CTRL_DATA pWmtCtrlData)
+ 	PUINT8 pNbuf = NULL;
+ 	PUINT8 pAbuf = NULL;
+ 	INT32 ret = 0;
+-	UINT8 cmdStr[NAME_MAX + 1] = { 0 };
+ 
+ 	type = pWmtCtrlData->au4CtrlData[0];
+ 	WMT_DBG_FUNC("rom patch type is %d\n", type);
+@@ -646,10 +713,9 @@ INT32 wmt_ctrl_get_rom_patch_info(P_WMT_CTRL_DATA pWmtCtrlData)
+ 	WMT_DBG_FUNC("ip version is [%x] [%x]\n", pDev->ip_ver, pDev->fw_ver);
+ 
+ 	if (!pDev->pWmtRomPatchInfo[WMTDRV_TYPE_WMT]) {
+-		osal_snprintf(cmdStr, NAME_MAX, "srh_rom_patch");
+-		ret = wmt_ctrl_ul_cmd(pDev, cmdStr);
++		ret = wmt_ctrl_srh_rom_patch_headless(pDev);
+ 		if (ret) {
+-			WMT_WARN_FUNC("wmt_ctrl_ul_cmd fail(%d)\n", ret);
++			WMT_WARN_FUNC("headless srh_rom_patch fail(%d)\n", ret);
+ 			return -1;
+ 		}
+ 	}
+-- 
+2.56.0
+

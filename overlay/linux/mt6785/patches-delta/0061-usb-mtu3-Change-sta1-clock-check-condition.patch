@@ -1,0 +1,51 @@
+From acf19f7d1f4caf5e203d26c63f9daa45f9f7087e Mon Sep 17 00:00:00 2001
+From: Jiaqin Wang <jiaqin.wang@mediatek.com>
+Date: Fri, 29 Jan 2021 00:05:23 +0800
+Subject: [PATCH 061/115] usb: mtu3: Change sta1 clock check condition
+
+Do not check sta1 clock if we don't support speed greater than high.
+
+Signed-off-by: Jiaqin Wang <jiaqin.wang@mediatek.com>
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/usb/mtu3/mtu3_plat.c | 17 ++++++++++++-----
+ 1 file changed, 12 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/usb/mtu3/mtu3_plat.c b/drivers/usb/mtu3/mtu3_plat.c
+index cc8a864db..363ec3182 100644
+--- a/drivers/usb/mtu3/mtu3_plat.c
++++ b/drivers/usb/mtu3/mtu3_plat.c
+@@ -29,11 +29,14 @@ int ssusb_check_clocks(struct ssusb_mtk *ssusb, u32 ex_clks)
+ 	check_val = ex_clks | SSUSB_SYS125_RST_B_STS | SSUSB_SYSPLL_STABLE |
+ 			SSUSB_REF_RST_B_STS;
+ 
+-	ret = readl_poll_timeout(ibase + U3D_SSUSB_IP_PW_STS1, value,
+-			(check_val == (value & check_val)), 100, 20000);
+-	if (ret) {
+-		dev_err(ssusb->dev, "clks of sts1 are not stable!\n");
+-		return ret;
++	if (ssusb->u3d->max_speed > USB_SPEED_HIGH) {
++		ret = readl_poll_timeout(ibase + U3D_SSUSB_IP_PW_STS1, value,
++					 (check_val == (value & check_val)),
++					 100, 20000);
++		if (ret) {
++			dev_err(ssusb->dev, "clks of sts1 are not stable!\n");
++			return ret;
++		}
+ 	}
+ 
+ 	ret = readl_poll_timeout(ibase + U3D_SSUSB_IP_PW_STS2, value,
+@@ -58,6 +61,10 @@ static int wait_for_ip_sleep(struct ssusb_mtk *ssusb)
+ 	if (!sleep_check)
+ 		return 0;
+ 
++	/* USB2-only mode does not require U3 IP sleep check */
++	if (ssusb->u3d && ssusb->u3d->max_speed <= USB_SPEED_HIGH)
++		return 0;
++
+ 	/* wait for ip enter sleep mode */
+ 	ret = readl_poll_timeout(ssusb->ippc_base + U3D_SSUSB_IP_PW_STS1, value,
+ 				 (value & SSUSB_IP_SLEEP_STS), 100, 100000);
+-- 
+2.56.0
+

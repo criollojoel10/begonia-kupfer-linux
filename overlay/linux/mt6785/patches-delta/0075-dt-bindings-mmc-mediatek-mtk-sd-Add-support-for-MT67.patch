@@ -1,0 +1,31 @@
+From 9a0160e8e351de01d8b14975b9b76e89ecd7852e Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 9 Jul 2025 16:48:59 +0200
+Subject: [PATCH 075/115] dt-bindings: mmc: mediatek,mtk-sd: Add support for
+ MT6785
+
+Add mediatek,mt6785-mmc compatible with mediatek,mt8183-mmc fallback.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ Documentation/devicetree/bindings/mmc/mtk-sd.yaml | 1 +
+ 1 file changed, 1 insertion(+)
+ mode change 100644 => 100755 Documentation/devicetree/bindings/mmc/mtk-sd.yaml
+
+diff --git a/Documentation/devicetree/bindings/mmc/mtk-sd.yaml b/Documentation/devicetree/bindings/mmc/mtk-sd.yaml
+old mode 100644
+new mode 100755
+index a4d032224..0461459a4
+--- a/Documentation/devicetree/bindings/mmc/mtk-sd.yaml
++++ b/Documentation/devicetree/bindings/mmc/mtk-sd.yaml
+@@ -33,6 +33,7 @@ properties:
+           - const: mediatek,mt2701-mmc
+       - items:
+           - enum:
++              - mediatek,mt6785-mmc
+               - mediatek,mt6893-mmc
+               - mediatek,mt8186-mmc
+               - mediatek,mt8188-mmc
+-- 
+2.56.0
+

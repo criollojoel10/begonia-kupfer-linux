@@ -1,0 +1,78 @@
+From 79202c8d6d97a7b12ccb215ebbaf9d0dc22f53f9 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 09:41:44 +0200
+Subject: [PATCH 38/51] begonia-wifi (fwport): port consys_clock_buffer_ctrl
+ for real (open conn XO_WCN)
+
+KERNEL_clk_buf_ctrl(CLK_BUF_CONN, true) was a no-op stub, so the vendor
+consys_clock_buffer_ctrl never opened the conn 26MHz crystal buffer (mt6359 PMIC
+EXTBUF2 / XO_WCN). Without that reference clock the conn-MCU cannot run its
+BTIF/RF, so it never drains the AP BTIF TX (the live "wait for tx allowed timeout"
+/ "Tx data is not empty" gate). Port it faithfully: do the real DCXO_CW00 op via
+the PMIC regmap (g_regmap from mtk_wcn_get_regmap) - clear EXTBUF2_MODE (force
+mode), set EXTBUF2_EN_M (enable). This is what the vendor MTK clkbuf driver
+clk_buf_ctrl(CLK_BUF_CONN, FORCE_ON) does, corroborated by the reimpl
+mtk_conninfra_enable_xo_wcn (proven working). Replaces a stub with real code.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../common/common_main/platform/mt6785.c      | 36 ++++++++++++++++---
+ 1 file changed, 32 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/platform/mt6785.c b/drivers/misc/mediatek/connectivity/common/common_main/platform/mt6785.c
+index 689545d2e..92e12cb6d 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/platform/mt6785.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/platform/mt6785.c
+@@ -1,4 +1,5 @@
+ /*
++#include <linux/regmap.h>
+  * Copyright (C) 2016 MediaTek Inc.
+  *
+  * This program is free software; you can redistribute it and/or modify
+@@ -460,12 +461,39 @@ static INT32 consys_co_clock_type(VOID)
+ 	return 0;
+ }
+ 
++/* Faithful port of the MTK clkbuf driver's clk_buf_ctrl(CLK_BUF_CONN, FORCE_ON):
++ * the conn subsystem's 26MHz crystal clock is the mt6359 PMIC EXTBUF2 buffer
++ * ("XO_WCN"). The vendor opens it on DCXO_CW00 (clear EXTBUF2_MODE -> force/SW
++ * mode, set EXTBUF2_EN_M -> enable). Mainline has no mt6359 clk-buf driver, so we
++ * do the register op directly via the PMIC regmap (g_regmap, from
++ * mtk_wcn_get_regmap). Without this 26MHz reference the conn cannot run its
++ * BTIF/RF. Register op corroborated by the reimpl mtk_conninfra_enable_xo_wcn. */
++#define MT6359_DCXO_CW00		0x788
++#define XO_EXTBUF2_MODE_MASK		(0x3u << 3)	/* bits [4:3] */
++#define XO_EXTBUF2_EN_M_MASK		(0x1u << 5)	/* bit 5 */
++extern struct regmap *g_regmap;			/* mt6359 PMIC regmap (consys_hw.c) */
++
+ static INT32 consys_clock_buffer_ctrl(MTK_WCN_BOOL enable)
+ {
+-	if (enable)
+-		KERNEL_clk_buf_ctrl(CLK_BUF_CONN, true);	/*open XO_WCN*/
+-	else
+-		KERNEL_clk_buf_ctrl(CLK_BUF_CONN, false);	/*close XO_WCN*/
++	unsigned int v = 0;
++
++	if (!g_regmap) {
++		WMT_PLAT_PR_ERR("clock_buffer_ctrl: no PMIC regmap, cannot %s XO_WCN\n",
++				enable ? "open" : "close");
++		return -1;
++	}
++
++	if (enable) {
++		/* clear EXTBUF2_MODE (force/SW mode), then set EXTBUF2_EN_M (enable) */
++		regmap_update_bits(g_regmap, MT6359_DCXO_CW00, XO_EXTBUF2_MODE_MASK, 0);
++		regmap_update_bits(g_regmap, MT6359_DCXO_CW00,
++				   XO_EXTBUF2_EN_M_MASK, XO_EXTBUF2_EN_M_MASK);
++		regmap_read(g_regmap, MT6359_DCXO_CW00, &v);
++		WMT_PLAT_PR_INFO("clock_buffer_ctrl: open XO_WCN, DCXO_CW00=0x%08x\n", v);
++	} else {
++		regmap_update_bits(g_regmap, MT6359_DCXO_CW00, XO_EXTBUF2_EN_M_MASK, 0);
++		WMT_PLAT_PR_INFO("clock_buffer_ctrl: close XO_WCN\n");
++	}
+ 
+ 	return 0;
+ }
+-- 
+2.56.0
+

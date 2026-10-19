@@ -1,0 +1,117 @@
+From d48d4a01ad1d340b6cf16f2990e7a06ab65cc6ad Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sat, 12 Jul 2025 21:31:25 +0200
+Subject: [PATCH 103/115] arm64: dts: mediatek: mt6785-xiaomi-begonia: Enable
+ display panel
+
+Define shared DSI panel wiring and enable the CSOT and Tianma nt36672a display panels.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../mt6785-xiaomi-begonia-common.dtsi         | 48 +++++++++++++++++++
+ .../mediatek/mt6785-xiaomi-begonia-csot.dts   |  5 ++
+ .../mediatek/mt6785-xiaomi-begonia-tianma.dts |  5 ++
+ 3 files changed, 58 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+index 03298c252..2d30f6df3 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+@@ -78,6 +78,44 @@ &cpu7 {
+ 	proc-supply = <&mt6359_vproc1_buck_reg>;
+ };
+ 
++&dither0_out {
++	remote-endpoint = <&dsi0_in>;
++};
++
++&dsi0 {
++	status = "okay";
++
++	panel: panel@0 {
++		reg = <0>;
++
++		backlight = <&backlight>;
++		reset-gpios = <&pio 44 GPIO_ACTIVE_LOW>;
++
++		vddio-supply = <&mt6359_vio18_ldo_reg>;
++		vddneg-supply = <&backlight_vddpos>;
++		vddpos-supply = <&backlight_vddneg>;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&panel_pins>;
++
++		status = "disabled";
++
++		port {
++			panel_in: endpoint {
++				remote-endpoint = <&dsi0_out>;
++			};
++		};
++	};
++};
++
++&dsi0_in {
++	remote-endpoint = <&dither0_out>;
++};
++
++&dsi0_out {
++	remote-endpoint = <&panel_in>;
++};
++
+ &i2c0 {
+ 	clock-frequency = <400000>;
+ 
+@@ -141,6 +179,10 @@ &mfg_async {
+ 	domain-supply = <&mt6359_vgpu11_buck_reg>;
+ };
+ 
++&mipi_tx0 {
++	status = "okay";
++};
++
+ &mt6359_vcore_buck_reg {
+ 	regulator-always-on;
+ };
+@@ -194,6 +236,12 @@ pins-bus {
+ 		};
+ 	};
+ 
++	panel_pins: panel-pins {
++		pins-reset {
++			pinmux = <PINMUX_GPIO44__FUNC_GPIO44>;
++		};
++	};
++
+ 	volume_button_pins: volume-button-pins {
+ 		pins-volume {
+ 			pinmux = <PINMUX_GPIO59__FUNC_KPCOL0>,
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-csot.dts b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-csot.dts
+index 0267f50d2..eb6423f62 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-csot.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-csot.dts
+@@ -11,3 +11,8 @@ / {
+ 	model = "Xiaomi Redmi Note 8 Pro (CSOT)";
+ 	compatible = "xiaomi,begonia", "mediatek,mt6785";
+ };
++
++&panel {
++	compatible = "xiaomi,begonia-csot-nt36672a", "novatek,nt36672a";
++	status = "okay";
++};
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-tianma.dts b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-tianma.dts
+index 5dcd8437d..337959dcb 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-tianma.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-tianma.dts
+@@ -11,3 +11,8 @@ / {
+ 	model = "Xiaomi Redmi Note 8 Pro (Tianma)";
+ 	compatible = "xiaomi,begonia", "mediatek,mt6785";
+ };
++
++&panel {
++	compatible = "xiaomi,begonia-tianma-nt36672a", "novatek,nt36672a";
++	status = "okay";
++};
+-- 
+2.56.0
+

@@ -1,0 +1,258 @@
+From 4f2896e263dd4d356de2c9ecff8fb8b0079bbc9e Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sat, 21 Jun 2025 23:47:08 +0200
+Subject: [PATCH 021/115] soc: mediatek: mmsys: add MT6785 mmsys routing table
+
+Add new routing table for MT6785.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/soc/mediatek/mt6785-mmsys.h | 200 ++++++++++++++++++++++++++++
+ drivers/soc/mediatek/mtk-mmsys.c    |  10 ++
+ 2 files changed, 210 insertions(+)
+ create mode 100644 drivers/soc/mediatek/mt6785-mmsys.h
+
+diff --git a/drivers/soc/mediatek/mt6785-mmsys.h b/drivers/soc/mediatek/mt6785-mmsys.h
+new file mode 100644
+index 000000000..340b5c4b0
+--- /dev/null
++++ b/drivers/soc/mediatek/mt6785-mmsys.h
+@@ -0,0 +1,200 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++
++#ifndef __SOC_MEDIATEK_MT6785_MMSYS_H
++#define __SOC_MEDIATEK_MT6785_MMSYS_H
++
++#define MT6785_DISP_DITHER0_MOUT_EN	0xf00
++#define MT6785_DITHER0_MOUT_EN_MASK	0x7
++#define MT6785_DITHER0_TO_DSI0		BIT(0)
++#define MT6785_DITHER0_TO_DPI0		BIT(1)
++
++#define MT6785_DISP_OVL0_2L_MOUT_EN	0xf04
++#define MT6785_OVL0_2L_MOUT_EN_MASK	0x1f
++#define MT6785_OVL0_2L_TO_RDMA0		BIT(0)
++
++#define MT6785_DISP_OVL0_MOUT_EN	0xf08
++#define MT6785_OVL0_MOUT_EN_MASK	0x1f
++#define MT6785_OVL0_TO_RDMA0		BIT(0)
++
++#define MT6785_DISP_OVL1_2L_MOUT_EN	0xf0c
++#define MT6785_OVL1_2L_MOUT_EN_MASK	0x3f
++#define MT6785_OVL1_2L_TO_RDMA0		BIT(0)
++#define MT6785_OVL1_2L_TO_RDMA1		BIT(4)
++
++#define MT6785_DISP_OVL0_WCG_MOUT_EN	0xf34
++#define MT6785_OVL0_WCG_MOUT_EN_MASK	0x3
++#define MT6785_OVL0_TO_OVL0_2L		BIT(0)
++#define MT6785_OVL0_TO_OVL1_2L		BIT(1)
++
++#define MT6785_DISP_OVL0_2L_WCG_MOUT_EN	0xf38
++#define MT6785_OVL0_2L_WCG_MOUT_EN_MASK	0x3
++#define MT6785_OVL0_2L_TO_OVL0		BIT(0)
++#define MT6785_OVL0_2L_TO_OVL1_2L	BIT(1)
++
++#define MT6785_DISP_OVL1_2L_WCG_MOUT_EN	0xf3c
++#define MT6785_OVL1_2L_WCG_MOUT_EN_MASK	0x3
++#define MT6785_OVL1_2L_TO_OVL0		BIT(0)
++#define MT6785_OVL1_2L_TO_OVL0_2L	BIT(1)
++
++#define MT6785_DISP_RDMA0_SOUT_SEL	0xf44
++#define MT6785_RDMA0_SOUT_SEL_MASK	0xf
++#define MT6785_RDMA0_TO_DSI0		0
++#define MT6785_RDMA0_TO_COLOR0		1
++#define MT6785_RDMA0_TO_CCORR		2
++#define MT6785_RDMA0_TO_DPI0		3
++
++#define MT6785_DISP_RDMA1_SOUT_SEL	0xf48
++#define MT6785_RDMA1_SOUT_SEL_MASK	0xf
++#define MT6785_RDMA1_TO_DPI0		0
++#define MT6785_RDMA1_TO_DSI0		1
++
++#define MT6785_DISP_CCORR_SEL_IN	0xf68
++#define MT6785_CCORR_SEL_IN_MASK	0xf
++#define MT6785_CCORR_FROM_COLOR0	0
++#define MT6785_CCORR_FROM_RDMA0		1
++
++#define MT6785_DISP_RDMA0_SEL_IN	0xf74
++#define MT6785_RDMA0_SEL_IN_MASK	0xf
++#define MT6785_RDMA0_FROM_OVL0		0
++#define MT6785_RDMA0_FROM_OVL0_2L	1
++#define MT6785_RDMA0_FROM_OVL1_2L	2
++
++#define MT6785_DISP_DPI0_SEL_IN		0xf88
++#define MT6785_DPI0_SEL_IN_MASK		0xf
++#define MT6785_DPI0_FROM_RDMA0		0
++#define MT6785_DPI0_FROM_RDMA1		1
++#define MT6785_DPI0_FROM_DITHER0	2
++
++#define MT6785_DISP_DSI0_SEL_IN		0xf8c
++#define MT6785_DSI0_SEL_IN_MASK		0xf
++#define MT6785_DSI0_FROM_DITHER0	0
++#define MT6785_DSI0_FROM_RDMA0		1
++#define MT6785_DSI0_FROM_RDMA1		2
++
++#define MT6785_DISP_OVL0_WCG_SEL_IN	0xfc8
++#define MT6785_OVL0_WCG_SEL_IN_MASK	0xf
++#define MT6785_OVL0_FROM_OVL0_2L	0
++#define MT6785_OVL0_FROM_OVL1_2L	1
++
++#define MT6785_DISP_OVL0_2L_WCG_SEL_IN	0xfcc
++#define MT6785_OVL0_2L_WCG_SEL_IN_MASK	0xf
++#define MT6785_OVL0_2L_FROM_OVL0	0
++#define MT6785_OVL0_2L_FROM_OVL1_2L	1
++
++#define MT6785_DISP_OVL1_2L_WCG_SEL_IN	0xfd0
++#define MT6785_OVL1_2L_WCG_SEL_IN_MASK	0xf
++#define MT6785_OVL1_2L_FROM_OVL0	0
++#define MT6785_OVL1_2L_FROM_OVL0_2L	1
++
++static const struct mtk_mmsys_routes mmsys_mt6785_routing_table[] = {
++	MMSYS_ROUTE(DITHER0, DSI0,
++		    MT6785_DISP_DITHER0_MOUT_EN, MT6785_DITHER0_TO_DSI0,
++		    MT6785_DITHER0_TO_DSI0),
++	MMSYS_ROUTE(DITHER0, DPI0,
++		    MT6785_DISP_DITHER0_MOUT_EN, MT6785_DITHER0_TO_DPI0,
++		    MT6785_DITHER0_TO_DPI0),
++	MMSYS_ROUTE(OVL_2L0, RDMA0,
++		    MT6785_DISP_OVL0_2L_MOUT_EN, MT6785_OVL0_2L_TO_RDMA0,
++		    MT6785_OVL0_2L_TO_RDMA0),
++	MMSYS_ROUTE(OVL0, RDMA0,
++		    MT6785_DISP_OVL0_MOUT_EN, MT6785_OVL0_TO_RDMA0,
++		    MT6785_OVL0_TO_RDMA0),
++	MMSYS_ROUTE(OVL_2L1, RDMA0,
++		    MT6785_DISP_OVL1_2L_MOUT_EN, MT6785_OVL1_2L_TO_RDMA0,
++		    MT6785_OVL1_2L_TO_RDMA0),
++	MMSYS_ROUTE(OVL_2L1, RDMA1,
++		    MT6785_DISP_OVL1_2L_MOUT_EN, MT6785_OVL1_2L_TO_RDMA1,
++		    MT6785_OVL1_2L_TO_RDMA1),
++	MMSYS_ROUTE(OVL0, OVL_2L0,
++		    MT6785_DISP_OVL0_WCG_MOUT_EN, MT6785_OVL0_TO_OVL0_2L,
++		    MT6785_OVL0_TO_OVL0_2L),
++	MMSYS_ROUTE(OVL0, OVL_2L1,
++		    MT6785_DISP_OVL0_WCG_MOUT_EN, MT6785_OVL0_TO_OVL1_2L,
++		    MT6785_OVL0_TO_OVL1_2L),
++	MMSYS_ROUTE(OVL_2L0, OVL0,
++		    MT6785_DISP_OVL0_2L_WCG_MOUT_EN, MT6785_OVL0_2L_TO_OVL0,
++		    MT6785_OVL0_2L_TO_OVL0),
++	MMSYS_ROUTE(OVL_2L0, OVL_2L1,
++		    MT6785_DISP_OVL0_2L_WCG_MOUT_EN, MT6785_OVL0_2L_TO_OVL1_2L,
++		    MT6785_OVL0_2L_TO_OVL1_2L),
++	MMSYS_ROUTE(OVL_2L1, OVL0,
++		    MT6785_DISP_OVL1_2L_WCG_MOUT_EN, MT6785_OVL1_2L_TO_OVL0,
++		    MT6785_OVL1_2L_TO_OVL0),
++	MMSYS_ROUTE(OVL_2L1, OVL_2L0,
++		    MT6785_DISP_OVL1_2L_WCG_MOUT_EN, MT6785_OVL1_2L_TO_OVL0_2L,
++		    MT6785_OVL1_2L_TO_OVL0_2L),
++
++	MMSYS_ROUTE(RDMA0, DSI0,
++		    MT6785_DISP_RDMA0_SOUT_SEL, MT6785_RDMA0_SOUT_SEL_MASK,
++		    MT6785_RDMA0_TO_DSI0),
++	MMSYS_ROUTE(RDMA0, COLOR0,
++		    MT6785_DISP_RDMA0_SOUT_SEL, MT6785_RDMA0_SOUT_SEL_MASK,
++		    MT6785_RDMA0_TO_COLOR0),
++	MMSYS_ROUTE(RDMA0, CCORR,
++		    MT6785_DISP_RDMA0_SOUT_SEL, MT6785_RDMA0_SOUT_SEL_MASK,
++		    MT6785_RDMA0_TO_CCORR),
++	MMSYS_ROUTE(RDMA0, DPI0,
++		    MT6785_DISP_RDMA0_SOUT_SEL, MT6785_RDMA0_SOUT_SEL_MASK,
++		    MT6785_RDMA0_TO_DPI0),
++	MMSYS_ROUTE(RDMA1, DPI0,
++		    MT6785_DISP_RDMA1_SOUT_SEL, MT6785_RDMA1_SOUT_SEL_MASK,
++		    MT6785_RDMA1_TO_DPI0),
++	MMSYS_ROUTE(RDMA1, DSI0,
++		    MT6785_DISP_RDMA1_SOUT_SEL, MT6785_RDMA1_SOUT_SEL_MASK,
++		    MT6785_RDMA1_TO_DSI0),
++
++	MMSYS_ROUTE(COLOR0, CCORR,
++		    MT6785_DISP_CCORR_SEL_IN, MT6785_CCORR_SEL_IN_MASK,
++		    MT6785_CCORR_FROM_COLOR0),
++	MMSYS_ROUTE(RDMA0, CCORR,
++		    MT6785_DISP_CCORR_SEL_IN, MT6785_CCORR_SEL_IN_MASK,
++		    MT6785_CCORR_FROM_RDMA0),
++	MMSYS_ROUTE(OVL0, RDMA0,
++		    MT6785_DISP_RDMA0_SEL_IN, MT6785_RDMA0_SEL_IN_MASK,
++		    MT6785_RDMA0_FROM_OVL0),
++	MMSYS_ROUTE(OVL_2L0, RDMA0,
++		    MT6785_DISP_RDMA0_SEL_IN, MT6785_RDMA0_SEL_IN_MASK,
++		    MT6785_RDMA0_FROM_OVL0_2L),
++	MMSYS_ROUTE(OVL_2L1, RDMA0,
++		    MT6785_DISP_RDMA0_SEL_IN, MT6785_RDMA0_SEL_IN_MASK,
++		    MT6785_RDMA0_FROM_OVL1_2L),
++	MMSYS_ROUTE(RDMA0, DPI0,
++		    MT6785_DISP_DPI0_SEL_IN, MT6785_DPI0_SEL_IN_MASK,
++		    MT6785_DPI0_FROM_RDMA0),
++	MMSYS_ROUTE(RDMA1, DPI0,
++		    MT6785_DISP_DPI0_SEL_IN, MT6785_DPI0_SEL_IN_MASK,
++		    MT6785_DPI0_FROM_RDMA1),
++	MMSYS_ROUTE(DITHER0, DPI0,
++		    MT6785_DISP_DPI0_SEL_IN, MT6785_DPI0_SEL_IN_MASK,
++		    MT6785_DPI0_FROM_DITHER0),
++	MMSYS_ROUTE(DITHER0, DSI0,
++		    MT6785_DISP_DSI0_SEL_IN, MT6785_DSI0_SEL_IN_MASK,
++		    MT6785_DSI0_FROM_DITHER0),
++	MMSYS_ROUTE(RDMA0, DSI0,
++		    MT6785_DISP_DSI0_SEL_IN, MT6785_DSI0_SEL_IN_MASK,
++		    MT6785_DSI0_FROM_RDMA0),
++	MMSYS_ROUTE(RDMA1, DSI0,
++		    MT6785_DISP_DSI0_SEL_IN, MT6785_DSI0_SEL_IN_MASK,
++		    MT6785_DSI0_FROM_RDMA1),
++	MMSYS_ROUTE(OVL_2L0, OVL0,
++		    MT6785_DISP_OVL0_WCG_SEL_IN, MT6785_OVL0_WCG_SEL_IN_MASK,
++		    MT6785_OVL0_FROM_OVL0_2L),
++	MMSYS_ROUTE(OVL_2L1, OVL0,
++		    MT6785_DISP_OVL0_WCG_SEL_IN, MT6785_OVL0_WCG_SEL_IN_MASK,
++		    MT6785_OVL0_FROM_OVL1_2L),
++	MMSYS_ROUTE(OVL0, OVL_2L0,
++		    MT6785_DISP_OVL0_2L_WCG_SEL_IN, MT6785_OVL0_2L_WCG_SEL_IN_MASK,
++		    MT6785_OVL0_2L_FROM_OVL0),
++	MMSYS_ROUTE(OVL_2L1, OVL_2L0,
++		    MT6785_DISP_OVL0_2L_WCG_SEL_IN, MT6785_OVL0_2L_WCG_SEL_IN_MASK,
++		    MT6785_OVL0_2L_FROM_OVL1_2L),
++	MMSYS_ROUTE(OVL0, OVL_2L1,
++		    MT6785_DISP_OVL1_2L_WCG_SEL_IN, MT6785_OVL1_2L_WCG_SEL_IN_MASK,
++		    MT6785_OVL1_2L_FROM_OVL0),
++	MMSYS_ROUTE(OVL_2L0, OVL_2L1,
++		    MT6785_DISP_OVL1_2L_WCG_SEL_IN, MT6785_OVL1_2L_WCG_SEL_IN_MASK,
++		    MT6785_OVL1_2L_FROM_OVL0_2L),
++};
++
++#endif /* __SOC_MEDIATEK_MT6785_MMSYS_H */
++
+diff --git a/drivers/soc/mediatek/mtk-mmsys.c b/drivers/soc/mediatek/mtk-mmsys.c
+index 2f3e0778b..0b308de04 100644
+--- a/drivers/soc/mediatek/mtk-mmsys.c
++++ b/drivers/soc/mediatek/mtk-mmsys.c
+@@ -14,6 +14,7 @@
+ #include <linux/soc/mediatek/mtk-mmsys.h>
+ 
+ #include "mtk-mmsys.h"
++#include "mt6785-mmsys.h"
+ #include "mt8167-mmsys.h"
+ #include "mt8173-mmsys.h"
+ #include "mt8183-mmsys.h"
+@@ -41,6 +42,14 @@ static const struct mtk_mmsys_driver_data mt6779_mmsys_driver_data = {
+ 	.clk_driver = "clk-mt6779-mm",
+ };
+ 
++static const struct mtk_mmsys_driver_data mt6785_mmsys_driver_data = {
++	.clk_driver = "clk-mt6785-mm",
++	.routes = mmsys_mt6785_routing_table,
++	.num_routes = ARRAY_SIZE(mmsys_mt6785_routing_table),
++	.sw0_rst_offset = MT8183_MMSYS_SW0_RST_B,
++	.num_resets = 64,
++};
++
+ static const struct mtk_mmsys_driver_data mt6795_mmsys_driver_data = {
+ 	.clk_driver = "clk-mt6795-mm",
+ 	.routes = mt8173_mmsys_routing_table,
+@@ -461,6 +470,7 @@ static const struct of_device_id of_match_mtk_mmsys[] = {
+ 	{ .compatible = "mediatek,mt2701-mmsys", .data = &mt2701_mmsys_driver_data },
+ 	{ .compatible = "mediatek,mt2712-mmsys", .data = &mt2712_mmsys_driver_data },
+ 	{ .compatible = "mediatek,mt6779-mmsys", .data = &mt6779_mmsys_driver_data },
++	{ .compatible = "mediatek,mt6785-mmsys", .data = &mt6785_mmsys_driver_data },
+ 	{ .compatible = "mediatek,mt6795-mmsys", .data = &mt6795_mmsys_driver_data },
+ 	{ .compatible = "mediatek,mt6797-mmsys", .data = &mt6797_mmsys_driver_data },
+ 	{ .compatible = "mediatek,mt8167-mmsys", .data = &mt8167_mmsys_driver_data },
+-- 
+2.56.0
+

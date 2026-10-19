@@ -1,0 +1,169 @@
+From f5ee1fa6a79e6b10dbe5e2ea7204b09f9075c3fe Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 11:36:24 +0200
+Subject: [PATCH 42/51] begonia-wifi (fwport): in-kernel srh_patch (multi-patch
+ / connac MCU patch)
+
+After srh_rom_patch loaded the EMI firmware and the conn started replying
+(hw_check now reads chip id 0x6785 ok), mtk_wcn_soc_sw_init advanced to the
+multi-patch download and hit the SAME userspace-launcher gap: wmt_ctrl_patch_search
+issued ul_cmd("srh_patch") to the absent stp_uart_launcher -> timeout ->
+patch info prepare fail(-1) -> sw_init fail(-6).
+
+Replay the launcher srh_patch in-kernel (wmt_dev_srh_patch_headless): verify the
+MCU patch (soc1_0_patch_mcu_2a_1_hdr.bin) is present, then publish patchNum=1 and
+a WMT_PATCH_INFO whose PDA target is CONNAC_PATCH_START_ADDR (0x0001C000, per
+begonia gen4m connac.h/connac2x2.h; patch u4PatchVer 0x0001c0xx corroborates),
+reusing the existing pPatchInfo/pAtchNum statics + free path.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../common/common_main/core/wmt_ctrl.c        | 10 ++--
+ .../common/common_main/core/wmt_exp.c         |  2 +-
+ .../common/common_main/include/wmt_plat.h     |  2 +-
+ .../common_main/linux/include/wmt_dev.h       |  1 +
+ .../common/common_main/linux/wmt_dev.c        | 52 +++++++++++++++++++
+ .../common_main/platform/wmt_plat_alps.c      |  2 +-
+ 6 files changed, 61 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_ctrl.c b/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_ctrl.c
+index fa8dc32e2..c9d49361b 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_ctrl.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_ctrl.c
+@@ -576,14 +576,14 @@ INT32 wmt_ctrl_stp_open(P_WMT_CTRL_DATA pWmtCtrlData)
+ 
+ INT32 wmt_ctrl_patch_search(P_WMT_CTRL_DATA pWmtCtrlData)
+ {
+-	P_DEV_WMT pDev = &gDevWmt;	/* single instance */
+ 	INT32 iRet;
+-	UINT8 cmdStr[NAME_MAX + 1] = { 0 };
+ 
+-	osal_snprintf(cmdStr, NAME_MAX, "srh_patch");
+-	iRet = wmt_ctrl_ul_cmd(pDev, cmdStr);
++	/* headless: no userspace stp_uart_launcher to service the "srh_patch"
++	 * ul_cmd; do the launcher's multi-patch search in-kernel (same pattern as
++	 * the in-kernel srh_rom_patch). */
++	iRet = wmt_dev_srh_patch_headless();
+ 	if (iRet) {
+-		WMT_WARN_FUNC("wmt_ctrl_ul_cmd fail(%d)\n", iRet);
++		WMT_WARN_FUNC("headless srh_patch fail(%d)\n", iRet);
+ 		return -1;
+ 	}
+ 	return 0;
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_exp.c b/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_exp.c
+index 0cc26da0c..4e1ba5d6b 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_exp.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_exp.c
+@@ -61,7 +61,7 @@ wmt_wlan_is_wifi_drv_own_cb mtk_wcn_wlan_is_wifi_drv_own;
+ OSAL_BIT_OP_VAR gBtWifiGpsState;
+ OSAL_BIT_OP_VAR gGpsFmState;
+ UINT32 gWifiProbed;
+-INT32 gWmtDbgLvl = WMT_LOG_INFO;
++INT32 gWmtDbgLvl = WMT_LOG_LOUD;
+ MTK_WCN_BOOL g_pwr_off_flag = MTK_WCN_BOOL_TRUE;
+ 
+ /*******************************************************************************
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/include/wmt_plat.h b/drivers/misc/mediatek/connectivity/common/common_main/include/wmt_plat.h
+index 7545d9459..6c386824d 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/include/wmt_plat.h
++++ b/drivers/misc/mediatek/connectivity/common/common_main/include/wmt_plat.h
+@@ -72,7 +72,7 @@ do { \
+ #define WMT_PLAT_PR_DBG(fmt, arg...) \
+ do { \
+ 	if (wmtPlatLogLvl >= WMT_PLAT_LOG_DBG) \
+-		pr_debug(DFT_TAG "[D]%s:"  fmt, __func__, ##arg); \
++		pr_info(DFT_TAG "[D]%s:"  fmt, __func__, ##arg); \
+ } while (0)
+ 
+ #endif
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/include/wmt_dev.h b/drivers/misc/mediatek/connectivity/common/common_main/linux/include/wmt_dev.h
+index 0aec92321..91f4b5b49 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/include/wmt_dev.h
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/include/wmt_dev.h
+@@ -25,6 +25,7 @@ VOID wmt_dev_rx_event_cb(VOID);
+ INT32 wmt_dev_rx_timeout(P_OSAL_EVENT pEvent);
+ INT32 wmt_dev_patch_get(PUINT8 pPatchName, osal_firmware **ppPatch);
+ INT32 wmt_dev_patch_put(osal_firmware **ppPatch);
++INT32 wmt_dev_srh_patch_headless(VOID);
+ VOID wmt_dev_patch_info_free(VOID);
+ VOID wmt_dev_send_cmd_to_daemon(UINT32 cmd);
+ MTK_WCN_BOOL wmt_dev_get_early_suspend_state(VOID);
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
+index e28d02dd4..6776412b1 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
+@@ -438,6 +438,58 @@ VOID wmt_dev_patch_info_free(VOID)
+ 	wmt_lib_set_patch_info(NULL);
+ }
+ 
++/*
++ * Headless srh_patch.
++ *
++ * On stock Android the WMT_CTRL ul_cmd "srh_patch" is serviced by the userspace
++ * stp_uart_launcher daemon: it locates the SOC multi-patch (the connac MCU
++ * patch), then publishes the patch count and per-patch download descriptor into
++ * the kernel via WMT_IOCTL_SET_PATCH_NUM / WMT_IOCTL_SET_PATCH_INFO.
++ *
++ * pmOS has no such daemon, so the ul_cmd never completes and mtk_wcn_soc_sw_init
++ * aborts at "patch info perpare fail". Replay the launcher step in-kernel, using
++ * the very same pPatchInfo / pAtchNum statics + free path the ioctls use:
++ * request_firmware the MCU patch (the core re-reads it through WMT_CTRL_GET_PATCH),
++ * then set patchNum=1 and a single WMT_PATCH_INFO whose conn target address is
++ * CONNAC_PATCH_START_ADDR (0x0001C000 per begonia gen4m connac.h/connac2x2.h; the
++ * patch header u4PatchVer 0x0001c0xx corroborates this load address).
++ */
++INT32 wmt_dev_srh_patch_headless(VOID)
++{
++	static const char *patch_name = "soc1_0_patch_mcu_2a_1_hdr.bin";
++	const UINT32 connac_patch_addr = 0x0001C000;
++	osal_firmware *fw = NULL;
++
++	/* verify the patch file is present; the core re-reads it via GET_PATCH */
++	if (wmt_dev_patch_get((PUINT8)patch_name, &fw) != 0 || fw == NULL) {
++		WMT_ERR_FUNC("srh_patch(headless): get %s fail\n", patch_name);
++		return -1;
++	}
++	wmt_dev_patch_put(&fw);
++
++	if (pPatchInfo == NULL)
++		pPatchInfo = kcalloc(1, sizeof(WMT_PATCH_INFO), GFP_ATOMIC);
++	if (!pPatchInfo) {
++		WMT_ERR_FUNC("srh_patch(headless): allocate memory fail\n");
++		return -1;
++	}
++
++	pAtchNum = 1;
++	pPatchInfo[0].dowloadSeq = 1;
++	pPatchInfo[0].addRess[0] = connac_patch_addr & 0xFF;
++	pPatchInfo[0].addRess[1] = (connac_patch_addr >> 8) & 0xFF;
++	pPatchInfo[0].addRess[2] = (connac_patch_addr >> 16) & 0xFF;
++	pPatchInfo[0].addRess[3] = (connac_patch_addr >> 24) & 0xFF;
++	osal_strncpy(pPatchInfo[0].patchName, (PUINT8)patch_name,
++		     osal_sizeof(pPatchInfo[0].patchName) - 1);
++
++	wmt_lib_set_patch_num(pAtchNum);
++	wmt_lib_set_patch_info(pPatchInfo);
++	WMT_INFO_FUNC("srh_patch(headless): %s seq=1 addr=0x%x num=%u\n",
++		      patch_name, connac_patch_addr, pAtchNum);
++	return 0;
++}
++
+ MTK_WCN_BOOL wmt_dev_is_file_exist(PUINT8 pFileName)
+ {
+ 	INT32 iRet = 0;
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/platform/wmt_plat_alps.c b/drivers/misc/mediatek/connectivity/common/common_main/platform/wmt_plat_alps.c
+index 8a057249d..db8a4ab63 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/platform/wmt_plat_alps.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/platform/wmt_plat_alps.c
+@@ -118,7 +118,7 @@ static INT32 wmt_plat_dump_pin_conf(VOID);
+ INT32 gWmtMergeIfSupport;
+ UINT32 gCoClockFlag;
+ BGF_IRQ_BALANCE g_bgf_irq_lock;
+-INT32 wmtPlatLogLvl = WMT_PLAT_LOG_INFO;
++INT32 wmtPlatLogLvl = WMT_PLAT_LOG_LOUD;
+ 
+ /*******************************************************************************
+ *                           P R I V A T E   D A T A
+-- 
+2.56.0
+

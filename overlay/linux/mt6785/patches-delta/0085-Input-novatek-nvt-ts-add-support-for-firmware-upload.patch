@@ -1,0 +1,212 @@
+From e8419e267f71f6368b65fdfadce205bde30913c9 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Tue, 1 Jul 2025 13:22:34 +0200
+Subject: [PATCH 085/115] Input: novatek-nvt-ts - add support for firmware
+ upload
+
+In preparation for SPI support, add support for uploading firmware.
+This is not implemented for I2C as chips like this have persistent memory
+and don't strictly require it to function.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../input/touchscreen/novatek-nvt-ts-core.c   | 56 +++++++++++++++++--
+ .../input/touchscreen/novatek-nvt-ts-i2c.c    |  3 +-
+ drivers/input/touchscreen/novatek-nvt-ts.h    | 37 +++++++++++-
+ 3 files changed, 89 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/input/touchscreen/novatek-nvt-ts-core.c b/drivers/input/touchscreen/novatek-nvt-ts-core.c
+index 582cefc26..3ce9bf169 100644
+--- a/drivers/input/touchscreen/novatek-nvt-ts-core.c
++++ b/drivers/input/touchscreen/novatek-nvt-ts-core.c
+@@ -75,20 +75,50 @@ static irqreturn_t nvt_ts_irq(int irq, void *dev_id)
+ 	return IRQ_HANDLED;
+ }
+ 
+-static int nvt_ts_start(struct input_dev *dev)
++static int nvt_ts_upload_firmware(const struct nvt_ts_data *data)
+ {
+-	struct nvt_ts_data *data = input_get_drvdata(dev);
++	const struct firmware *firmware = NULL;
++	struct device *dev = data->dev;
+ 	int error;
+ 
+-	error = regulator_bulk_enable(ARRAY_SIZE(data->regulators), data->regulators);
++	if (!data->upload_firmware || !data->fw_name)
++		return 0;
++
++	error = request_firmware(&firmware, data->fw_name, dev);
+ 	if (error) {
+-		dev_err(data->dev, "failed to enable regulators\n");
++		dev_err(dev, "unable to load firmware: %d\n", error);
+ 		return error;
+ 	}
+ 
++	error = data->upload_firmware(data, firmware);
++
++	release_firmware(firmware);
++	return error;
++}
++
++static int nvt_ts_start(struct input_dev *dev)
++{
++	struct nvt_ts_data *data = input_get_drvdata(dev);
++	int ret;
++
++	ret = regulator_bulk_enable(ARRAY_SIZE(data->regulators), data->regulators);
++	if (ret) {
++		dev_err(data->dev, "failed to enable regulators\n");
++		return ret;
++	}
++
+ 	enable_irq(data->irq);
+ 	gpiod_set_value_cansleep(data->reset_gpio, 0);
+ 
++	ret = nvt_ts_upload_firmware(data);
++	if (ret) {
++		dev_err(data->dev, "failed to upload firmware: %d\n", ret);
++		disable_irq(data->irq);
++		gpiod_set_value_cansleep(data->reset_gpio, 1);
++		regulator_bulk_disable(ARRAY_SIZE(data->regulators), data->regulators);
++		return ret;
++	}
++
+ 	return 0;
+ }
+ 
+@@ -128,7 +158,8 @@ static int nvt_ts_resume(struct device *dev)
+ EXPORT_GPL_SIMPLE_DEV_PM_OPS(nvt_ts_pm_ops, nvt_ts_suspend, nvt_ts_resume);
+ 
+ int nvt_ts_probe(struct device *dev, int irq, struct regmap *regmap,
+-		 const struct input_id *id)
++		 const struct input_id *id,
++		 nvt_ts_upload_firmware_impl upload_firmware)
+ {
+ 	int error, width, height, irq_type;
+ 	struct nvt_ts_data *data;
+@@ -146,9 +177,17 @@ int nvt_ts_probe(struct device *dev, int irq, struct regmap *regmap,
+ 	if (!chip)
+ 		return -EINVAL;
+ 
++	if (upload_firmware) {
++		error = device_property_read_string(dev, "firmware-name", &data->fw_name);
++		if (error)
++			return dev_err_probe(dev, error, "unable to get firmware name\n");
++	}
++
+ 	data->dev = dev;
+ 	data->regmap = regmap;
+ 	data->irq = irq;
++	data->upload_firmware = upload_firmware;
++	data->memory_map = chip->memory_map;
+ 	dev_set_drvdata(dev, data);
+ 
+ 	/*
+@@ -172,6 +211,13 @@ int nvt_ts_probe(struct device *dev, int irq, struct regmap *regmap,
+ 		return dev_err_probe(dev, error, "failed to request reset GPIO\n");
+ 	}
+ 
++	error = nvt_ts_upload_firmware(data);
++	if (error) {
++		gpiod_set_value_cansleep(data->reset_gpio, 1);
++		regulator_bulk_disable(ARRAY_SIZE(data->regulators), data->regulators);
++		return dev_err_probe(dev, error, "failed to upload firmware\n");
++	}
++
+ 	/* Wait for controller to come out of reset before params read */
+ 	msleep(100);
+ 	error = regmap_raw_read(data->regmap, NVT_TS_PARAMETERS_START,
+diff --git a/drivers/input/touchscreen/novatek-nvt-ts-i2c.c b/drivers/input/touchscreen/novatek-nvt-ts-i2c.c
+index ec6ed3468..0534d3e56 100644
+--- a/drivers/input/touchscreen/novatek-nvt-ts-i2c.c
++++ b/drivers/input/touchscreen/novatek-nvt-ts-i2c.c
+@@ -25,7 +25,8 @@ static int nvt_ts_i2c_probe(struct i2c_client *i2c)
+ 	if (IS_ERR(regmap))
+ 		return PTR_ERR(regmap);
+ 
+-	return nvt_ts_probe(&i2c->dev, i2c->irq, regmap, &nvt_ts_i2c_input_id);
++	return nvt_ts_probe(&i2c->dev, i2c->irq, regmap, &nvt_ts_i2c_input_id,
++			    NULL);
+ }
+ 
+ static const struct nvt_ts_chip_data nvt_nt11205_ts_data = {
+diff --git a/drivers/input/touchscreen/novatek-nvt-ts.h b/drivers/input/touchscreen/novatek-nvt-ts.h
+index bde2f2158..4fb2f96ca 100644
+--- a/drivers/input/touchscreen/novatek-nvt-ts.h
++++ b/drivers/input/touchscreen/novatek-nvt-ts.h
+@@ -2,6 +2,7 @@
+ #ifndef __NOVATEK_NVT_TS_H_
+ #define __NOVATEK_NVT_TS_H_
+ 
++#include <linux/firmware.h>
+ #include <linux/input.h>
+ #include <linux/input/touchscreen.h>
+ #include <linux/regmap.h>
+@@ -10,6 +11,10 @@
+ #define NVT_TS_TOUCH_START		0x00
+ #define NVT_TS_TOUCH_SIZE		6
+ 
++#define NVT_TS_HOST_COMMAND_START	0x50
++
++#define NVT_TS_RESET_STATUS_START	0x60
++
+ #define NVT_TS_PARAMETERS_START		0x78
+ /* These are offsets from NVT_TS_PARAMETERS_START */
+ #define NVT_TS_PARAMS_WIDTH		0x04
+@@ -30,6 +35,31 @@
+ #define NVT_TS_TOUCH_UPDATE		2
+ #define NVT_TS_TOUCH_RELEASE		3
+ 
++struct nvt_ts_data;
++
++struct nvt_ts_memory_map {
++	u32 event_buffer;
++	u32 software_reset_n8;
++	u32 spi_rd_fast;
++	u32 bootloader_crc_enable;
++	u32 boot_ready;
++	struct {
++		u32 ilm;
++		u32 dlm;
++	} length;
++	struct {
++		u32 ilm;
++		u32 dlm;
++	} destination;
++	struct {
++		u32 ilm;
++		u32 dlm;
++	} golden_checksum;
++};
++
++typedef int (*nvt_ts_upload_firmware_impl)(const struct nvt_ts_data *data,
++					   const struct firmware *firmware);
++
+ struct nvt_ts_data {
+ 	struct device *dev;
+ 	struct regmap *regmap;
+@@ -39,15 +69,20 @@ struct nvt_ts_data {
+ 	struct touchscreen_properties prop;
+ 	int max_touches;
+ 	int irq;
++	nvt_ts_upload_firmware_impl upload_firmware;
++	const struct nvt_ts_memory_map *memory_map;
++	const char *fw_name;
+ 	u8 buf[NVT_TS_TOUCH_SIZE * NVT_TS_MAX_TOUCHES];
+ };
+ 
+ struct nvt_ts_chip_data {
++	const struct nvt_ts_memory_map *memory_map;
+ 	u8 chip_id;
+ };
+ 
+ int nvt_ts_probe(struct device *dev, int irq, struct regmap *regmap,
+-		 const struct input_id *id);
++		 const struct input_id *id,
++		 nvt_ts_upload_firmware_impl upload_firmware);
+ 
+ extern const struct dev_pm_ops nvt_ts_pm_ops;
+ 
+-- 
+2.56.0
+

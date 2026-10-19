@@ -1,0 +1,64 @@
+From d42bb8276ac3020e5d3a6ff7e04901761b9708f7 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Mon, 23 Jun 2025 19:35:06 +0200
+Subject: [PATCH 024/115] dt-bindings: power: mediatek: Add support for MT6785
+
+Add mediatek,mt6785-power-controller compatible and power domain bindings.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../power/mediatek,power-controller.yaml      |  2 ++
+ .../dt-bindings/power/mediatek,mt6785-power.h | 21 +++++++++++++++++++
+ 2 files changed, 23 insertions(+)
+ create mode 100644 include/dt-bindings/power/mediatek,mt6785-power.h
+
+diff --git a/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml b/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml
+index 07f046277..fbedcd9d0 100644
+--- a/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml
++++ b/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml
+@@ -24,6 +24,7 @@ properties:
+   compatible:
+     enum:
+       - mediatek,mt6735-power-controller
++      - mediatek,mt6785-power-controller
+       - mediatek,mt6795-power-controller
+       - mediatek,mt6893-power-controller
+       - mediatek,mt8167-power-controller
+@@ -101,6 +102,7 @@ $defs:
+       reg:
+         description: |
+           Power domain index. Valid values are defined in:
++              "include/dt-bindings/power/mediatek,mt6785-power.h" - for MT6785 type power domain.
+               "include/dt-bindings/power/mt6795-power.h" - for MT8167 type power domain.
+               "include/dt-bindings/power/mediatek,mt6893-power.h" - for MT6893 type power domain.
+               "include/dt-bindings/power/mt8167-power.h" - for MT8167 type power domain.
+diff --git a/include/dt-bindings/power/mediatek,mt6785-power.h b/include/dt-bindings/power/mediatek,mt6785-power.h
+new file mode 100644
+index 000000000..b66cc45c3
+--- /dev/null
++++ b/include/dt-bindings/power/mediatek,mt6785-power.h
+@@ -0,0 +1,21 @@
++/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
++
++#ifndef _DT_BINDINGS_POWER_MT6785_POWER_H
++#define _DT_BINDINGS_POWER_MT6785_POWER_H
++
++#define MT6785_POWER_DOMAIN_AUDIO	0
++#define MT6785_POWER_DOMAIN_CAM		1
++#define MT6785_POWER_DOMAIN_CONN	2
++#define MT6785_POWER_DOMAIN_ISP		3
++#define MT6785_POWER_DOMAIN_MD		4
++#define MT6785_POWER_DOMAIN_MFG		5
++#define MT6785_POWER_DOMAIN_MFG_ASYNC	6
++#define MT6785_POWER_DOMAIN_MFG_CORE0	7
++#define MT6785_POWER_DOMAIN_MFG_CORE1	8
++#define MT6785_POWER_DOMAIN_MFG_CORE2	9
++#define MT6785_POWER_DOMAIN_MFG_CORE3	10
++#define MT6785_POWER_DOMAIN_MM		11
++#define MT6785_POWER_DOMAIN_VDEC	12
++#define MT6785_POWER_DOMAIN_VENC	13
++
++#endif /* _DT_BINDINGS_POWER_MT6785_POWER_H */
+-- 
+2.56.0
+

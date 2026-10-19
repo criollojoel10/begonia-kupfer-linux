@@ -1,0 +1,47 @@
+From 366f59732ee2526fe36f34fa57623e94bc969599 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Tue, 1 Jul 2025 15:59:03 +0200
+Subject: [PATCH 079/115] dt-bindings: display: novatek,nt36672a: add
+ compatible for beryllium and begonia panels
+
+Previous compatible only included the panel manufacturer, but not the
+device it is used in. This commit adds the device specific compatible
+strings for Pocophone F1 (beryllium) and Redmi Note 8 Pro (begonia).
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../display/panel/novatek,nt36672a.yaml        | 18 ++++++++++++++----
+ 1 file changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/display/panel/novatek,nt36672a.yaml b/Documentation/devicetree/bindings/display/panel/novatek,nt36672a.yaml
+index 5d16d8511..8ebec0a30 100644
+--- a/Documentation/devicetree/bindings/display/panel/novatek,nt36672a.yaml
++++ b/Documentation/devicetree/bindings/display/panel/novatek,nt36672a.yaml
+@@ -20,10 +20,20 @@ allOf:
+ 
+ properties:
+   compatible:
+-    items:
+-      - enum:
+-          - tianma,fhd-video
+-      - const: novatek,nt36672a
++    oneOf:
++      - items:
++          - enum:
++              - xiaomi,beryllium-tianma-nt36672a
++              - xiaomi,begonia-csot-nt36672a
++              - xiaomi,begonia-tianma-nt36672a
++          - const: novatek,nt36672a
++
++      - description: Deprecated compatible string that only included manufacturer
++        items:
++          - const: tianma,fhd-video
++          - const: novatek,nt36672a
++        deprecated: true
++
+     description: This indicates the panel manufacturer of the panel that is
+       in turn using the NT36672A panel driver. This compatible string
+       determines how the NT36672A panel driver is configured for the indicated
+-- 
+2.56.0
+

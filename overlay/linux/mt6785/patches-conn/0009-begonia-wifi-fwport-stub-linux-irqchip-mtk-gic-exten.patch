@@ -1,0 +1,34 @@
+From 7a077bd236fccfd21860ce2c301221839e8ff02a Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 00:13:40 +0200
+Subject: [PATCH 09/51] begonia-wifi (fwport): stub
+ linux/irqchip/mtk-gic-extend.h for vendor BTIF
+
+Vendor mtk_btif.h pulls <linux/irqchip/mtk-gic-extend.h> for mt_irq_dump_status();
+no mainline equivalent. Add a no-op inline stub in the compat include tree.
+
+wmt_drv now compiles + links clean (LD wmt_drv.o); this unblocks the vendor BTIF.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../compat/include/linux/irqchip/mtk-gic-extend.h         | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+ create mode 100644 drivers/misc/mediatek/connectivity/compat/include/linux/irqchip/mtk-gic-extend.h
+
+diff --git a/drivers/misc/mediatek/connectivity/compat/include/linux/irqchip/mtk-gic-extend.h b/drivers/misc/mediatek/connectivity/compat/include/linux/irqchip/mtk-gic-extend.h
+new file mode 100644
+index 000000000..b4c94118e
+--- /dev/null
++++ b/drivers/misc/mediatek/connectivity/compat/include/linux/irqchip/mtk-gic-extend.h
+@@ -0,0 +1,8 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/* compat stub: linux/irqchip/mtk-gic-extend.h (begonia fwport).
++ * Vendor BTIF includes this only for mt_irq_dump_status(); no mainline
++ * equivalent. Provide a no-op so the IRQ-dump debug path compiles. */
++#ifndef _COMPAT_STUB_MTK_GIC_EXTEND_H
++#define _COMPAT_STUB_MTK_GIC_EXTEND_H
++static inline void mt_irq_dump_status(int irq) { (void)irq; }
++#endif
+-- 
+2.56.0
+

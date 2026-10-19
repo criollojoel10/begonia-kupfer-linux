@@ -1,0 +1,186 @@
+From 115d45edf32c747a5766cbdb5c07d5d17ac77b71 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 00:24:27 +0200
+Subject: [PATCH 12/51] begonia-wifi (fwport): resolve modpost - combo CFG=0 +
+ weak stubs for pruned TUs
+
+- wmt_core.h: CFG_CORE_MT662{0,8},663{0,2}_SUPPORT = 0 (begonia is SOC-only;
+  combo IC drivers wmt_ic_66xx were pruned) - drops wmt_ic_ops_mt66xx refs.
+- mtk-bsp-compat.c: weak no-op stubs for pruned SDIO/UART/hif_sdio transports,
+  wmt_detect_get_chip_type()->WMT_CHIP_TYPE_SOC, and the connadp platform-bridge
+  exports. These sit on COMBO/SDIO/UART branches the begonia BTIF+SOC path never
+  takes (flagged: a runtime hit means an unexpected branch).
+
+wmt_drv + vendor BTIF both COMPILE clean; this is link-stage (modpost) cleanup.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../common_main/core/include/wmt_core.h       | 28 ++----
+ .../connectivity/common/mtk-bsp-compat.c      | 92 +++++++++++++------
+ 2 files changed, 73 insertions(+), 47 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/core/include/wmt_core.h b/drivers/misc/mediatek/connectivity/common/common_main/core/include/wmt_core.h
+index 7ac2b51cd..f6e0e6f75 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/core/include/wmt_core.h
++++ b/drivers/misc/mediatek/connectivity/common/common_main/core/include/wmt_core.h
+@@ -30,29 +30,17 @@
+ *                         C O M P I L E R   F L A G S
+ ********************************************************************************
+ */
+-#if defined(MT6620E3) || defined(MT6620E6)	/* need modify this part */
+-#define CFG_CORE_MT6620_SUPPORT 1	/* whether MT6620 is supported or not */
+-#else
+-#define CFG_CORE_MT6620_SUPPORT 1	/* whether MT6620 is supported or not */
+-#endif
++/* begonia fwport: SOC-only; combo IC drivers (wmt_ic_6620) pruned. */
++#define CFG_CORE_MT6620_SUPPORT 0
+ 
+-#if defined(MT6628)
+-#define CFG_CORE_MT6628_SUPPORT 1	/* whether MT6628 is supported or not */
+-#else
+-#define CFG_CORE_MT6628_SUPPORT 1	/* whether MT6628 is supported or not */
+-#endif
++/* begonia fwport: SOC-only; combo IC drivers (wmt_ic_6628) pruned. */
++#define CFG_CORE_MT6628_SUPPORT 0
+ 
+-#if defined(MT6630)
+-#define CFG_CORE_MT6630_SUPPORT 1	/* whether MT6630 is supported or not */
+-#else
+-#define CFG_CORE_MT6630_SUPPORT 1	/* whether MT6630 is supported or not */
+-#endif
++/* begonia fwport: SOC-only; combo IC drivers (wmt_ic_6630) pruned. */
++#define CFG_CORE_MT6630_SUPPORT 0
+ 
+-#if defined(MT6632)
+-#define CFG_CORE_MT6632_SUPPORT 1	/* whether MT6632 is supported or not */
+-#else
+-#define CFG_CORE_MT6632_SUPPORT 1	/* whether MT6632 is supported or not */
+-#endif
++/* begonia fwport: SOC-only; combo IC drivers (wmt_ic_6632) pruned. */
++#define CFG_CORE_MT6632_SUPPORT 0
+ 
+ #define CFG_CORE_SOC_SUPPORT 1
+ /* TODO:[ChangeFeature][George] move this definition outside so that wmt_dev can remove wmt_core.h inclusion. */
+diff --git a/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c b/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c
+index b19e5a302..d8818f5f7 100644
+--- a/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c
++++ b/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c
+@@ -1,50 +1,88 @@
+ // SPDX-License-Identifier: GPL-2.0
+ /*
+- * mtk-bsp-compat.c - no-op bodies for the connectivity_build_in_adapter
+- * export wrappers that wmt_drv references via the unconditional KERNEL_*
+- * macros. The real bodies live in the separate connadp module (which pulls a
+- * large BSP surface incl. private scheduler headers); for the Stage-1 build
+- * port wmt_drv is standalone, so these are no-op shims.
++ * mtk-bsp-compat.c - Stage-1 forward-port compat bodies for wmt_drv.
+  *
+- * RULE: no register address / value / bitfield. PMIC/GPIO calls are no-op at
+- * the API level - no hardware is touched at build or (these) call sites.
++ * Two roles:
++ *  1. No-op bodies for the connectivity_build_in_adapter export wrappers that
++ *     wmt_drv references via the unconditional KERNEL_* macros. The real bodies
++ *     live in the separate connadp module (which pulls a large BSP surface incl.
++ *     private scheduler headers); wmt_drv is built standalone here.
++ *  2. Weak stubs for symbols that lived in *pruned* TUs (SDIO/UART transports,
++ *     hif_sdio, wmt_detect, combo IC ops) that the begonia path never executes
++ *     (begonia uses the BTIF transport + the SOC chip). These keep modpost
++ *     happy without dragging the pruned transports back in.
++ *
++ * RULE: no register address / value / bitfield. PMIC/GPIO/SDIO calls are no-op
++ * at the API level - no hardware is touched at build or (these) call sites.
++ * FLAG: any of these stubs that actually gets called at runtime indicates the
++ *       begonia path unexpectedly took a COMBO/SDIO/UART branch - revisit.
+  */
+ #include <linux/module.h>
+ #include <linux/types.h>
+ #include <linux/sched.h>
+ 
++#include "osal_typedef.h"
++#include "wmt_detect.h"
++
++/* ---- connectivity_build_in_adapter export wrappers (no-op) -------------- */
+ void connectivity_export_pmic_set_register_value(int flagname, unsigned int val)
+-{
+-	(void)flagname; (void)val;
+-}
++{ (void)flagname; (void)val; }
+ 
+ unsigned short connectivity_export_pmic_get_register_value(int flagname)
+-{
+-	(void)flagname;
+-	return 0;
+-}
++{ (void)flagname; return 0; }
+ 
+ void connectivity_export_mt6306_set_gpio_out(unsigned long pin, unsigned long output)
+-{
+-	(void)pin; (void)output;
+-}
++{ (void)pin; (void)output; }
+ 
+ void connectivity_export_mt6306_set_gpio_dir(unsigned long pin, unsigned long dir)
+-{
+-	(void)pin; (void)dir;
+-}
++{ (void)pin; (void)dir; }
+ 
+ void connectivity_export_show_stack(struct task_struct *tsk, unsigned long *sp)
+-{
+-	(void)tsk; (void)sp;
+-}
++{ (void)tsk; (void)sp; }
+ 
+ void connectivity_export_dump_thread_state(const char *name)
+-{
+-	(void)name;
+-}
++{ (void)name; }
+ 
+ void connectivity_export_dump_gpio_info(int start, int end)
++{ (void)start; (void)end; }
++
++/* ---- wmt_detect (common_detect, only mtk_wcn_stub_alps.o is built) ------ *
++ * begonia is an SOC consys chip, so report SOC. */
++ENUM_WMT_CHIP_TYPE __weak wmt_detect_get_chip_type(void)
+ {
+-	(void)start; (void)end;
++	return WMT_CHIP_TYPE_SOC;
+ }
++
++/* ---- pruned SDIO/UART transport + hif_sdio + adapter bridge ------------- *
++ * Declared via their own headers in the consumers; defined weak here so the
++ * dead COMBO/SDIO/UART branches link. Kept untyped (varargs-free, simple)
++ * matching the C call sites; the prototypes come from stp_sdio.h / wmt_dev.h /
++ * wmt_build_in_adapter.h included by the consumers, not here, so we declare the
++ * exact signatures locally. */
++int __weak mtk_wcn_stp_uart_drv_init(void) { return 0; }
++int __weak mtk_wcn_stp_uart_drv_exit(void) { return 0; }
++int __weak mtk_wcn_stp_sdio_drv_init(void) { return 0; }
++int __weak mtk_wcn_stp_sdio_drv_exit(void) { return 0; }
++
++void __weak stp_sdio_retry_flag_ctrl(int flag) { (void)flag; }
++int  __weak stp_sdio_retry_flag_get(void) { return 0; }
++void __weak stp_sdio_dump_register(void) { }
++void __weak stp_sdio_txdbg_dump(void) { }
++int  __weak stp_sdio_wake_up_ctrl(unsigned int ctx) { (void)ctx; return 0; }
++int  __weak stp_sdio_rw_retry(int type, unsigned int retry_limit,
++			      unsigned int ctx, unsigned int offset,
++			      void *pvalue, int wait)
++{ (void)type; (void)retry_limit; (void)ctx; (void)offset; (void)pvalue; (void)wait; return 0; }
++
++int  __weak mtk_wcn_hif_sdio_drv_init(void) { return 0; }
++void __weak mtk_wcn_hif_sdio_driver_exit(void) { }
++int  __weak mtk_wcn_hif_sdio_f0_readb(unsigned int ctx, unsigned int offset, unsigned char *pvb)
++{ (void)ctx; (void)offset; if (pvb) *pvb = 0; return 0; }
++int  __weak mtk_wcn_hif_sdio_update_cb_reg(int (*ts_update)(void)) { (void)ts_update; return 0; }
++int  __weak mtk_wcn_hif_sdio_wmt_control(int func_type, int is_on)
++{ (void)func_type; (void)is_on; return 0; }
++
++/* adapter platform-bridge (wmt_build_in_adapter.c, connadp module) */
++void __weak wmt_export_platform_bridge_register(void *cb) { (void)cb; }
++void __weak wmt_export_platform_bridge_unregister(void) { }
++void __weak wmt_export_mtk_wcn_cmb_sdio_disable_eirq(void) { }
+-- 
+2.56.0
+

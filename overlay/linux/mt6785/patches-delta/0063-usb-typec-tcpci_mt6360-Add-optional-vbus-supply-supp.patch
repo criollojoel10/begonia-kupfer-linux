@@ -1,0 +1,74 @@
+From c034507c44b75a4392afa13f2d4ae5d6a35bd094 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sun, 11 Jan 2026 17:36:55 +0100
+Subject: [PATCH 063/115] usb: typec: tcpci_mt6360: Add optional vbus supply
+ support
+
+Needed for proper role switch support.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/usb/typec/tcpm/tcpci_mt6360.c | 26 ++++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/drivers/usb/typec/tcpm/tcpci_mt6360.c b/drivers/usb/typec/tcpm/tcpci_mt6360.c
+index 4a33e576f..b6b6cb4fb 100644
+--- a/drivers/usb/typec/tcpm/tcpci_mt6360.c
++++ b/drivers/usb/typec/tcpm/tcpci_mt6360.c
+@@ -11,6 +11,7 @@
+ #include <linux/of.h>
+ #include <linux/platform_device.h>
+ #include <linux/regmap.h>
++#include <linux/regulator/consumer.h>
+ #include <linux/usb/tcpci.h>
+ #include <linux/usb/tcpm.h>
+ 
+@@ -40,6 +41,7 @@ struct mt6360_tcpc_info {
+ 	struct tcpci_data tdata;
+ 	struct tcpci *tcpci;
+ 	struct device *dev;
++	struct regulator *vbus;
+ 	int irq;
+ };
+ 
+@@ -140,6 +142,26 @@ static irqreturn_t mt6360_irq(int irq, void *dev_id)
+ 	return tcpci_irq(mti->tcpci);
+ }
+ 
++static int mt6360_tcpc_set_vbus(struct tcpci *tcpci, struct tcpci_data *data,
++				bool source, bool sink)
++{
++	struct mt6360_tcpc_info *mti =
++		container_of(data, struct mt6360_tcpc_info, tdata);
++	int ret;
++
++	ret = regulator_is_enabled(mti->vbus);
++	if (ret < 0)
++		return ret;
++
++	if (ret && !source)
++		return regulator_disable(mti->vbus);
++
++	if (!ret && source)
++		return regulator_enable(mti->vbus);
++
++	return 0;
++}
++
+ static int mt6360_tcpc_probe(struct platform_device *pdev)
+ {
+ 	struct mt6360_tcpc_info *mti;
+@@ -161,6 +183,10 @@ static int mt6360_tcpc_probe(struct platform_device *pdev)
+ 	if (mti->irq < 0)
+ 		return mti->irq;
+ 
++	mti->vbus = devm_regulator_get_optional(&pdev->dev, "vbus");
++	if (!IS_ERR(mti->vbus))
++		mti->tdata.set_vbus = mt6360_tcpc_set_vbus;
++
+ 	mti->tdata.init = mt6360_tcpc_init;
+ 	mti->tcpci = tcpci_register_port(&pdev->dev, &mti->tdata);
+ 	if (IS_ERR(mti->tcpci)) {
+-- 
+2.56.0
+

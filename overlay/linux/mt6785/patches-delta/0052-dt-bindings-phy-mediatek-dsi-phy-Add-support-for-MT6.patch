@@ -1,0 +1,32 @@
+From a5dbd8fb91bf384676c1014e9bf887d8370372a0 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 9 Jul 2025 20:34:45 +0200
+Subject: [PATCH 052/115] dt-bindings: phy: mediatek: dsi-phy: Add support for
+ MT6785
+
+Add mediatek,mt6785-mipi-tx compatible with mediatek,mt8183-mipi-tx
+fallback.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ Documentation/devicetree/bindings/phy/mediatek,dsi-phy.yaml | 1 +
+ 1 file changed, 1 insertion(+)
+ mode change 100644 => 100755 Documentation/devicetree/bindings/phy/mediatek,dsi-phy.yaml
+
+diff --git a/Documentation/devicetree/bindings/phy/mediatek,dsi-phy.yaml b/Documentation/devicetree/bindings/phy/mediatek,dsi-phy.yaml
+old mode 100644
+new mode 100755
+index c6d0bbdbe..e81edc0f9
+--- a/Documentation/devicetree/bindings/phy/mediatek,dsi-phy.yaml
++++ b/Documentation/devicetree/bindings/phy/mediatek,dsi-phy.yaml
+@@ -31,6 +31,7 @@ properties:
+           - const: mediatek,mt8173-mipi-tx
+       - items:
+           - enum:
++              - mediatek,mt6785-mipi-tx
+               - mediatek,mt6893-mipi-tx
+               - mediatek,mt8188-mipi-tx
+               - mediatek,mt8195-mipi-tx
+-- 
+2.56.0
+

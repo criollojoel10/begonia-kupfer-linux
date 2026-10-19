@@ -1,0 +1,72 @@
+From 3dee3d54dff6399ff386432455a8fefe0b51626b Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sat, 12 Jul 2025 17:40:02 +0200
+Subject: [PATCH 096/115] arm64: dts: mediatek: mt6785-xiaomi-begonia: Add
+ power supplies for CPU/CCI/GPU
+
+Add the necessary power supplies to safely enable CPU, CCI and GPU
+frequency scaling.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../dts/mediatek/mt6785-xiaomi-begonia.dts    | 44 +++++++++++++++++++
+ 1 file changed, 44 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts
+index 7281f60e6..9b66c3e3e 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts
+@@ -13,6 +13,50 @@ / {
+ 	chassis-type = "handset";
+ };
+ 
++&cci {
++	proc-supply = <&mt6359_vproc2_buck_reg>;
++};
++
++&cpu0 {
++	proc-supply = <&mt6359_vproc2_buck_reg>;
++};
++
++&cpu1 {
++	proc-supply = <&mt6359_vproc2_buck_reg>;
++};
++
++&cpu2 {
++	proc-supply = <&mt6359_vproc2_buck_reg>;
++};
++
++&cpu3 {
++	proc-supply = <&mt6359_vproc2_buck_reg>;
++};
++
++&cpu4 {
++	proc-supply = <&mt6359_vproc2_buck_reg>;
++};
++
++&cpu5 {
++	proc-supply = <&mt6359_vproc2_buck_reg>;
++};
++
++&cpu6 {
++	proc-supply = <&mt6359_vproc1_buck_reg>;
++};
++
++&cpu7 {
++	proc-supply = <&mt6359_vproc1_buck_reg>;
++};
++
++&mfg {
++	domain-supply = <&mt6359_vpu_buck_reg>;
++};
++
++&mfg_async {
++	domain-supply = <&mt6359_vgpu11_buck_reg>;
++};
++
+ &mt6359_vcore_buck_reg {
+ 	regulator-always-on;
+ };
+-- 
+2.56.0
+

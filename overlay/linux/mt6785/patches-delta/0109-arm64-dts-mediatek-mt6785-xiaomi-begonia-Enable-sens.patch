@@ -1,0 +1,146 @@
+From dd02e9a24d7e6282c005f325d0d8b03bb4f22c85 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Fri, 18 Jul 2025 20:04:29 +0200
+Subject: [PATCH 109/115] arm64: dts: mediatek: mt6785-xiaomi-begonia: Enable
+ sensors
+
+Describe imu, proximity, and magnetometer sensors.
+SCP firmware should handle them, but as it hasn't been implemented yet,
+they are handled this way.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../mt6785-xiaomi-begonia-common.dtsi         | 89 +++++++++++++++++++
+ 1 file changed, 89 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+index f0743ae8b..2fc991a9f 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+@@ -179,6 +179,31 @@ led {
+ 	};
+ };
+ 
++&i2c1 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c1_pins>;
++
++	status = "okay";
++
++	magnetometer@c {
++		compatible = "asahi-kasei,ak09918";
++		reg = <0x0c>;
++
++		vdd-supply = <&mt6359_vio18_ldo_reg>;
++	};
++
++	proximity@47 {
++		compatible = "sensortek,stk3310";
++		reg = <0x47>;
++
++		interrupts-extended = <&pio 6 IRQ_TYPE_EDGE_FALLING>;
++		proximity-near-level = <70>;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&proximity_pins>;
++	};
++};
++
+ &i2c5 {
+ 	clock-frequency = <3400000>;
+ 
+@@ -442,6 +467,14 @@ pins-bus {
+ 		};
+ 	};
+ 
++	i2c1_pins: i2c1-pins {
++		pins-bus {
++			pinmux = <PINMUX_GPIO61__FUNC_SCL1>,
++				 <PINMUX_GPIO62__FUNC_SDA1>;
++			bias-pull-up;
++		};
++	};
++
+ 	i2c5_pins: i2c5-pins {
+ 		pins-bus {
+ 			pinmux = <PINMUX_GPIO28__FUNC_SCL5>,
+@@ -450,6 +483,14 @@ pins-bus {
+ 		};
+ 	};
+ 
++	imu_pins: imu-pins {
++		pins-interrupt {
++			pinmux = <PINMUX_GPIO10__FUNC_GPIO10>;
++			bias-pull-down = <MTK_PUPD_SET_R1R0_00>;
++			input-enable;
++		};
++	};
++
+ 	mmc1_pins: mmc1-pins {
+ 		pins-cmd-dat {
+ 			pinmux = <PINMUX_GPIO135__FUNC_MSDC1_CMD>,
+@@ -492,6 +533,24 @@ pins-reset {
+ 		};
+ 	};
+ 
++	proximity_pins: proximity-pins {
++		pins-interrupt {
++			pinmux = <PINMUX_GPIO6__FUNC_GPIO6>;
++			bias-pull-up;
++			input-enable;
++		};
++	};
++
++	spi2_pins: spi2-pins {
++		pins-bus {
++			pinmux = <PINMUX_GPIO63__FUNC_SPI2_MI>,
++				 <PINMUX_GPIO64__FUNC_SPI2_CSB>,
++				 <PINMUX_GPIO65__FUNC_SPI2_MO>,
++				 <PINMUX_GPIO66__FUNC_SPI2_CLK>;
++			bias-disable;
++		};
++	};
++
+ 	spi5_pins: spi5-pins {
+ 		pins-bus {
+ 			pinmux = <PINMUX_GPIO37__FUNC_SPI5_A_MI>,
+@@ -562,6 +621,36 @@ power {
+ 	};
+ };
+ 
++&spi2 {
++	mediatek,pad-select = <0>;
++
++	pinctrl-names = "default";
++	pinctrl-0 = <&spi2_pins>;
++
++	status = "okay";
++
++	imu@0 {
++		compatible = "bosch,bmi120";
++		reg = <0>;
++
++		interrupts-extended = <&pio 10 IRQ_TYPE_EDGE_RISING>;
++		interrupt-names = "INT1";
++
++		spi-cs-setup-delay-ns = <1000000>;
++		spi-max-frequency = <10000000>;
++
++		vdd-supply = <&mt6359_vio18_ldo_reg>;
++		vddio-supply = <&mt6359_vio18_ldo_reg>;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&imu_pins>;
++
++		mount-matrix = "0", "1", "0",
++			       "-1", "0", "0",
++			       "0", "0", "1";
++	};
++};
++
+ &ssusb {
+ 	maximum-speed = "high-speed";
+ 	usb-role-switch;
+-- 
+2.56.0
+

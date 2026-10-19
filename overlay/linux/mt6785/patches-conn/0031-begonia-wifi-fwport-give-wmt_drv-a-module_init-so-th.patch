@@ -1,0 +1,63 @@
+From f945b99acc29696013a23f6c8931491aab01b56c Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 08:05:28 +0200
+Subject: [PATCH 31/51] begonia-wifi (fwport): give wmt_drv a module_init so
+ the WMT core actually boots
+
+The vendor stack's only module_init lived in common_detect/wmt_detect.c
+[wmt_detect_driver_init -> do_common_drv_init -> mtk_wcn_common_drv_init ->
+WMT_init], and common_detect is not part of this build. So wmt_drv loaded but
+WMT_init never ran: no "mtk_wmt" consys platform driver registered, no
+/dev/stpwmt, no chip bring-up. Verified on-device: consys node unbound, zero WMT
+logs, the /dev/wmtWifi seen earlier was only a stray shell-redirect file.
+
+Register the existing exported mtk_wcn_common_drv_init/exit as wmt_drv
+module_init/exit. With this, on hardware the full vendor stack runs end to end:
+mtk_wmt_probe binds 18002000.consys, /dev/wmtWifi registers as a real misc dev,
+func_on(WIFI) drives bring-up, and the conn-MCU reaches ROM idle 0x1d1e, matching
+the working stock oracle.
+
+Remaining gate (separate, conn-side): the first WMT control command over STP/BTIF
+[get_rom_patch_info] times out at wmt_ctrl_ul_cmd "wait signal timeout", so the
+ROM patch download fails. That is the conn RX/response gate, now reproduced live
+with the vendor code on mainline.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../common/common_main/linux/wmt_dev.c        | 23 +++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
+index 3b20b271a..7421b0a6d 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
+@@ -1795,3 +1795,26 @@ VOID mtk_wcn_common_drv_exit(VOID)
+ }
+ EXPORT_SYMBOL(mtk_wcn_common_drv_exit);
+ 
++/*
++ * begonia fwport: wmt_drv self-bootstrap.
++ * The vendor stack's ONLY module_init lived in common_detect/wmt_detect.c
++ * (wmt_detect_driver_init -> do_common_drv_init -> mtk_wcn_common_drv_init ->
++ * WMT_init). common_detect is not part of this forward-port build, so wmt_drv
++ * otherwise has no init entry and WMT_init never runs (no consys platform driver
++ * registered, no /dev/stpwmt, no chip bring-up). Register the bring-up directly
++ * as wmt_drv's module init. Chip type is SOC (begonia) via the weak
++ * wmt_detect_get_chip_type stub, so wmt_plat_init takes the consys path and
++ * registers the "mtk_wmt" platform driver that binds 18002000.consys.
++ */
++static int __init wmt_drv_module_init(void)
++{
++	return mtk_wcn_common_drv_init();
++}
++module_init(wmt_drv_module_init);
++
++static void __exit wmt_drv_module_exit(void)
++{
++	mtk_wcn_common_drv_exit();
++}
++module_exit(wmt_drv_module_exit);
++
+-- 
+2.56.0
+

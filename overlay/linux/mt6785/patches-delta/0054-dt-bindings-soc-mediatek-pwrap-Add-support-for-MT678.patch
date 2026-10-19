@@ -1,0 +1,28 @@
+From 4e18ef443bd1278cee05c94687151d28cfd77dc5 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 9 Jul 2025 19:46:57 +0200
+Subject: [PATCH 054/115] dt-bindings: soc: mediatek: pwrap: Add support for
+ MT6785
+
+Add mediatek,mt6785-pwrap compatible.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../devicetree/bindings/soc/mediatek/mediatek,pwrap.yaml         | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/soc/mediatek/mediatek,pwrap.yaml b/Documentation/devicetree/bindings/soc/mediatek/mediatek,pwrap.yaml
+index e7c4a3984..449a256a8 100644
+--- a/Documentation/devicetree/bindings/soc/mediatek/mediatek,pwrap.yaml
++++ b/Documentation/devicetree/bindings/soc/mediatek/mediatek,pwrap.yaml
+@@ -33,6 +33,7 @@ properties:
+               - mediatek,mt2701-pwrap
+               - mediatek,mt6765-pwrap
+               - mediatek,mt6779-pwrap
++              - mediatek,mt6785-pwrap
+               - mediatek,mt6795-pwrap
+               - mediatek,mt6797-pwrap
+               - mediatek,mt6873-pwrap
+-- 
+2.56.0
+

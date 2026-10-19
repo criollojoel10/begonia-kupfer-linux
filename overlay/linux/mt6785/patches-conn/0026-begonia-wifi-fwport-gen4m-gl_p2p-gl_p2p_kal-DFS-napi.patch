@@ -1,0 +1,89 @@
+From 5c0621f9422dda8d5bdb4784ad631e02e15f9fe0 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 01:42:17 +0200
+Subject: [PATCH 26/51] begonia-wifi (fwport-gen4m): gl_p2p/gl_p2p_kal DFS +
+ napi + ch_switch churn
+
+- gl_p2p.c: netif_napi_add drop weight arg (6.1)
+- gl_p2p_kal.c: wireless_dev.cac_started removed 6.1 (guard the clear);
+  cfg80211_cac_event +link_id (6.1); cfg80211_ch_switch_notify +link_id (6.1)
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../connectivity/wlan/gen4m/os/linux/gl_p2p.c |  6 +++++
+ .../wlan/gen4m/os/linux/gl_p2p_kal.c          | 23 +++++++++++++++++--
+ 2 files changed, 27 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p.c
+index bdebd423c..d48b71d7a 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p.c
+@@ -554,8 +554,14 @@ static int p2pInit(struct net_device *prDev)
+ 	prDev->hw_features |= NETIF_F_GRO;
+ 	spin_lock_init(&prNetDevPrivate->napi_spinlock);
+ 	prNetDevPrivate->napi.dev = prDev;
++	/* netif_napi_add() dropped the weight arg in 6.1 (default 64). */
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++	netif_napi_add(prNetDevPrivate->napi.dev,
++		&prNetDevPrivate->napi, p2p_napi_poll);
++#else
+ 	netif_napi_add(prNetDevPrivate->napi.dev,
+ 		&prNetDevPrivate->napi, p2p_napi_poll, 64);
++#endif
+ 	DBGLOG(INIT, TRACE,
+ 		"GRO interface added successfully:%p\n", prDev);
+ #endif
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p_kal.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p_kal.c
+index cd5946827..133ccebeb 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p_kal.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p_kal.c
+@@ -1663,8 +1663,14 @@ void kalP2PRddDetectUpdate(IN struct GLUE_INFO *prGlueInfo,
+ 
+ 		/* cac start disable for next cac slot
+ 		 * if enable in dfs channel
++		 *
++		 * wireless_dev.cac_started was removed in 6.1 (per-link DFS
++		 * state); cfg80211 tracks CAC internally now, so the explicit
++		 * clear is unnecessary there.
+ 		 */
++#if KERNEL_VERSION(6, 1, 0) > CFG80211_VERSION_CODE
+ 		prGlueInfo->prP2PInfo[ucRoleIndex]->prWdev->cac_started = FALSE;
++#endif
+ 		DBGLOG(INIT, INFO,
+ 			"kalP2PRddDetectUpdate: Update to OS\n");
+ 		cfg80211_radar_event(
+@@ -1713,7 +1719,14 @@ void kalP2PCacFinishedUpdate(IN struct GLUE_INFO *prGlueInfo,
+ 		}
+ 
+ 		DBGLOG(INIT, INFO, "kalP2PCacFinishedUpdate: Update to OS\n");
+-#if KERNEL_VERSION(3, 14, 0) <= CFG80211_VERSION_CODE
++		/* cfg80211_cac_event() gained an unsigned int link_id arg
++		 * (after chandef) in 6.1. */
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++		cfg80211_cac_event(
++			prGlueInfo->prP2PInfo[ucRoleIndex]->prDevHandler,
++			prGlueInfo->prP2PInfo[ucRoleIndex]->chandef,
++			0, NL80211_RADAR_CAC_FINISHED, GFP_KERNEL);
++#elif KERNEL_VERSION(3, 14, 0) <= CFG80211_VERSION_CODE
+ 		cfg80211_cac_event(
+ 			prGlueInfo->prP2PInfo[ucRoleIndex]->prDevHandler,
+ 			prGlueInfo->prP2PInfo[ucRoleIndex]->chandef,
+@@ -2336,8 +2349,14 @@ void kalP2pIndicateChnlSwitch(IN struct ADAPTER *prAdapter,
+ 			prP2PInfo->chandef->chan->dfs_state);
+ 	}
+ 
+-	/* Ch notify */
++	/* Ch notify. cfg80211_ch_switch_notify() gained a link_id arg in 6.1. */
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++	cfg80211_ch_switch_notify(
++		prP2PInfo->prDevHandler,
++		prP2PInfo->chandef, 0);
++#else
+ 	cfg80211_ch_switch_notify(
+ 		prP2PInfo->prDevHandler,
+ 		prP2PInfo->chandef);
++#endif
+ }
+-- 
+2.56.0
+

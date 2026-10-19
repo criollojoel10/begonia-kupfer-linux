@@ -1,0 +1,79 @@
+From 10d2b0d40b8a76b6c75b0d643e4663540b37ee99 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 11:44:22 +0200
+Subject: [PATCH 43/51] begonia-wifi (fwport): gen4m use eth_hw_addr_set for
+ netdev MAC (6.x)
+
+mainline 6.x net_device.dev_addr is const and tracked in the hw_addr list;
+gen4m set it via direct kalMemCopy/COPY_MAC_ADDR (gl_init.c wlan0/wlan1 MAC at
+probe + .ndo_set_mac_addr, gl_kal.c kalSetNetAddress), which bypasses the list
+and trips dev_addr_check ("netdevice: wlan0: Incorrect netdev->dev_addr").
+Use eth_hw_addr_set() so the list stays consistent. perm_addr writes kept (it
+is still a writable array).
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../connectivity/wlan/gen4m/os/linux/gl_init.c  | 17 +++++++++++------
+ .../connectivity/wlan/gen4m/os/linux/gl_kal.c   |  4 ++--
+ 2 files changed, 13 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c
+index 4ddbfe97c..5e7a374d5 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c
+@@ -1772,7 +1772,10 @@ static int wlanSetMacAddress(struct net_device *ndev, void *addr)
+ 		wlanGetBssIdx(ndev));
+ 
+ 	COPY_MAC_ADDR(prAisBssInfo->aucOwnMacAddr, sa->sa_data);
+-	COPY_MAC_ADDR(ndev->dev_addr, sa->sa_data);
++	/* mainline 6.x: dev_addr is const + hw_addr-list tracked, must go via
++	 * eth_hw_addr_set() (a direct memcpy trips dev_addr_check "Incorrect
++	 * netdev->dev_addr"). */
++	eth_hw_addr_set(ndev, (const u8 *)sa->sa_data);
+ 	DBGLOG(INIT, INFO,
+ 		"[wlan%d] Set connect random macaddr to " MACSTR ".\n",
+ 		prAisBssInfo->ucBssIndex,
+@@ -4191,8 +4194,11 @@ static int32_t wlanOnPreNetRegister(struct GLUE_INFO *prGlueInfo,
+ 			DBGLOG(INIT, WARN, "set MAC addr fail 0x%x\n",
+ 							rStatus);
+ 		} else {
+-			kalMemCopy(prGlueInfo->prDevHandler->dev_addr,
+-					&MacAddr.sa_data, ETH_ALEN);
++			/* mainline 6.x: set dev_addr via eth_hw_addr_set() so the
++			 * netdev hw_addr list stays consistent (direct memcpy trips
++			 * dev_addr_check). */
++			eth_hw_addr_set(prGlueInfo->prDevHandler,
++					(const u8 *)&MacAddr.sa_data);
+ 			kalMemCopy(prGlueInfo->prDevHandler->perm_addr,
+ 					prGlueInfo->prDevHandler->dev_addr,
+ 					ETH_ALEN);
+@@ -4207,9 +4213,8 @@ static int32_t wlanOnPreNetRegister(struct GLUE_INFO *prGlueInfo,
+ 		if (KAL_AIS_NUM > 1) {
+ 			prDevHandler = wlanGetNetDev(prGlueInfo, 1);
+ 			if (prDevHandler) {
+-				kalMemCopy(prDevHandler->dev_addr,
+-					&prAdapter->rWifiVar.aucMacAddress1,
+-					ETH_ALEN);
++				eth_hw_addr_set(prDevHandler,
++					(const u8 *)&prAdapter->rWifiVar.aucMacAddress1);
+ 				kalMemCopy(prDevHandler->perm_addr,
+ 					prDevHandler->dev_addr,
+ 					ETH_ALEN);
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_kal.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_kal.c
+index 1e64b8431..17d08ab33 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_kal.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_kal.c
+@@ -747,8 +747,8 @@ void kalUpdateMACAddress(IN struct GLUE_INFO *prGlueInfo,
+ 
+ 	if (UNEQUAL_MAC_ADDR(prGlueInfo->prDevHandler->dev_addr,
+ 			     pucMacAddr))
+-		memcpy(prGlueInfo->prDevHandler->dev_addr, pucMacAddr,
+-		       PARAM_MAC_ADDR_LEN);
++		/* mainline 6.x: dev_addr is const + hw_addr-list tracked */
++		eth_hw_addr_set(prGlueInfo->prDevHandler, pucMacAddr);
+ }
+ 
+ #if CFG_TCP_IP_CHKSUM_OFFLOAD
+-- 
+2.56.0
+

@@ -1,0 +1,47 @@
+From ded12463e8499390b9ddbbdab1b8338e9d0764fe Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 00:29:08 +0200
+Subject: [PATCH 15/51] begonia-wifi (fwport): btif RT thread uses
+ sched_set_fifo (module-exported)
+
+sched_setscheduler_nocheck() is also not exported to modules in 6.16;
+sched_set_fifo() is the module-safe RT FIFO setter.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ drivers/misc/mediatek/btif/common/mtk_btif.c | 19 +++++++------------
+ 1 file changed, 7 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/misc/mediatek/btif/common/mtk_btif.c b/drivers/misc/mediatek/btif/common/mtk_btif.c
+index c58785a86..0156d57c3 100644
+--- a/drivers/misc/mediatek/btif/common/mtk_btif.c
++++ b/drivers/misc/mediatek/btif/common/mtk_btif.c
+@@ -2559,18 +2559,13 @@ static int _btif_rx_btm_init(struct _mtk_btif_ *p_btif)
+ 
+ #if ENABLE_BTIF_RX_THREAD_RT_SCHED
+ 		{
+-			int i_ret = -1;
+-			int policy = SCHED_FIFO;
+-			struct sched_param param;
+-
+-			param.sched_priority = MAX_RT_PRIO - 20;
+-			/* 6.x: EXPORT_SYMBOL(sched_setscheduler) removed; use _nocheck variant. */
+-			i_ret = sched_setscheduler_nocheck(p_btif->p_task, policy,
+-					&param);
+-			if (i_ret != 0)
+-				BTIF_WARN_FUNC("set RT to workqueue failed\n");
+-			else
+-				BTIF_INFO_FUNC("set RT to workqueue succeed\n");
++			/*
++			 * 6.x: sched_setscheduler[_nocheck]() are no longer
++			 * exported to modules; sched_set_fifo() is the
++			 * module-safe replacement (default mid-range RT FIFO).
++			 */
++			sched_set_fifo(p_btif->p_task);
++			BTIF_INFO_FUNC("set RT (sched_set_fifo) to rx thread\n");
+ 		}
+ #endif
+ 
+-- 
+2.56.0
+

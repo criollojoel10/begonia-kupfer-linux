@@ -1,0 +1,27 @@
+From 12f4420b34630300bde52e5d6a79419fcc8571cf Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 9 Jul 2025 17:03:37 +0200
+Subject: [PATCH 003/115] dt-bindings: timer: mediatek: Add support for MT6785
+
+Add mediatek,mt6785-timer compatible with mediatek,mt6765-timer fallback.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ Documentation/devicetree/bindings/timer/mediatek,timer.yaml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/timer/mediatek,timer.yaml b/Documentation/devicetree/bindings/timer/mediatek,timer.yaml
+index 337580dc7..2f373e4b1 100644
+--- a/Documentation/devicetree/bindings/timer/mediatek,timer.yaml
++++ b/Documentation/devicetree/bindings/timer/mediatek,timer.yaml
+@@ -40,6 +40,7 @@ properties:
+       # SYST Timers
+       - items:
+           - enum:
++              - mediatek,mt6785-timer
+               - mediatek,mt7629-timer
+               - mediatek,mt8183-timer
+               - mediatek,mt8186-timer
+-- 
+2.56.0
+

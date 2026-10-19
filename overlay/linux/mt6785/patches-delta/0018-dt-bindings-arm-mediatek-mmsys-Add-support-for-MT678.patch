@@ -1,0 +1,28 @@
+From bcb0438d5f2f8daab173e2cb0966d0b2cc370773 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Thu, 19 Jun 2025 17:27:11 +0200
+Subject: [PATCH 018/115] dt-bindings: arm: mediatek: mmsys: Add support for
+ MT6785
+
+Add mediatek,mt6785-mmsys compatible.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../devicetree/bindings/arm/mediatek/mediatek,mmsys.yaml         | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/arm/mediatek/mediatek,mmsys.yaml b/Documentation/devicetree/bindings/arm/mediatek/mediatek,mmsys.yaml
+index 3f4262e93..2db0f6193 100644
+--- a/Documentation/devicetree/bindings/arm/mediatek/mediatek,mmsys.yaml
++++ b/Documentation/devicetree/bindings/arm/mediatek/mediatek,mmsys.yaml
+@@ -25,6 +25,7 @@ properties:
+               - mediatek,mt2712-mmsys
+               - mediatek,mt6765-mmsys
+               - mediatek,mt6779-mmsys
++              - mediatek,mt6785-mmsys
+               - mediatek,mt6795-mmsys
+               - mediatek,mt6797-mmsys
+               - mediatek,mt8167-mmsys
+-- 
+2.56.0
+

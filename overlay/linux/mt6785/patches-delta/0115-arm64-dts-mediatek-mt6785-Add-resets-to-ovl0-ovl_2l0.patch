@@ -1,0 +1,36 @@
+From 456205a71b2ef8c7f9197234baca6360458fb8b3 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Tue, 5 Aug 2025 15:42:39 +0200
+Subject: [PATCH 115/115] arm64: dts: mediatek: mt6785: Add resets to
+ ovl0/ovl_2l0
+
+This is needed for the main path to function with stock bootloader.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ arch/arm64/boot/dts/mediatek/mt6785.dtsi | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785.dtsi b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+index 41f2bf7f9..2d92417c9 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+@@ -1528,6 +1528,7 @@ ovl0: ovl@14008000 {
+ 				 <&iommu M4U_PORT_DISP_OVL0_HDR>;
+ 			power-domains = <&spm MT6785_POWER_DOMAIN_MM>;
+ 			mediatek,gce-client-reg = <&gce SUBSYS_1400XXXX 0x8000 0x1000>;
++			resets = <&mmsys MT6785_MMSYS_DISP_OVL0_RST>;
+ 
+ 			ports {
+ 				#address-cells = <1>;
+@@ -1561,6 +1562,7 @@ ovl_2l0: ovl@14009000 {
+ 				 <&iommu M4U_PORT_DISP_OVL0_2L_HDR>;
+ 			power-domains = <&spm MT6785_POWER_DOMAIN_MM>;
+ 			mediatek,gce-client-reg = <&gce SUBSYS_1400XXXX 0x9000 0x1000>;
++			resets = <&mmsys MT6785_MMSYS_DISP_OVL0_2L_RST>;
+ 
+ 			ports {
+ 				#address-cells = <1>;
+-- 
+2.56.0
+

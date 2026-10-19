@@ -1,0 +1,84 @@
+From 6b61b0d3cb5b2c70427179b92c29d17fedaf38e3 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Thu, 17 Jul 2025 15:57:46 +0200
+Subject: [PATCH 108/115] arm64: dts: mediatek: mt6785-xiaomi-begonia: Enable
+ MMC
+
+Enable MMC1 for external storage support.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../mt6785-xiaomi-begonia-common.dtsi         | 50 +++++++++++++++++++
+ 1 file changed, 50 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+index 9df7ca060..f0743ae8b 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+@@ -366,6 +366,29 @@ &mipi_tx0 {
+ 	status = "okay";
+ };
+ 
++&mmc1 {
++	bus-width = <4>;
++	cd-gpios = <&pio 8 GPIO_ACTIVE_HIGH>;
++	max-frequency = <200000000>;
++
++	cap-sd-highspeed;
++	disable-wp;
++	no-mmc;
++	no-sdio;
++	sd-uhs-ddr50;
++	sd-uhs-sdr104;
++	sd-uhs-sdr50;
++
++	vmmc-supply = <&mt6360_vmch_ldo_reg>;
++	vqmmc-supply = <&mt6360_vmc_ldo_reg>;
++
++	pinctrl-names = "default", "state_uhs";
++	pinctrl-0 = <&mmc1_pins>, <&mmc1_pins_detect>;
++	pinctrl-1 = <&mmc1_pins>;
++
++	status = "okay";
++};
++
+ &mt6359_vcore_buck_reg {
+ 	regulator-always-on;
+ };
+@@ -427,6 +450,33 @@ pins-bus {
+ 		};
+ 	};
+ 
++	mmc1_pins: mmc1-pins {
++		pins-cmd-dat {
++			pinmux = <PINMUX_GPIO135__FUNC_MSDC1_CMD>,
++				 <PINMUX_GPIO137__FUNC_MSDC1_DAT0>,
++				 <PINMUX_GPIO139__FUNC_MSDC1_DAT1>,
++				 <PINMUX_GPIO138__FUNC_MSDC1_DAT2>,
++				 <PINMUX_GPIO136__FUNC_MSDC1_DAT3>;
++			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
++			drive-strength = <8>;
++			input-enable;
++		};
++
++		pins-clk {
++			pinmux = <PINMUX_GPIO134__FUNC_MSDC1_CLK>;
++			bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
++			drive-strength = <8>;
++		};
++	};
++
++	mmc1_pins_detect: mmc1-pins-detect {
++		pins-insert {
++			pinmux = <PINMUX_GPIO8__FUNC_GPIO8>;
++			bias-pull-up;
++			input-enable;
++		};
++	};
++
+ 	mt6360_pins: mt6360-pins {
+ 		pins-interrupt {
+ 			pinmux = <PINMUX_GPIO7__FUNC_GPIO7>,
+-- 
+2.56.0
+

@@ -1,0 +1,58 @@
+From da2771a6b0fec9ba8b96dd57bef49e1836f66331 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sun, 6 Jul 2025 23:31:43 +0200
+Subject: [PATCH 014/115] arm64: dts: mediatek: mt6785: Add pinctrl controller
+ support
+
+Add a node for the pinctrl controller found on MT6785 but without
+configuration for any pin, as that's expected to be done in the
+machine-specific devicetrees.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ arch/arm64/boot/dts/mediatek/mt6785.dtsi | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785.dtsi b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+index e4dfef460..fe0e88d6c 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+@@ -6,6 +6,7 @@
+ #include <dt-bindings/clock/mediatek,mt6785-clk.h>
+ #include <dt-bindings/interrupt-controller/arm-gic.h>
+ #include <dt-bindings/interrupt-controller/irq.h>
++#include <dt-bindings/pinctrl/mediatek,mt6785-pinfunc.h>
+ #include <dt-bindings/reset/mediatek,mt6785-resets.h>
+ 
+ / {
+@@ -318,6 +319,27 @@ pericfg: syscon@10003000 {
+ 			reg = <0 0x10003000 0 0x1000>;
+ 		};
+ 
++		pio: pinctrl@10005000 {
++			compatible = "mediatek,mt6785-pinctrl";
++			reg = <0 0x10005000 0 0x1000>,
++			      <0 0x11c20000 0 0x1000>,
++			      <0 0x11d10000 0 0x1000>,
++			      <0 0x11e20000 0 0x1000>,
++			      <0 0x11e70000 0 0x1000>,
++			      <0 0x11ea0000 0 0x1000>,
++			      <0 0x11f20000 0 0x1000>,
++			      <0 0x11f30000 0 0x1000>,
++			      <0 0x1000b000 0 0x1000>;
++			reg-names = "base", "rm", "br", "bl", "lb", "rt", "lt", "tl",
++				    "eint";
++			interrupts = <GIC_SPI 204 IRQ_TYPE_LEVEL_HIGH>;
++			gpio-controller;
++			#gpio-cells = <2>;
++			gpio-ranges = <&pio 0 0 203>;
++			interrupt-controller;
++			#interrupt-cells = <2>;
++		};
++
+ 		apmixedsys: clock-controller@1000c000 {
+ 			compatible = "mediatek,mt6785-apmixedsys", "syscon";
+ 			reg = <0 0x1000c000 0 0x1000>;
+-- 
+2.56.0
+

@@ -1,0 +1,29 @@
+From 680db6d4da78b669943c16aea63e2dfadb5aa16d Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 9 Jul 2025 17:13:00 +0200
+Subject: [PATCH 048/115] dt-bindings: phy: mediatek: ufs-phy: Add support for
+ MT6785
+
+Add mediatek,mt6785-ufsphy compatible with mediatek,mt8183-ufsphy
+fallback.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ Documentation/devicetree/bindings/phy/mediatek,ufs-phy.yaml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/phy/mediatek,ufs-phy.yaml b/Documentation/devicetree/bindings/phy/mediatek,ufs-phy.yaml
+index 6e2edd43f..1c20d9d6a 100644
+--- a/Documentation/devicetree/bindings/phy/mediatek,ufs-phy.yaml
++++ b/Documentation/devicetree/bindings/phy/mediatek,ufs-phy.yaml
+@@ -26,6 +26,7 @@ properties:
+     oneOf:
+       - items:
+           - enum:
++              - mediatek,mt6785-ufsphy
+               - mediatek,mt8195-ufsphy
+           - const: mediatek,mt8183-ufsphy
+       - const: mediatek,mt8183-ufsphy
+-- 
+2.56.0
+

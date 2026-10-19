@@ -1,0 +1,44 @@
+From b1106e09d2dfdde9b7f0d48bceb118b942c2dfcf Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 01:03:06 +0200
+Subject: [PATCH 19/51] begonia-wifi (fwport): make consys "conn" clock
+ optional (genpd powers the domain)
+
+consys_clk_get_from_dts() aborted probe if devm_clk_get(dev,"conn") failed.
+Stock bound "conn" to <&scpsys SCP_SYS_CONN> - the conn power domain expressed
+as a 4.14 clock. Mainline 6.16 models conn power as genpd MT6785_POWER_DOMAIN_CONN
+(power-domains is already on the consys DT node, powered by the genpd core at
+probe), and the mt6785 clk driver exposes no connsys "conn" clock. Use
+devm_clk_get_optional so a missing "conn" returns NULL (probe continues;
+clk_prepare_enable(NULL) is a no-op) while real errors (-EPROBE_DEFER) still abort.
+This clears the last probe-fatal blocker for mtk_wmt against the reconciled DT.
+Verified vs stock mt6785.dts consys node (3-source: stock clocks, mainline genpd, clk driver).
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../connectivity/common/common_main/platform/mt6785.c    | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/platform/mt6785.c b/drivers/misc/mediatek/connectivity/common/common_main/platform/mt6785.c
+index a20758e76..689545d2e 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/platform/mt6785.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/platform/mt6785.c
+@@ -415,7 +415,14 @@ UINT32 mtk_wcn_consys_jtag_flag_ctrl(UINT32 en)
+ 
+ static INT32 consys_clk_get_from_dts(struct platform_device *pdev)
+ {
+-	clk_scp_conn_main = devm_clk_get(&pdev->dev, "conn");
++	/* Forward-port: stock's "conn" clock was <&scpsys SCP_SYS_CONN>, i.e. the
++	 * conn power domain expressed as a 4.14 clock. Mainline 6.16 models conn
++	 * power as the genpd MT6785_POWER_DOMAIN_CONN (power-domains on the DT node),
++	 * which is powered by the genpd core at probe. There is no connsys "conn"
++	 * CLOCK to bind on mainline, so make it optional: a missing "conn" returns
++	 * NULL here, and clk_prepare_enable(NULL)/clk_disable_unprepare(NULL) are
++	 * documented no-ops downstream. Real errors (e.g. -EPROBE_DEFER) still abort. */
++	clk_scp_conn_main = devm_clk_get_optional(&pdev->dev, "conn");
+ 	if (IS_ERR(clk_scp_conn_main)) {
+ 		WMT_PLAT_PR_ERR("[CCF]cannot get clk_scp_conn_main clock.\n");
+ 		return PTR_ERR(clk_scp_conn_main);
+-- 
+2.56.0
+

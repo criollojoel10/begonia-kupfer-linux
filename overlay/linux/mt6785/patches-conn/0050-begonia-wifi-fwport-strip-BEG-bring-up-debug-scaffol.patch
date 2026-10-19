@@ -1,0 +1,274 @@
+From b832d42b790f6fac81180bf9d18227fa8811228f Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Fri, 19 Jun 2026 14:50:50 +0200
+Subject: [PATCH 50/51] begonia-wifi (fwport): strip BEG bring-up debug
+ scaffolding
+
+Remove my own bring-up instrumentation now that WiFi works:
+ - begtrace.h: MMIO-hijack oracle (#undef/redefine readl/writel/udelay/
+   CONSYS_REG_* to pr_err every access) - was included nowhere, delete.
+ - begsnap.h + begtrace_rx_snapshot(): conn RX-DMA/WFSYS/mailbox register
+   dumper; remove the 3 includes + 5 call sites (+ their debug comments).
+ - stp_exp.c sys_if_tx: drop the [BEGTRACE_TX] hexdump, the if= print, and
+   the [BEGTRACE_CONN]/[BEGTRACE_PC] ioremap/readl probe block; keep the
+   real UART/SDIO/BTIF transport dispatch verbatim.
+No functional change. Verified on HW (running .ko md5 79201088): 0 BEGTRACE
+in module+dmesg, WIFI function ON, wlan0 scans 2.4+5GHz. -153 LOC.
+---
+ .../common/common_main/core/stp_exp.c         | 32 ----------
+ .../common/common_main/core/wmt_core.c        |  6 --
+ .../common/common_main/core/wmt_ic_soc.c      | 10 ---
+ .../common/common_main/platform/begsnap.h     | 64 -------------------
+ .../common/common_main/platform/begtrace.h    | 35 ----------
+ .../common/common_main/platform/mt6785.c      |  6 --
+ 6 files changed, 153 deletions(-)
+ delete mode 100644 drivers/misc/mediatek/connectivity/common/common_main/platform/begsnap.h
+ delete mode 100644 drivers/misc/mediatek/connectivity/common/common_main/platform/begtrace.h
+
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/core/stp_exp.c b/drivers/misc/mediatek/connectivity/common/common_main/core/stp_exp.c
+index e63d9e8f2..e75153365 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/core/stp_exp.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/core/stp_exp.c
+@@ -100,38 +100,6 @@ INT32 mtk_wcn_sys_if_rx(PUINT8 data, INT32 size)
+ 
+ static INT32 mtk_wcn_sys_if_tx(const PUINT8 data, const UINT32 size, PUINT32 written_size)
+ {
+-	if (data) print_hex_dump(KERN_ERR, "[BEGTRACE_TX] ", DUMP_PREFIX_NONE, 16, 1, data, (size <= 48 ? size : 48), false);
+-	pr_err("[BEGTRACE_TX] sys_if_tx if=%d size=%u\n", g_stp_if_type, size);
+-	{
+-		static void __iomem *cb, *cd, *cm;
+-		static int frm;
+-		if (frm < 40) {
+-			if (!cb) cb = ioremap(0x180a2000u, 0x1000);
+-			if (!cd) cd = ioremap(0x180a1000u, 0x1000);
+-			if (!cm) cm = ioremap(0x18002000u, 0x1000);
+-			if (cb && cd && cm)
+-				pr_err("[BEGTRACE_CONN] f%d sz=%u: BTIF0 e4=%08x DR_lsr=%08x dmaen=%08x | ring1038=%08x | COM600=%08x mbox510=%08x\n",
+-					frm, size, readl(cb+0xe4), readl(cb+0x14), readl(cb+0x4c), readl(cd+0x38), readl(cm+0x600), readl(cm+0x510));
+-			if (frm < 6) {
+-				static void __iomem *hif;
+-				u32 isr=0, recv=0, disp=0, task=0, emi=0, pcmax=0, i, pc;
+-				if (!hif) hif = ioremap(0x18007000u, 0x1000);
+-				if (hif) {
+-					for (i = 0; i < 4000; i++) {
+-						pc = readl(hif + 0x104);
+-						if (pc > pcmax) pcmax = pc;
+-						if ((pc & 0xf0000000u) == 0xf0000000u) emi++;
+-						if (pc >= 0xf0002600u && pc <= 0xf0002800u) isr++;
+-						if ((pc >= 0xf0008a00u && pc <= 0xf0008c00u) || (pc >= 0x0000e130u && pc <= 0x0000e160u)) recv++;
+-						if (pc >= 0x00006a00u && pc <= 0x00006d00u) disp++;
+-						if (pc >= 0x000021b0u && pc <= 0x00002290u) task++;
+-					}
+-					pr_err("[BEGTRACE_PC] f%d: ISR=%u RECV=%u STPdisp=%u task=%u EMI=%u maxPC=%08x\n", frm, isr, recv, disp, task, emi, pcmax);
+-				}
+-			}
+-			frm++;
+-		}
+-	}
+ 	if (g_stp_if_type == STP_UART_IF_TX)
+ 		return stp_uart_if_tx != NULL ? (*stp_uart_if_tx)(data, size, written_size) : -1;
+ 	else if (g_stp_if_type == STP_SDIO_IF_TX)
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_core.c b/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_core.c
+index b5c0ed901..12edb8a64 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_core.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_core.c
+@@ -47,7 +47,6 @@
+ #include "wmt_detect.h"
+ #include "wmt_plat.h"
+ #include "wmt_dev.h"
+-#include "../platform/begsnap.h"
+ 
+ P_WMT_FUNC_OPS gpWmtFuncOps[WMTDRV_TYPE_MAX] = {
+ #if CFG_FUNC_BT_SUPPORT
+@@ -885,11 +884,6 @@ static INT32 wmt_core_stp_init(VOID)
+ #endif
+ 
+ 	iRet = wmt_core_hw_check();
+-	/* after-first-TX snapshot: hw_check is the first post-idle BTIF round-trip
+-	 * (chip-id read of GEN_HCR 0x80000008). On stock it SUCCEEDS, so the conn
+-	 * armed its bootstrap RX-DMA between idle and here — capture ring-ctrl/clock/
+-	 * count to see what flipped (and confirm no AP ring write did it). */
+-	begtrace_rx_snapshot("after-hwcheck");
+ 	if (iRet) {
+ 		WMT_ERR_FUNC("hw_check fail:%d\n", iRet);
+ 		return -8;
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_ic_soc.c b/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_ic_soc.c
+index 314a3cc49..e695222b1 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_ic_soc.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/core/wmt_ic_soc.c
+@@ -44,7 +44,6 @@
+ #include "stp_core.h"
+ #include "mtk_wcn_consys_hw.h"
+ #include "wmt_step.h"
+-#include "../platform/begsnap.h"
+ 
+ /*******************************************************************************
+ *                              C O N S T A N T S
+@@ -3102,7 +3101,6 @@ static INT32 mtk_wcn_soc_pda_patch_dwn(PUINT8 pPatchBuf, UINT32 patchSize, PUINT
+ 	WMT_PATCH_PDA_CFG_CMD[11] = (patchSize & 0x00FF0000) >> 16;
+ 	WMT_PATCH_PDA_CFG_CMD[12] = (patchSize & 0xFF000000) >> 24;
+ 
+-	begtrace_rx_snapshot("pda-pre-cfgcmd");
+ 	iRet = wmt_core_tx((PUINT8) &WMT_PATCH_PDA_CFG_CMD[0], sizeof(WMT_PATCH_PDA_CFG_CMD), &u4Res,
+ 			   MTK_WCN_BOOL_FALSE);
+ 	if (iRet || (u4Res != sizeof(WMT_PATCH_PDA_CFG_CMD))) {
+@@ -3123,11 +3121,6 @@ static INT32 mtk_wcn_soc_pda_patch_dwn(PUINT8 pPatchBuf, UINT32 patchSize, PUINT
+ 		mtk_wcn_stp_dbg_dump_package();
+ 		return -1;
+ 	}
+-	/* CFG_EVT received = conn replied to CFG_CMD = the FIRST PDA conn-RX. If any
+-	 * DMA channel's count/ringctl left idle between pre-cfgcmd and here, that's
+-	 * the conn arming its bootstrap RX (the step mainline never reaches). */
+-	begtrace_rx_snapshot("pda-after-cfgevt");
+-
+ 	patchSizePerFrag = DEFAULT_PATCH_FRAG_SIZE;
+ 	fragNum = patchSize / patchSizePerFrag;
+ 	fragNum += ((fragNum * patchSizePerFrag) == patchSize) ? 0 : 1;
+@@ -3165,9 +3158,6 @@ static INT32 mtk_wcn_soc_pda_patch_dwn(PUINT8 pPatchBuf, UINT32 patchSize, PUINT
+ 		WMT_DBG_FUNC("wmt_core: write fragSeq(%d) size(%d, %d) ok\n",
+ 			     fragSeq, fragSize, u4Res);
+ 
+-		if (fragSeq == 0)
+-			begtrace_rx_snapshot("pda-after-frag1");
+-
+ 		offset += patchSizePerFrag;
+ 		++fragSeq;
+ 	}
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/platform/begsnap.h b/drivers/misc/mediatek/connectivity/common/common_main/platform/begsnap.h
+deleted file mode 100644
+index 4a3b918dc..000000000
+--- a/drivers/misc/mediatek/connectivity/common/common_main/platform/begsnap.h
++++ /dev/null
+@@ -1,64 +0,0 @@
+-/* BEGSNAP — self-contained conn RX-DMA / WFSYS / mailbox snapshot helper.
+- * Portable (no conn_reg dependency): ioremaps the conn windows itself, so it
+- * can be called from any module TU (mt6785.c platform layer AND wmt_core.c).
+- * Uses raw readl (NOT hijacked) — include this WITHOUT begtrace.h's readl/writel
+- * redefinition. Each line is tagged with `where` so before/after-TX snapshots
+- * are distinguishable in dmesg.
+- *
+- * Decisive registers (all conn_infra-domain, valid while WFSYS is still dark):
+- *   0x18002108  DMA-engine clock        0x18002150  bootstrap RX-DMA clock
+- *   0x18002510  0x1101 command mailbox   0x180a1014  ch0 ring-ctrl ("started")
+- *   0x180a1038  ch0 RX-DMA count         0x180ae000  WFSYS_ON (req/ACK)
+- *   0x18000000  WF_MAC (0x42424242 = unpowered bus-poison)
+- */
+-#ifndef _BEGSNAP_H_
+-#define _BEGSNAP_H_
+-#include <linux/printk.h>
+-#include <linux/io.h>
+-
+-static inline void begtrace_rx_snapshot(const char *where)
+-{
+-	void __iomem *mcu  = ioremap_nocache(0x18002000, 0x800);
+-	void __iomem *dma  = ioremap_nocache(0x180a1000, 0x300);
+-	void __iomem *btif = ioremap_nocache(0x180a2000, 0x100);
+-	void __iomem *wfsys = ioremap_nocache(0x180ae000, 0x20);
+-	void __iomem *wfmac = ioremap_nocache(0x18000000, 0x10);
+-
+-	pr_err("[BEGSNAP:%s] === snapshot ===\n", where);
+-	if (mcu) {
+-		pr_err("[BEGSNAP:%s] MCU_CFG: 108_DMAclk=%08x 150_bootclk=%08x 16c=%08x 510_mbox=%08x 514=%08x 424=%08x 440=%08x 600_COM=%08x\n",
+-			where, readl(mcu+0x108), readl(mcu+0x150), readl(mcu+0x16c), readl(mcu+0x510),
+-			readl(mcu+0x514), readl(mcu+0x424), readl(mcu+0x440), readl(mcu+0x600));
+-		iounmap(mcu);
+-	}
+-	if (dma) {
+-		/* Sweep ALL 8 DMA channels: base 0x180a1000 + ch*0x100.
+-		 * The conn binds BTIF-RX to an unverified channel (prior traces:
+-		 * fn0x3968->ch2, fn0x5dd8->ch5); watching only ch0 reads an idle channel.
+-		 * Per ch: 0x00 glob/ctl, 0x14 ringctl(start), 0x18 base, 0x38 count. */
+-		int ch;
+-		for (ch = 0; ch < 8; ch++) {
+-			u32 off = ch * 0x100;
+-			pr_err("[BEGSNAP:%s] DMA ch%d (180a1%03x): 00=%08x 14_ringctl=%08x 18_base=%08x 1c=%08x 20=%08x 38_cnt=%08x\n",
+-				where, ch, off, readl(dma+off+0x00), readl(dma+off+0x14), readl(dma+off+0x18),
+-				readl(dma+off+0x1c), readl(dma+off+0x20), readl(dma+off+0x38));
+-		}
+-		iounmap(dma);
+-	}
+-	if (btif) {
+-		pr_err("[BEGSNAP:%s] BTIF0: ctl04=%08x ier08=%08x fifo0c=%08x lsr14=%08x dmaen4c=%08x\n",
+-			where, readl(btif+0x04), readl(btif+0x08), readl(btif+0x0c), readl(btif+0x14), readl(btif+0x4c));
+-		iounmap(btif);
+-	}
+-	if (wfsys) {
+-		pr_err("[BEGSNAP:%s] WFSYS: ae000=%08x ae00c=%08x ae010=%08x\n",
+-			where, readl(wfsys+0x00), readl(wfsys+0x0c), readl(wfsys+0x10));
+-		iounmap(wfsys);
+-	}
+-	if (wfmac) {
+-		pr_err("[BEGSNAP:%s] WF_MAC 18000000=%08x\n", where, readl(wfmac+0x00));
+-		iounmap(wfmac);
+-	}
+-	pr_err("[BEGSNAP:%s] === END ===\n", where);
+-}
+-#endif
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/platform/begtrace.h b/drivers/misc/mediatek/connectivity/common/common_main/platform/begtrace.h
+deleted file mode 100644
+index 1a2d47a73..000000000
+--- a/drivers/misc/mediatek/connectivity/common/common_main/platform/begtrace.h
++++ /dev/null
+@@ -1,35 +0,0 @@
+-/* BEGTRACE shared instrumentation — #include AFTER the targets own includes */
+-#ifndef _BEGTRACE_H_
+-#define _BEGTRACE_H_
+-#include <linux/printk.h>
+-#include <linux/delay.h>
+-#include <linux/io.h>
+-#define ORACLE_TAG "[BEGTRACE_ORACLE]"
+-static inline u32  _bt_readl(const volatile void __iomem *a){ return readl(a); }
+-static inline void _bt_writel(u32 v, volatile void __iomem *a){ writel(v, a); }
+-static inline void _bt_udelay(unsigned long u){ udelay(u); }
+-static inline void _bt_mdelay(unsigned long m){ mdelay(m); }
+-static inline void _bt_msleep(unsigned int m){ msleep(m); }
+-#undef readl
+-#define readl(a) ({ const volatile void __iomem *_a=(a); u32 _v=_bt_readl(_a); \
+-	pr_err("%s R [0x%lx]=0x%08x\n", ORACLE_TAG, (unsigned long)_a, _v); _v; })
+-#undef writel
+-#define writel(v,a) do { volatile void __iomem *_a=(volatile void __iomem*)(a); u32 _v=(u32)(v); \
+-	pr_err("%s W [0x%lx]<-0x%08x\n", ORACLE_TAG, (unsigned long)_a, _v); _bt_writel(_v,_a); } while(0)
+-#undef udelay
+-#define udelay(u) do { pr_err("%s udelay(%lu)\n", ORACLE_TAG, (unsigned long)(u)); _bt_udelay(u); } while(0)
+-#undef mdelay
+-#define mdelay(m) do { pr_err("%s mdelay(%lu)\n", ORACLE_TAG, (unsigned long)(m)); _bt_mdelay(m); } while(0)
+-#undef msleep
+-#define msleep(m) do { pr_err("%s msleep(%u)\n", ORACLE_TAG, (unsigned int)(m)); _bt_msleep(m); } while(0)
+-#ifdef CONSYS_REG_WRITE
+-#undef CONSYS_REG_WRITE
+-#define CONSYS_REG_WRITE(a,d) do { pr_err("%s CW [0x%lx]<-0x%08x\n", ORACLE_TAG, (unsigned long)(a), (u32)(d)); \
+-	_bt_writel((u32)(d),(volatile void __iomem*)(a)); } while(0)
+-#endif
+-#ifdef CONSYS_REG_READ
+-#undef CONSYS_REG_READ
+-#define CONSYS_REG_READ(a) ({ unsigned long _ca=(unsigned long)(a); u32 _cv=_bt_readl((volatile void __iomem*)_ca); \
+-	pr_err("%s CR [0x%lx]=0x%08x\n", ORACLE_TAG, _ca, _cv); _cv; })
+-#endif
+-#endif
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/platform/mt6785.c b/drivers/misc/mediatek/connectivity/common/common_main/platform/mt6785.c
+index d11f2e6c9..de2ddd14b 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/platform/mt6785.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/platform/mt6785.c
+@@ -46,7 +46,6 @@
+ #endif
+ #include "osal_typedef.h"
+ #include "mt6785.h"
+-#include "begsnap.h"
+ #include "mtk_wcn_consys_hw.h"
+ #include "wmt_ic.h"
+ #include "wmt_lib.h"
+@@ -646,11 +645,6 @@ static VOID consys_hw_reset_bit_set(MTK_WCN_BOOL enable)
+ 			msleep(20);
+ 			cnt++;
+ 		}
+-		/* Conn RX-DMA/WFSYS/mailbox snapshot at the EXACT bootstrap-idle moment
+-		 * (COM_REG0==0x1D1E) BEFORE any WMT/chip-id TX. Paired with the
+-		 * after-hwcheck snapshot in wmt_core.c = the before/after-first-TX
+-		 * discriminator for when the conn arms its bootstrap RX-DMA. */
+-		begtrace_rx_snapshot("idle-COM1d1e");
+ 	}
+ }
+ 
+-- 
+2.56.0
+

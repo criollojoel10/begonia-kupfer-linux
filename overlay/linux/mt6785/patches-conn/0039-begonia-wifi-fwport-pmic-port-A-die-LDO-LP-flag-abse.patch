@@ -1,0 +1,347 @@
+From b29340392d893084a9e38e9c1a73b8d785da5d1d Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 10:04:56 +0200
+Subject: [PATCH 39/51] begonia-wifi (fwport-pmic): port A-die LDO LP + flag
+ absent EMI-MPU API
+
+The conn A-die PMIC path was stubbed at the API level (no-op
+KERNEL_pmic_ldo_vcn*_lp / KERNEL_pmic_set_register_value bodies in
+mtk-bsp-compat). Port them to REAL mt6359 PMIC regmap ops in mt6785.c,
+following the f9650bf5a clock-buffer pattern, so consys_hw_vcn18_ctrl /
+consys_hw_vcn28_ctrl actually take the conn A-die rails out of low-power
+and tie them to SRCLKEN0 hardware-LP control:
+
+  - wmt_pmic_ldo_lp(): faithful port of vendor pmic_ldo_vcn*_lp()
+    (pmic_lp_type_set semantics) - SW user maps to OP_EN[15] SW operator;
+    SRCLKEN0 user maps to CON0 OP_MODE select + OP_EN/OP_CFG bit0.
+  - wmt_pmic_set_ldo_lp(): faithful port of
+    KERNEL_pmic_set_register_value(PMIC_RG_LDO_VCN*_LP, 0): clear CON0[1].
+
+mt6359 offsets (PMIC_REG_BASE==0): VCN18 CON0 0x1c2a/OP_EN 0x1c2e/OP_CFG
+0x1c34; VCN33_2 CON0 0x1c08/OP_EN 0x1c0c/OP_CFG 0x1c12; LP bit[1];
+OP_MODE[12:10]; SRCLKEN0 op = bit0; SW op = bit15.
+
+3-source bar met for every register op:
+  (1) vendor intent: the KERNEL_pmic_ldo_*_lp / KERNEL_pmic_set_register_value
+      call sites in mt6785.c.
+  (2) proven reimpl op: mtk-conninfra-mt6785.c
+      (mtk_conninfra_ldo_sw_op_en / mtk_conninfra_ldo_hw_mode), reaches
+      conn idle 0x1d1e on hardware.
+  (3) field def: include/linux/mfd/mt6359/registers.h + mt6785 upmu_hw.h
+      (begonia-r-oss) + pmic_lp_api.c selector model (SRCLKEN0=0, SW=15).
+
+EMI-MPU (consys_emi_mpu_set_region_protection): FLAGGED, NOT PORTED.
+Mainline 6.16 has no MTK EMI driver (drivers/memory/mediatek ships only
+mtk-smi.o; no mtk-emi.c, no mtk_emimpu_* symbol) and CONFIG_MTK_EMI is
+unset, so the vendor emi_mpu_set_protection() body never compiled. This is
+an access-protection table, NOT the conn firmware-fetch path (that is the
+0xF0000000 EMI-window remap, which the reimpl proves works without any MPU
+call). Replaced the silent ifdef no-op with an explicit logged skip + flag
+comment; documented likewise in the mt_emi_api.h compat stub.
+
+Also: drop a dead include of linux/regmap.h that f9650bf5a left inside the
+copyright comment block; add a real include in the header section.
+
+bsp-compat: the pmic_set/get_register_value no-op bodies are now dead on
+the begonia path (call sites bypass the KERNEL_* macro); kept only for any
+non-begonia caller and re-commented. No-ops intentionally LEFT (off the
+begonia BTIF bring-up path): mt6306 GPIO expander, SDIO CMD52, show_stack /
+dump_thread_state debug, platform_bridge / SDIO eirq.
+
+Build: pmbootstrap build --src OK; wmt_pmic_ldo_lp + EMI-skip string
+verified present in wmt_drv.ko.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../common/common_main/platform/mt6785.c      | 142 +++++++++++++++---
+ .../connectivity/common/mtk-bsp-compat.c      |   6 +
+ .../connectivity/compat/include/mt_emi_api.h  |  18 ++-
+ .../compat/include/mtk-bsp-compat.h           |  12 +-
+ 4 files changed, 149 insertions(+), 29 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/platform/mt6785.c b/drivers/misc/mediatek/connectivity/common/common_main/platform/mt6785.c
+index 92e12cb6d..7f5c0cd22 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/platform/mt6785.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/platform/mt6785.c
+@@ -1,5 +1,4 @@
+ /*
+-#include <linux/regmap.h>
+  * Copyright (C) 2016 MediaTek Inc.
+  *
+  * This program is free software; you can redistribute it and/or modify
+@@ -38,6 +37,7 @@
+ #include <connectivity_build_in_adapter.h>
+ #include <linux/clk.h>
+ #include <linux/delay.h>
++#include <linux/regmap.h>
+ #include <linux/memblock.h>
+ #include <linux/platform_device.h>
+ #include "connsys_debug_utility.h"
+@@ -498,6 +498,83 @@ static INT32 consys_clock_buffer_ctrl(MTK_WCN_BOOL enable)
+ 	return 0;
+ }
+ 
++/* ---- mt6359 A-die LDO hardware-low-power (SRCLKEN0) faithful port ----------
++ * The vendor consys_hw_vcn18_ctrl / consys_hw_vcn28_ctrl drive the conn A-die
++ * LDOs (VCN18 1.8V, VCN33_2 2.8V) through two MTK-BSP calls that are no-ops in
++ * mainline (no mt6359 pmic_lp_api):
++ *
++ *   KERNEL_pmic_ldo_vcnXX_lp(user, op_mode, op_en, op_cfg)
++ *       -> pmic_ldo_vcnXX_lp() -> pmic_set_ldo_op_mode()+pmic_lp_type_set()
++ *   KERNEL_pmic_set_register_value(PMIC_RG_LDO_VCNXX_LP, 0)
++ *       -> clears CON0[1] (the SW low-power request bit)
++ *
++ * We port these to real mt6359 PMIC regmap ops via g_regmap, faithful to the
++ * vendor pmic_lp_type_set() semantics and corroborated by the proven reimpl
++ * mtk_conninfra_ldo_sw_op_en() / mtk_conninfra_ldo_hw_mode()
++ * (drivers/soc/mediatek/mtk-conninfra-mt6785.c). 3-source bar met:
++ *   (1) vendor intent: the KERNEL_pmic_ldo_*_lp() / KERNEL_pmic_set_register_value
++ *       call sites in mt6785.c.
++ *   (2) reimpl proven op: mtk_conninfra-mt6785.c (reaches conn idle 0x1d1e).
++ *   (3) mainline/vendor field def: include/linux/mfd/mt6359/registers.h +
++ *       mt6785 upmu_hw.h (begonia-r-oss): CON0/OP_EN/OP_CFG addresses, LP bit[1],
++ *       OP_MODE[12:10], and pmic_lp_api selector model (SRCLKEN0=bit0,SW=bit15).
++ *
++ * mt6359 register offsets (PMIC_REG_BASE==0, so offset==ADDR):
++ *   VCN18:    CON0 0x1c2a  OP_EN 0x1c2e  OP_CFG 0x1c34
++ *   VCN33_2:  CON0 0x1c08  OP_EN 0x1c0c  OP_CFG 0x1c12
++ */
++#define MT6359_LDO_VCN18_CON0		0x1c2a
++#define MT6359_LDO_VCN18_OP_EN		0x1c2e
++#define MT6359_LDO_VCN18_OP_CFG		0x1c34
++#define MT6359_LDO_VCN33_2_CON0		0x1c08
++#define MT6359_LDO_VCN33_2_OP_EN	0x1c0c
++#define MT6359_LDO_VCN33_2_OP_CFG	0x1c12
++#define MT6359_LDO_LP_BIT		(0x1u << 1)	/* CON0[1]  SW low-power request */
++#define MT6359_LDO_OP_MODE_MASK		(0x7u << 10)	/* CON0[12:10] operator-mode select */
++#define MT6359_LDO_OP_MODE_SRCLKEN0	(0x0u << 10)	/* op_mode==SRCLKEN0(0) */
++#define MT6359_LDO_HW0_OP_BIT		(0x1u << 0)	/* OP_EN/OP_CFG[0] SRCLKEN0 operator */
++#define MT6359_LDO_SW_OP_EN_BIT		(0x1u << 15)	/* OP_EN[15] SW operator enable */
++
++/* Faithful port of the vendor pmic_ldo_vcnXX_lp(user, op_mode, op_en, op_cfg).
++ * Mirrors pmic_lp_type_set(): for user==SW the op_en goes to OP_EN bit15 (the SW
++ * operator) and op_cfg is ignored; for user==SRCLKEN0 it selects OP_MODE and
++ * drives OP_EN/OP_CFG bit0 (the SRCLKEN0 operator). con0/op_en/op_cfg are the
++ * mt6359 register offsets for the target LDO. */
++static void wmt_pmic_ldo_lp(unsigned int con0, unsigned int op_en_reg,
++			    unsigned int op_cfg_reg, int user, int op_mode,
++			    unsigned char op_en, unsigned char op_cfg)
++{
++	if (!g_regmap)
++		return;
++
++	if (user == SW) {
++		/* SW operator: OP_EN[15]; op_cfg unused (matches pmic_lp_type_set) */
++		regmap_update_bits(g_regmap, op_en_reg, MT6359_LDO_SW_OP_EN_BIT,
++				   op_en ? MT6359_LDO_SW_OP_EN_BIT : 0);
++	} else {
++		/* SRCLKEN0 operator: select OP_MODE, then drive OP_EN/OP_CFG bit0 */
++		regmap_update_bits(g_regmap, con0, MT6359_LDO_OP_MODE_MASK,
++				   (op_mode == SRCLKEN0) ? MT6359_LDO_OP_MODE_SRCLKEN0
++							 : ((op_mode << 10) &
++							    MT6359_LDO_OP_MODE_MASK));
++		regmap_update_bits(g_regmap, op_en_reg, MT6359_LDO_HW0_OP_BIT,
++				   op_en ? MT6359_LDO_HW0_OP_BIT : 0);
++		regmap_update_bits(g_regmap, op_cfg_reg, MT6359_LDO_HW0_OP_BIT,
++				   op_cfg ? MT6359_LDO_HW0_OP_BIT : 0);
++	}
++}
++
++/* Faithful port of KERNEL_pmic_set_register_value(PMIC_RG_LDO_VCNXX_LP, val):
++ * the *_LP flag is CON0 bit[1] (the SW low-power request). val==0 takes the rail
++ * out of low-power so the A-die gets full current. */
++static void wmt_pmic_set_ldo_lp(unsigned int con0, unsigned int val)
++{
++	if (!g_regmap)
++		return;
++	regmap_update_bits(g_regmap, con0, MT6359_LDO_LP_BIT,
++			   val ? MT6359_LDO_LP_BIT : 0);
++}
++
+ static VOID consys_set_if_pinmux(MTK_WCN_BOOL enable)
+ {
+ 	UINT8 *consys_if_pinmux_reg_base = NULL;
+@@ -999,7 +1076,8 @@ static INT32 consys_hw_vcn18_ctrl(MTK_WCN_BOOL enable)
+ #if CONSYS_PMIC_CTRL_ENABLE
+ 	if (enable) {
+ 		/*Set VCN18_SW_OP_EN as 1*/
+-		KERNEL_pmic_ldo_vcn18_lp(SW, 1, 1, SW_OFF);
++		wmt_pmic_ldo_lp(MT6359_LDO_VCN18_CON0, MT6359_LDO_VCN18_OP_EN,
++				MT6359_LDO_VCN18_OP_CFG, SW, 1, 1, SW_OFF);
+ 		/*Set VCN18_SW_EN as 1 and set votage as 1V8*/
+ 		if (reg_VCN18) {
+ 			regulator_set_voltage(reg_VCN18, 1800000, 1800000);
+@@ -1009,9 +1087,10 @@ static INT32 consys_hw_vcn18_ctrl(MTK_WCN_BOOL enable)
+ 				WMT_PLAT_PR_DBG("enable VCN18 ok\n");
+ 		}
+ 		/*Set VCN18 SW_LP as 0*/
+-		KERNEL_pmic_set_register_value(PMIC_RG_LDO_VCN18_LP, 0);
++		wmt_pmic_set_ldo_lp(MT6359_LDO_VCN18_CON0, 0);
+ 		/*Set VCN18 as low-power mode(1), HW0_OP_EN as 1, HW0_OP_CFG as HW_LP(1)*/
+-		KERNEL_pmic_ldo_vcn18_lp(SRCLKEN0, 1, 1, HW_LP);
++		wmt_pmic_ldo_lp(MT6359_LDO_VCN18_CON0, MT6359_LDO_VCN18_OP_EN,
++				MT6359_LDO_VCN18_OP_CFG, SRCLKEN0, 1, 1, HW_LP);
+ 
+ 		/*1.AP power on VCN_3V3 LDO (with PMIC_WRAP API) VCN_3V3  */
+ 		/*default vcn33_1 SW mode*/
+@@ -1043,10 +1122,12 @@ static VOID consys_vcn28_hw_mode_ctrl(UINT32 enable)
+ #if CONSYS_PMIC_CTRL_ENABLE
+ 	if (enable)
+ 		/*Set VCN33_2_SW_OP_EN as 1*/
+-		KERNEL_pmic_ldo_vcn33_2_lp(SW, 1, 1, SW_OFF);
++		wmt_pmic_ldo_lp(MT6359_LDO_VCN33_2_CON0, MT6359_LDO_VCN33_2_OP_EN,
++				MT6359_LDO_VCN33_2_OP_CFG, SW, 1, 1, SW_OFF);
+ 	else
+ 		/*Set VCN33_2 as low-power mode(1), HW0_OP_EN as 0, HW0_OP_CFG as HW_OFF(0)*/
+-		KERNEL_pmic_ldo_vcn33_2_lp(SRCLKEN0, 1, 0, HW_OFF);
++		wmt_pmic_ldo_lp(MT6359_LDO_VCN33_2_CON0, MT6359_LDO_VCN33_2_OP_EN,
++				MT6359_LDO_VCN33_2_OP_CFG, SRCLKEN0, 1, 0, HW_OFF);
+ #endif
+ }
+ 
+@@ -1058,21 +1139,24 @@ static INT32 consys_hw_vcn28_ctrl(UINT32 enable)
+ 	if (enable) {
+ 		/*in co-clock mode,need to turn on vcn33_2 when fm on */
+ 		/*Set VCN33_2_SW_OP_EN as 1*/
+-		KERNEL_pmic_ldo_vcn33_2_lp(SW, 1, 1, SW_OFF);
++		wmt_pmic_ldo_lp(MT6359_LDO_VCN33_2_CON0, MT6359_LDO_VCN33_2_OP_EN,
++				MT6359_LDO_VCN33_2_OP_CFG, SW, 1, 1, SW_OFF);
+ 		/*Set VCN33_2_SW_EN as 1 and set votage as 2V8*/
+ 		if (reg_VCN33_2) {
+ 			regulator_set_voltage(reg_VCN33_2, 2800000, 2800000);
+ 			result = regulator_enable(reg_VCN33_2);
+ 		}
+ 		/*Set VCN33_2 SW_LP as 0*/
+-		KERNEL_pmic_set_register_value(PMIC_RG_LDO_VCN33_2_LP, 0);
++		wmt_pmic_set_ldo_lp(MT6359_LDO_VCN33_2_CON0, 0);
+ 		/*Set VCN33_2 as low-power mode(1), HW0_OP_EN as 1, HW0_OP_CFG as HW_OFF(0)*/
+-		KERNEL_pmic_ldo_vcn33_2_lp(SRCLKEN0, 1, 1, HW_OFF);
++		wmt_pmic_ldo_lp(MT6359_LDO_VCN33_2_CON0, MT6359_LDO_VCN33_2_OP_EN,
++				MT6359_LDO_VCN33_2_OP_CFG, SRCLKEN0, 1, 1, HW_OFF);
+ 		WMT_PLAT_PR_DBG("turn on vcn33_2 for fm/gps usage in co-clock mode\n");
+ 	} else {
+ 		/*in co-clock mode,need to turn off vcn33_2 when fm off */
+ 		/*Set VCN33_2 as low-power mode(1), HW0_OP_EN as 0, HW0_OP_CFG as HW_OFF(0)*/
+-		KERNEL_pmic_ldo_vcn33_2_lp(SRCLKEN0, 1, 0, HW_OFF);
++		wmt_pmic_ldo_lp(MT6359_LDO_VCN33_2_CON0, MT6359_LDO_VCN33_2_OP_EN,
++				MT6359_LDO_VCN33_2_OP_CFG, SRCLKEN0, 1, 0, HW_OFF);
+ 		if (reg_VCN33_2)
+ 			regulator_disable(reg_VCN33_2);
+ 		WMT_PLAT_PR_DBG("turn off vcn33_2 for fm/gps usage in co-clock mode\n");
+@@ -1091,23 +1175,31 @@ static INT32 consys_hw_wifi_vcn33_ctrl(UINT32 enable)
+ 	return 0;
+ }
+ 
++/* FLAGGED: NOT PORTED - no mainline EMI-MPU API exists in 6.16.
++ *
++ * The vendor sets an EMI MPU access-protection domain (region 27) over the conn
++ * EMI share-memory carveout [gConEmiPhyBase .. +gConEmiSize) via
++ * emi_mpu_set_protection(&emi_region_info_t). That depends on the MTK BSP EMI-MPU
++ * driver (mtk_emimpu_* / emi_mpu_set_protection), which is GATED on CONFIG_MTK_EMI.
++ * Mainline 6.16 has NO MediaTek EMI driver at all (drivers/memory/mediatek/ ships
++ * only mtk-smi.o; there is no mtk-emi.c and no mtk_emimpu_* symbol in-tree), and
++ * CONFIG_MTK_EMI is undefined, so the ifdef body never compiled. The compat
++ * mt_emi_api.h is an empty stub (the emi_region_info_t type / SET_ACCESS_PERMISSION
++ * macro do not exist), confirming there is nothing to call.
++ *
++ * This is an ACCESS-PROTECTION table (which masters may read/write the region),
++ * NOT the mechanism by which the conn-MCU FETCHES its firmware. Firmware fetch is
++ * via the conn's 0xF0000000 EMI window remapped to the carveout phys base
++ * (consys_emi_set_remapping_reg() below + the EMI-remap registers), and the proven
++ * reimpl mtk-conninfra-mt6785.c reaches conn idle 0x1d1e by exactly that path with
++ * NO EMI-MPU call. So the missing MPU does not block firmware fetch; it only means
++ * the carveout is not access-locked against other masters (a security hardening,
++ * not a functional bring-up gate). Left explicitly unported and FLAGGED rather
++ * than silently no-op'd. If a future EMI-MPU mainline API lands, wire it here. */
+ static INT32 consys_emi_mpu_set_region_protection(VOID)
+ {
+-#ifdef CONFIG_MTK_EMI
+-	struct emi_region_info_t region_info;
+-
+-	/*set MPU for EMI share Memory */
+-	WMT_PLAT_PR_DBG("setting MPU for EMI share memory\n");
+-
+-	region_info.start = gConEmiPhyBase;
+-	region_info.end = gConEmiPhyBase + gConEmiSize - 1;
+-	region_info.region = 27;
+-	SET_ACCESS_PERMISSION(region_info.apc, LOCK,
+-			FORBIDDEN, FORBIDDEN, FORBIDDEN, FORBIDDEN, FORBIDDEN, FORBIDDEN, FORBIDDEN,
+-			FORBIDDEN, FORBIDDEN, FORBIDDEN, FORBIDDEN, FORBIDDEN, FORBIDDEN,
+-			NO_PROTECTION, FORBIDDEN, NO_PROTECTION);
+-	emi_mpu_set_protection(&region_info);
+-#endif
++	WMT_PLAT_PR_INFO("EMI MPU region protection: no mainline EMI-MPU API in 6.16 (CONFIG_MTK_EMI unset, no mtk-emi.c) - SKIPPED. conn fw fetch uses EMI remap, not MPU; not a bring-up gate. carveout [0x%llx +0x%llx)\n",
++			 (unsigned long long)gConEmiPhyBase, (unsigned long long)gConEmiSize);
+ 	return 0;
+ }
+ 
+diff --git a/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c b/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c
+index 08ee1ce3b..bf0ac1547 100644
+--- a/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c
++++ b/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c
+@@ -30,6 +30,12 @@
+ #include "wmt_build_in_adapter.h"
+ 
+ /* ---- connectivity_build_in_adapter export wrappers (connadp no-op) ------- */
++/* NOTE: the begonia conn bring-up path no longer routes A-die PMIC ops through
++ * these wrappers. consys_hw_vcn18_ctrl / consys_hw_vcn28_ctrl (mt6785.c) now do
++ * the REAL mt6359 regmap ops directly (wmt_pmic_ldo_lp / wmt_pmic_set_ldo_lp via
++ * g_regmap). These two bodies are therefore dead on the begonia path and kept
++ * only so the unconditional KERNEL_pmic_*_register_value adapter macro still
++ * links for any non-begonia caller. They touch no hardware. */
+ void connectivity_export_pmic_set_register_value(int flagname, unsigned int val)
+ { (void)flagname; (void)val; }
+ 
+diff --git a/drivers/misc/mediatek/connectivity/compat/include/mt_emi_api.h b/drivers/misc/mediatek/connectivity/compat/include/mt_emi_api.h
+index 9df7778dc..3e03242d9 100644
+--- a/drivers/misc/mediatek/connectivity/compat/include/mt_emi_api.h
++++ b/drivers/misc/mediatek/connectivity/compat/include/mt_emi_api.h
+@@ -1,5 +1,21 @@
+ /* SPDX-License-Identifier: GPL-2.0 */
+-/* compat stub for BSP header mt_emi_api.h (begonia fwport) */
++/* compat stub for BSP header mt_emi_api.h (begonia fwport).
++ *
++ * FLAGGED: there is NO mainline EMI-MPU API in 6.16. The vendor BSP
++ * mt_emi_api.h provided emi_mpu_set_protection(struct emi_region_info_t *) plus
++ * the emi_region_info_t type and the SET_ACCESS_PERMISSION() macro, backed by
++ * the MTK EMI driver gated on CONFIG_MTK_EMI. Mainline drivers/memory/mediatek/
++ * ships only mtk-smi.o (no mtk-emi.c, no mtk_emimpu_* symbol), and CONFIG_MTK_EMI
++ * is undefined, so consys_emi_mpu_set_region_protection() (mt6785.c) cannot set
++ * the conn EMI carveout access-protection table.
++ *
++ * This is an access-protection feature, NOT the conn firmware-fetch mechanism
++ * (which is the conn 0xF0000000 EMI-window remapping to the carveout phys base -
++ * see consys_emi_set_remapping_reg()). The proven reimpl mtk-conninfra-mt6785.c
++ * reaches conn idle 0x1d1e with NO EMI-MPU call, so the missing MPU is not a
++ * bring-up gate. Left as an empty stub and explicitly flagged in
++ * consys_emi_mpu_set_region_protection(); wire a real API here if one ever lands
++ * in mainline. */
+ #ifndef _COMPAT_STUB_MT_EMI_API_H
+ #define _COMPAT_STUB_MT_EMI_API_H
+ #endif
+diff --git a/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h b/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
+index e23c70909..df71fb5e7 100644
+--- a/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
++++ b/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
+@@ -8,9 +8,15 @@
+  * Grown from compile errors, not predicted.
+  *
+  * RULE: no register address / value / bitfield is altered here. Type /
+- * signature / symbol shims only. PMIC/EMI/clkbuf calls are stubbed at the API
+- * level for the build; runtime A-die wiring is the reimpl/DT path and is out
+- * of scope for this build-port. A no-op here touches no hardware.
++ * signature / symbol shims only.
++ *
++ * UPDATE (fwport-pmic): the conn A-die PMIC path is NO LONGER stubbed. The conn
++ * 26MHz XO buffer (consys_clock_buffer_ctrl) and the VCN18/VCN33_2 A-die LDO
++ * low-power setup (consys_hw_vcn18_ctrl / consys_hw_vcn28_ctrl) now do the REAL
++ * mt6359 regmap ops directly in mt6785.c (via g_regmap). The KERNEL_clk_buf_ctrl
++ * and KERNEL_pmic_ldo_vcn*_lp no-op macros below are consequently dead on the
++ * begonia path; they remain only so any non-begonia TU that still references the
++ * macro keeps building. A no-op here touches no hardware.
+  *
+  * Split of responsibility for the connectivity_build_in_adapter KERNEL_*
+  * macros (the connadp module is NOT linked into wmt_drv here):
+-- 
+2.56.0
+

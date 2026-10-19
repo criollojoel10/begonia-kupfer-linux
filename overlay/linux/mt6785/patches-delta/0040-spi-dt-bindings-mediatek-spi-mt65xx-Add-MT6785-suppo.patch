@@ -1,0 +1,28 @@
+From c28c9c948b220ef37259a1b358d2bb4df77e3da7 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 9 Jul 2025 17:01:03 +0200
+Subject: [PATCH 040/115] spi: dt-bindings: mediatek,spi-mt65xx: Add MT6785
+ support
+
+Add mediatek,mt6785-spi compatible with mediatek,mt6765-spi fallback.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ Documentation/devicetree/bindings/spi/mediatek,spi-mt65xx.yaml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/spi/mediatek,spi-mt65xx.yaml b/Documentation/devicetree/bindings/spi/mediatek,spi-mt65xx.yaml
+index 3bf3eb1f8..6e8878976 100644
+--- a/Documentation/devicetree/bindings/spi/mediatek,spi-mt65xx.yaml
++++ b/Documentation/devicetree/bindings/spi/mediatek,spi-mt65xx.yaml
+@@ -27,6 +27,7 @@ properties:
+       - items:
+           - enum:
+               - mediatek,mt6779-spi
++              - mediatek,mt6785-spi
+               - mediatek,mt8186-spi
+               - mediatek,mt8192-spi
+               - mediatek,mt8195-spi
+-- 
+2.56.0
+

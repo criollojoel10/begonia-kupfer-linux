@@ -1,0 +1,32 @@
+From e49e18dc764875a97e67b1668caaa6d22a9f935c Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 9 Jul 2025 17:08:53 +0200
+Subject: [PATCH 057/115] dt-bindings: phy: mediatek: tphy: Add support for
+ MT6785
+
+Add mediatek,mt6785-tphy compatible with mediatek,generic-tphy-v2
+fallback.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ Documentation/devicetree/bindings/phy/mediatek,tphy.yaml | 1 +
+ 1 file changed, 1 insertion(+)
+ mode change 100644 => 100755 Documentation/devicetree/bindings/phy/mediatek,tphy.yaml
+
+diff --git a/Documentation/devicetree/bindings/phy/mediatek,tphy.yaml b/Documentation/devicetree/bindings/phy/mediatek,tphy.yaml
+old mode 100644
+new mode 100755
+index ff5c77ef1..68afff87d
+--- a/Documentation/devicetree/bindings/phy/mediatek,tphy.yaml
++++ b/Documentation/devicetree/bindings/phy/mediatek,tphy.yaml
+@@ -78,6 +78,7 @@ properties:
+       - items:
+           - enum:
+               - mediatek,mt2712-tphy
++              - mediatek,mt6785-tphy
+               - mediatek,mt6893-tphy
+               - mediatek,mt7629-tphy
+               - mediatek,mt7981-tphy
+-- 
+2.56.0
+

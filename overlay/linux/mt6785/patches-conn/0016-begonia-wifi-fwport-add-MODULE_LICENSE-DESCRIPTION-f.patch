@@ -1,0 +1,31 @@
+From c77f4271407e4d69cad8355df5a49cd407c63acf Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 00:30:12 +0200
+Subject: [PATCH 16/51] begonia-wifi (fwport): add MODULE_LICENSE/DESCRIPTION
+ for wmt_drv
+
+The vendor MODULE_LICENSE lived in the pruned SDIO transport TUs; provide it
+(GPL, per the vendor source headers) + a MODULE_DESCRIPTION in the compat TU.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c b/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c
+index 956eddae5..35fe7a2fd 100644
+--- a/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c
++++ b/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c
+@@ -100,3 +100,9 @@ MTK_WCN_STP_SDIO_HIF_INFO g_stp_sdio_host_info;
+ unsigned int wifi_irq;
+ pm_callback_t mtk_wcn_cmb_sdio_pm_cb;
+ void *mtk_wcn_cmb_sdio_pm_data;
++
++/* wmt_drv module metadata: the vendor placed MODULE_LICENSE in the (pruned)
++ * SDIO transport TUs. Provide it here so modpost is satisfied. GPLv2 per the
++ * vendor source headers. */
++MODULE_LICENSE("GPL");
++MODULE_DESCRIPTION("MediaTek WMT/connsys (wmt_drv) vendor forward-port for begonia MT6785");
+-- 
+2.56.0
+

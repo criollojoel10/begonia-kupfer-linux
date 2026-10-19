@@ -1,0 +1,53 @@
+From 09db3b3ef660990fa8d05af73e31e8d76e846b0b Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Fri, 18 Jul 2025 20:10:42 +0200
+Subject: [PATCH 111/115] arm64: dts: mediatek: mt6785-xiaomi-begonia: Add
+ nodes required by lk
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../mt6785-xiaomi-begonia-common.dtsi         | 21 +++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+index 1c9cd06b4..9b9bf94f3 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+@@ -15,6 +15,15 @@
+ / {
+ 	chassis-type = "handset";
+ 
++	chosen {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		/* needed by Little Kernel */
++		bootargs = "";
++	};
++
+ 	vibrator {
+ 		compatible = "regulator-haptic";
+ 		haptic-supply = <&mt6359_vibr_ldo_reg>;
+@@ -22,6 +31,18 @@ vibrator {
+ 		min-microvolt = <1200000>;
+ 	};
+ 
++	/* needed by Little Kernel */
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++	};
++
++	/* needed by Little Kernel */
++	scp {
++		compatible = "mediatek,scp";
++	};
++
+ 	volume_buttons: volume-buttons {
+ 		compatible = "gpio-keys";
+ 		pinctrl-names = "default";
+-- 
+2.56.0
+

@@ -1,0 +1,75 @@
+From 93f24e1c696e221e184d9e2321ac337dc2107003 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 12:06:39 +0200
+Subject: [PATCH 44/51] begonia-wifi (fwport): gen4m eth_hw_addr_set for
+ p2p/ap0/bow netdevs
+
+Finish the mainline-6.x dev_addr port across the remaining gen4m netdevs (same
+const + hw_addr-list requirement as wlan0): p2p device create (gl_p2p.c),
+.ndo_set_mac_addr for p2p (gl_p2p.c), p2p add_iface (gl_p2p_cfg80211.c), and the
+BoW handler (gl_bow.c). perm_addr writes kept (still a writable array). wlan0/wlan1
+were fixed in 6929a107d; this makes the netdev MAC handling faithful across all
+interfaces.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_bow.c | 3 ++-
+ .../misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p.c | 6 ++++--
+ .../connectivity/wlan/gen4m/os/linux/gl_p2p_cfg80211.c      | 3 ++-
+ 3 files changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_bow.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_bow.c
+index 2ad16735a..d800e07b4 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_bow.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_bow.c
+@@ -1093,7 +1093,8 @@ u_int8_t kalInitBowDevice(IN struct GLUE_INFO *prGlueInfo, IN const char *prDevN
+ 		/* 1.2 fill hardware address */
+ 		COPY_MAC_ADDR(rMacAddr, prAdapter->rMyMacAddr);
+ 		rMacAddr[0] |= 0x2;	/* change to local administrated address */
+-		kalMemCopy(prGlueInfo->rBowInfo.prDevHandler->dev_addr, rMacAddr, ETH_ALEN);
++		/* mainline 6.x: dev_addr is const + hw_addr-list tracked */
++		eth_hw_addr_set(prGlueInfo->rBowInfo.prDevHandler, rMacAddr);
+ 		kalMemCopy(prGlueInfo->rBowInfo.prDevHandler->perm_addr,
+ 			   prGlueInfo->rBowInfo.prDevHandler->dev_addr, ETH_ALEN);
+ 
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p.c
+index d48b71d7a..caa60cc3a 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p.c
+@@ -1348,7 +1348,8 @@ u_int8_t glRegisterP2P(struct GLUE_INFO *prGlueInfo, const char *prDevName,
+ 
+ 		DBGLOG(INIT, INFO, "Set p2p role[%d] mac to " MACSTR "\n",
+ 				i, MAC2STR(rMacAddr));
+-		kalMemCopy(prP2pDev->dev_addr, rMacAddr, ETH_ALEN);
++		/* mainline 6.x: dev_addr is const + hw_addr-list tracked */
++		eth_hw_addr_set(prP2pDev, rMacAddr);
+ 		kalMemCopy(prP2pDev->perm_addr, prP2pDev->dev_addr, ETH_ALEN);
+ 
+ 		if (glSetupP2P(prGlueInfo, prP2pWdev, prP2pDev, i, fgIsApMode)
+@@ -2232,7 +2233,8 @@ int p2pSetMACAddress(IN struct net_device *prDev, void *addr)
+ 	sa = (struct sockaddr *)addr;
+ 
+ 	COPY_MAC_ADDR(prBssInfo->aucOwnMacAddr, sa->sa_data);
+-	COPY_MAC_ADDR(prDev->dev_addr, sa->sa_data);
++	/* mainline 6.x: dev_addr is const + hw_addr-list tracked */
++	eth_hw_addr_set(prDev, (const u8 *)sa->sa_data);
+ 	COPY_MAC_ADDR(prAdapter->rWifiVar.aucInterfaceAddress[ucRoleIdx],
+ 			sa->sa_data);
+ 
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p_cfg80211.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p_cfg80211.c
+index 63d2415f7..bf33cf94b 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p_cfg80211.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_p2p_cfg80211.c
+@@ -397,7 +397,8 @@ struct wireless_dev *mtk_p2p_cfg80211_add_iface(struct wiphy *wiphy,
+ 					prGlueInfo->prAdapter
+ 						->prP2pInfo->u4DeviceNum << 2;
+ 		}
+-		kalMemCopy(prNewNetDevice->dev_addr, rMacAddr, ETH_ALEN);
++		/* mainline 6.x: dev_addr is const + hw_addr-list tracked */
++		eth_hw_addr_set(prNewNetDevice, rMacAddr);
+ 		kalMemCopy(prNewNetDevice->perm_addr, rMacAddr, ETH_ALEN);
+ 
+ 		DBGLOG(P2P, TRACE,
+-- 
+2.56.0
+

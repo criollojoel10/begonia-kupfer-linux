@@ -1,0 +1,314 @@
+From 69b47b2dd79308a63c5b77cbdbbd8fd665b745aa Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 01:40:16 +0200
+Subject: [PATCH 25/51] begonia-wifi (fwport-gen4m): proc_ops +
+ station_parameters link_sta churn
+
+- gl_proc.c: proc_create() needs const struct proc_ops* since 5.6; convert the
+  12 proc-entry op tables via scoped KAL_FOPS/KAL_FOP_* macros (struct tag +
+  .proc_read/.proc_write/... field rename, .owner dropped). Callback bodies
+  untouched.
+- gl_cfg80211.c change_station: HT/VHT/supported_rates moved into nested
+  struct link_station_parameters link_sta_params in 6.0; alias prLinkSta to
+  &params->link_sta_params (6.0+) / params (older). No register value touched.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../wlan/gen4m/os/linux/gl_cfg80211.c         |  37 ++++--
+ .../wlan/gen4m/os/linux/gl_proc.c             | 123 +++++++++++-------
+ 2 files changed, 97 insertions(+), 63 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_cfg80211.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_cfg80211.c
+index aa1d2fef9..1111eab5a 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_cfg80211.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_cfg80211.c
+@@ -4026,6 +4026,15 @@ mtk_cfg80211_change_station(struct wiphy *wiphy,
+ 	struct ADAPTER *prAdapter;
+ 	struct BSS_INFO *prBssInfo;
+ 	uint8_t ucBssIndex = 0;
++	/* The HT/VHT/rate capability fields moved out of struct
++	 * station_parameters into the nested struct link_station_parameters
++	 * link_sta_params in 6.0 (link-station refactor). Alias so the field
++	 * accesses below stay unchanged. */
++#if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
++	struct link_station_parameters *prLinkSta = &params->link_sta_params;
++#else
++	struct station_parameters *prLinkSta = params;
++#endif
+ 
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+ 	ASSERT(prGlueInfo);
+@@ -4045,19 +4054,19 @@ mtk_cfg80211_change_station(struct wiphy *wiphy,
+ 
+ 	if (params == NULL)
+ 		return 0;
+-	else if (params->supported_rates == NULL)
++	else if (prLinkSta->supported_rates == NULL)
+ 		return 0;
+ 
+ 	/* init */
+ 	kalMemZero(&rCmdUpdate, sizeof(rCmdUpdate));
+ 	kalMemCopy(rCmdUpdate.aucPeerMac, mac, 6);
+ 
+-	if (params->supported_rates != NULL) {
++	if (prLinkSta->supported_rates != NULL) {
+ 
+-		u4Temp = params->supported_rates_len;
++		u4Temp = prLinkSta->supported_rates_len;
+ 		if (u4Temp > CMD_PEER_UPDATE_SUP_RATE_MAX)
+ 			u4Temp = CMD_PEER_UPDATE_SUP_RATE_MAX;
+-		kalMemCopy(rCmdUpdate.aucSupRate, params->supported_rates,
++		kalMemCopy(rCmdUpdate.aucSupRate, prLinkSta->supported_rates,
+ 			   u4Temp);
+ 		rCmdUpdate.u2SupRateLen = u4Temp;
+ 	}
+@@ -4080,30 +4089,30 @@ mtk_cfg80211_change_station(struct wiphy *wiphy,
+ 		rCmdUpdate.u2ExtCapLen = u4Temp;
+ 	}
+ 
+-	if (params->ht_capa != NULL) {
++	if (prLinkSta->ht_capa != NULL) {
+ 
+-		rCmdUpdate.rHtCap.u2CapInfo = params->ht_capa->cap_info;
++		rCmdUpdate.rHtCap.u2CapInfo = prLinkSta->ht_capa->cap_info;
+ 		rCmdUpdate.rHtCap.ucAmpduParamsInfo =
+-			params->ht_capa->ampdu_params_info;
++			prLinkSta->ht_capa->ampdu_params_info;
+ 		rCmdUpdate.rHtCap.u2ExtHtCapInfo =
+-			params->ht_capa->extended_ht_cap_info;
++			prLinkSta->ht_capa->extended_ht_cap_info;
+ 		rCmdUpdate.rHtCap.u4TxBfCapInfo =
+-			params->ht_capa->tx_BF_cap_info;
++			prLinkSta->ht_capa->tx_BF_cap_info;
+ 		rCmdUpdate.rHtCap.ucAntennaSelInfo =
+-			params->ht_capa->antenna_selection_info;
++			prLinkSta->ht_capa->antenna_selection_info;
+ 		kalMemCopy(rCmdUpdate.rHtCap.rMCS.arRxMask,
+-			   params->ht_capa->mcs.rx_mask,
++			   prLinkSta->ht_capa->mcs.rx_mask,
+ 			   sizeof(rCmdUpdate.rHtCap.rMCS.arRxMask));
+ 
+ 		rCmdUpdate.rHtCap.rMCS.u2RxHighest =
+-			params->ht_capa->mcs.rx_highest;
++			prLinkSta->ht_capa->mcs.rx_highest;
+ 		rCmdUpdate.rHtCap.rMCS.ucTxParams =
+-			params->ht_capa->mcs.tx_params;
++			prLinkSta->ht_capa->mcs.tx_params;
+ 		rCmdUpdate.fgIsSupHt = TRUE;
+ 	}
+ 	/* vht */
+ 
+-	if (params->vht_capa != NULL) {
++	if (prLinkSta->vht_capa != NULL) {
+ 		/* rCmdUpdate.rVHtCap */
+ 		/* rCmdUpdate.rVHtCap */
+ 	}
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_proc.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_proc.c
+index 256d30a13..56186fe11 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_proc.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_proc.c
+@@ -79,6 +79,31 @@
+ #include "wlan_oid.h"
+ #include <linux/rtc.h>
+ 
++/* proc_create() takes a const struct proc_ops * (not file_operations *) since
++ * 5.6, and proc_ops renamed its members (.proc_read, ...) and dropped .owner.
++ * Scoped compat so the proc-entry op tables below build on both old and new
++ * kernels without touching the callback bodies. KAL_FOPS selects the struct
++ * type; the field macros map .owner/.open/.read/.write/.llseek/.release. */
++#if KERNEL_VERSION(5, 6, 0) <= CFG80211_VERSION_CODE
++#define KAL_FOPS		struct proc_ops
++#define KAL_FOP_OWNER		proc_flags		/* no owner in proc_ops */
++#define KAL_FOP_OPEN		proc_open
++#define KAL_FOP_READ		proc_read
++#define KAL_FOP_WRITE		proc_write
++#define KAL_FOP_LSEEK		proc_lseek
++#define KAL_FOP_RELEASE		proc_release
++#define KAL_FOP_OWNER_VAL	0			/* drop THIS_MODULE */
++#else
++#define KAL_FOPS		struct file_operations
++#define KAL_FOP_OWNER		owner
++#define KAL_FOP_OPEN		open
++#define KAL_FOP_READ		read
++#define KAL_FOP_WRITE		write
++#define KAL_FOP_LSEEK		llseek
++#define KAL_FOP_RELEASE		release
++#define KAL_FOP_OWNER_VAL	THIS_MODULE
++#endif
++
+ /*******************************************************************************
+  *                              C O N S T A N T S
+  *******************************************************************************
+@@ -595,33 +620,33 @@ static ssize_t procDbgLevelWrite(struct file *file, const char __user *buffer,
+ 	return count;
+ }
+ 
+-static const struct file_operations dbglevel_ops = {
+-	.owner = THIS_MODULE,
+-	.read = procDbgLevelRead,
+-	.write = procDbgLevelWrite,
++static const KAL_FOPS dbglevel_ops = {
++	.KAL_FOP_OWNER = KAL_FOP_OWNER_VAL,
++	.KAL_FOP_READ = procDbgLevelRead,
++	.KAL_FOP_WRITE = procDbgLevelWrite,
+ };
+ 
+ #if WLAN_INCLUDE_PROC
+ #if	CFG_SUPPORT_EASY_DEBUG
+ 
+-static const struct file_operations efusedump_ops = {
+-	.owner = THIS_MODULE,
+-	.open = procEfuseDumpOpen,
+-	.read = seq_read,
+-	.llseek = seq_lseek,
+-	.release = seq_release,
++static const KAL_FOPS efusedump_ops = {
++	.KAL_FOP_OWNER = KAL_FOP_OWNER_VAL,
++	.KAL_FOP_OPEN = procEfuseDumpOpen,
++	.KAL_FOP_READ = seq_read,
++	.KAL_FOP_LSEEK = seq_lseek,
++	.KAL_FOP_RELEASE = seq_release,
+ };
+ 
+-static const struct file_operations drivercmd_ops = {
+-	.owner = THIS_MODULE,
+-	.read = procDriverCmdRead,
+-	.write = procDriverCmdWrite,
++static const KAL_FOPS drivercmd_ops = {
++	.KAL_FOP_OWNER = KAL_FOP_OWNER_VAL,
++	.KAL_FOP_READ = procDriverCmdRead,
++	.KAL_FOP_WRITE = procDriverCmdWrite,
+ };
+ 
+-static const struct file_operations cfg_ops = {
+-	.owner = THIS_MODULE,
+-	.read = procCfgRead,
+-	.write = procCfgWrite,
++static const KAL_FOPS cfg_ops = {
++	.KAL_FOP_OWNER = KAL_FOP_OWNER_VAL,
++	.KAL_FOP_READ = procCfgRead,
++	.KAL_FOP_WRITE = procCfgWrite,
+ };
+ #endif
+ #endif
+@@ -757,10 +782,10 @@ static ssize_t procMCRWrite(struct file *file, const char __user *buffer,
+ 
+ }				/* end of procMCRWrite() */
+ 
+-static const struct file_operations mcr_ops = {
+-	.owner = THIS_MODULE,
+-	.read = procMCRRead,
+-	.write = procMCRWrite,
++static const KAL_FOPS mcr_ops = {
++	.KAL_FOP_OWNER = KAL_FOP_OWNER_VAL,
++	.KAL_FOP_READ = procMCRRead,
++	.KAL_FOP_WRITE = procMCRWrite,
+ };
+ 
+ #if CFG_SUPPORT_SET_CAM_BY_PROC
+@@ -832,9 +857,9 @@ static ssize_t procSetCamCfgWrite(struct file *file, const char __user *buffer,
+ 	return count;
+ }
+ 
+-static const struct file_operations proc_set_cam_ops = {
+-	.owner = THIS_MODULE,
+-	.write = procSetCamCfgWrite,
++static const KAL_FOPS proc_set_cam_ops = {
++	.KAL_FOP_OWNER = KAL_FOP_OWNER_VAL,
++	.KAL_FOP_WRITE = procSetCamCfgWrite,
+ };
+ #endif /*CFG_SUPPORT_SET_CAM_BY_PROC */
+ 
+@@ -966,10 +991,10 @@ static ssize_t procPktDelayDbgCfgWrite(struct file *file, const char *buffer,
+ 	return count;
+ }
+ 
+-static const struct file_operations proc_pkt_delay_dbg_ops = {
+-	.owner = THIS_MODULE,
+-	.read = procPktDelayDbgCfgRead,
+-	.write = procPktDelayDbgCfgWrite,
++static const KAL_FOPS proc_pkt_delay_dbg_ops = {
++	.KAL_FOP_OWNER = KAL_FOP_OWNER_VAL,
++	.KAL_FOP_READ = procPktDelayDbgCfgRead,
++	.KAL_FOP_WRITE = procPktDelayDbgCfgWrite,
+ };
+ 
+ #if CFG_SUPPORT_DEBUG_FS
+@@ -1038,10 +1063,10 @@ static ssize_t procRoamWrite(struct file *file, const char __user *buffer,
+ 	return count;
+ }
+ 
+-static const struct file_operations roam_ops = {
+-	.owner = THIS_MODULE,
+-	.read = procRoamRead,
+-	.write = procRoamWrite,
++static const KAL_FOPS roam_ops = {
++	.KAL_FOP_OWNER = KAL_FOP_OWNER_VAL,
++	.KAL_FOP_READ = procRoamRead,
++	.KAL_FOP_WRITE = procRoamWrite,
+ };
+ #endif
+ 
+@@ -1101,10 +1126,10 @@ static ssize_t procCountryWrite(struct file *file, const char __user *buffer,
+ 	return count;
+ }
+ 
+-static const struct file_operations country_ops = {
+-	.owner = THIS_MODULE,
+-	.read = procCountryRead,
+-	.write = procCountryWrite,
++static const KAL_FOPS country_ops = {
++	.KAL_FOP_OWNER = KAL_FOP_OWNER_VAL,
++	.KAL_FOP_READ = procCountryRead,
++	.KAL_FOP_WRITE = procCountryWrite,
+ };
+ 
+ static ssize_t procAutoPerfCfgRead(struct file *filp, char __user *buf,
+@@ -1190,10 +1215,10 @@ static ssize_t procAutoPerfCfgWrite(struct file *file, const char *buffer,
+ 	return -EFAULT;
+ }
+ 
+-static const struct file_operations auto_perf_ops = {
+-	.owner = THIS_MODULE,
+-	.read = procAutoPerfCfgRead,
+-	.write = procAutoPerfCfgWrite,
++static const KAL_FOPS auto_perf_ops = {
++	.KAL_FOP_OWNER = KAL_FOP_OWNER_VAL,
++	.KAL_FOP_READ = procAutoPerfCfgRead,
++	.KAL_FOP_WRITE = procAutoPerfCfgWrite,
+ };
+ 
+ #if (CFG_SUPPORT_PRE_ON_PHY_ACTION == 1)
+@@ -1260,10 +1285,10 @@ static ssize_t procCalResultWrite(struct file *file, const char __user *buffer,
+ 	return count;
+ }
+ 
+-static const struct file_operations cal_result_ops = {
+-	.owner = THIS_MODULE,
+-	.read = procCalResultRead,
+-	.write = procCalResultWrite,
++static const KAL_FOPS cal_result_ops = {
++	.KAL_FOP_OWNER = KAL_FOP_OWNER_VAL,
++	.KAL_FOP_READ = procCalResultRead,
++	.KAL_FOP_WRITE = procCalResultWrite,
+ };
+ #endif /*(CFG_SUPPORT_PRE_ON_PHY_ACTION == 1)*/
+ 
+@@ -1804,10 +1829,10 @@ static ssize_t cfgWrite(struct file *filp, const char __user *buf,
+ 	return count;
+ }
+ 
+-static const struct file_operations fwcfg_ops = {
+-	.owner = THIS_MODULE,
+-	.read = cfgRead,
+-	.write = cfgWrite,
++static const KAL_FOPS fwcfg_ops = {
++	.KAL_FOP_OWNER = KAL_FOP_OWNER_VAL,
++	.KAL_FOP_READ = cfgRead,
++	.KAL_FOP_WRITE = cfgWrite,
+ };
+ 
+ int32_t cfgRemoveProcEntry(void)
+-- 
+2.56.0
+

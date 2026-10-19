@@ -1,0 +1,62 @@
+From 07c72219ea79772efb1978085594632eb5a752c0 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 00:26:31 +0200
+Subject: [PATCH 13/51] begonia-wifi (fwport): define remaining pruned/adapter
+ data syms + btif sched_setscheduler_nocheck
+
+- mtk-bsp-compat.c: strong defs for gpio_ctrl_info, g_stp_sdio_host_info,
+  wifi_irq, mtk_wcn_cmb_sdio_pm_{cb,data} (pruned wmt_gpio.c / SDIO / connadp).
+- mtk_btif.c: sched_setscheduler() -> sched_setscheduler_nocheck() (the former
+  lost its EXPORT_SYMBOL).
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ drivers/misc/mediatek/btif/common/mtk_btif.c        |  3 ++-
+ .../mediatek/connectivity/common/mtk-bsp-compat.c   | 13 +++++++++++++
+ 2 files changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/misc/mediatek/btif/common/mtk_btif.c b/drivers/misc/mediatek/btif/common/mtk_btif.c
+index 6d9294ff5..c58785a86 100644
+--- a/drivers/misc/mediatek/btif/common/mtk_btif.c
++++ b/drivers/misc/mediatek/btif/common/mtk_btif.c
+@@ -2564,7 +2564,8 @@ static int _btif_rx_btm_init(struct _mtk_btif_ *p_btif)
+ 			struct sched_param param;
+ 
+ 			param.sched_priority = MAX_RT_PRIO - 20;
+-			i_ret = sched_setscheduler(p_btif->p_task, policy,
++			/* 6.x: EXPORT_SYMBOL(sched_setscheduler) removed; use _nocheck variant. */
++			i_ret = sched_setscheduler_nocheck(p_btif->p_task, policy,
+ 					&param);
+ 			if (i_ret != 0)
+ 				BTIF_WARN_FUNC("set RT to workqueue failed\n");
+diff --git a/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c b/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c
+index d8818f5f7..3926edbed 100644
+--- a/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c
++++ b/drivers/misc/mediatek/connectivity/common/mtk-bsp-compat.c
+@@ -23,6 +23,9 @@
+ 
+ #include "osal_typedef.h"
+ #include "wmt_detect.h"
++#include "wmt_gpio.h"
++#include "stp_sdio.h"
++#include "wmt_build_in_adapter.h"
+ 
+ /* ---- connectivity_build_in_adapter export wrappers (no-op) -------------- */
+ void connectivity_export_pmic_set_register_value(int flagname, unsigned int val)
+@@ -86,3 +89,13 @@ int  __weak mtk_wcn_hif_sdio_wmt_control(int func_type, int is_on)
+ void __weak wmt_export_platform_bridge_register(void *cb) { (void)cb; }
+ void __weak wmt_export_platform_bridge_unregister(void) { }
+ void __weak wmt_export_mtk_wcn_cmb_sdio_disable_eirq(void) { }
++
++/* ---- data symbols from pruned TUs / connadp adapter --------------------- *
++ * Defined here (not weak; modpost needs a strong def). begonia never touches
++ * the SDIO host info or the combo-SDIO PM path; wifi_irq is the GPS/WiFi eint
++ * the connadp adapter owns. gpio_ctrl_info lives in the pruned wmt_gpio.c. */
++GPIO_CTRL_INFO gpio_ctrl_info;
++MTK_WCN_STP_SDIO_HIF_INFO g_stp_sdio_host_info;
++unsigned int wifi_irq;
++pm_callback_t mtk_wcn_cmb_sdio_pm_cb;
++void *mtk_wcn_cmb_sdio_pm_data;
+-- 
+2.56.0
+

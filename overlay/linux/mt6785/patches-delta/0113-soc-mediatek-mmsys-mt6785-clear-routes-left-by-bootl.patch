@@ -1,0 +1,38 @@
+From 9431513a44bda937187c1012dd806a81d54e9935 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sun, 6 Jul 2025 20:22:36 +0200
+Subject: [PATCH 113/115] soc: mediatek: mmsys: mt6785: clear routes left by
+ bootloader
+
+This is needed for proper routing of main path.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/soc/mediatek/mt6785-mmsys.h | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/drivers/soc/mediatek/mt6785-mmsys.h b/drivers/soc/mediatek/mt6785-mmsys.h
+index 340b5c4b0..ca39f2c88 100644
+--- a/drivers/soc/mediatek/mt6785-mmsys.h
++++ b/drivers/soc/mediatek/mt6785-mmsys.h
+@@ -87,6 +87,17 @@
+ #define MT6785_OVL1_2L_FROM_OVL0_2L	1
+ 
+ static const struct mtk_mmsys_routes mmsys_mt6785_routing_table[] = {
++	// Clear stock bootloader routes first
++	MMSYS_ROUTE(OVL0, OVL_2L0, // OVL0 -> RSZ0
++		    MT6785_DISP_OVL0_MOUT_EN, MT6785_OVL0_MOUT_EN_MASK,
++		    0),
++	MMSYS_ROUTE(OVL_2L0, RDMA0, // OVL_2L0 -> OVL0
++		    MT6785_DISP_OVL0_2L_WCG_MOUT_EN, MT6785_OVL0_2L_WCG_MOUT_EN_MASK,
++		    0),
++	MMSYS_ROUTE(OVL_2L0, RDMA0, // OVL_2L0 -> RSZ0
++		    MT6785_DISP_OVL0_2L_MOUT_EN, MT6785_OVL0_2L_MOUT_EN_MASK,
++		    0),
++
+ 	MMSYS_ROUTE(DITHER0, DSI0,
+ 		    MT6785_DISP_DITHER0_MOUT_EN, MT6785_DITHER0_TO_DSI0,
+ 		    MT6785_DITHER0_TO_DSI0),
+-- 
+2.56.0
+

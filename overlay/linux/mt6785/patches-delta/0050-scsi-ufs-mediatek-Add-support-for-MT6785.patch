@@ -1,0 +1,36 @@
+From 3d59f404227281840b4cd9f003fcab7e14a420c9 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sun, 22 Jun 2025 16:33:07 +0200
+Subject: [PATCH 050/115] scsi: ufs: mediatek: Add support for MT6785
+
+Half hardware mode is used in the MT6785 to control the reference clock.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/ufs/host/ufs-mediatek.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/ufs/host/ufs-mediatek.c b/drivers/ufs/host/ufs-mediatek.c
+index cb260b29d..e323e1877 100644
+--- a/drivers/ufs/host/ufs-mediatek.c
++++ b/drivers/ufs/host/ufs-mediatek.c
+@@ -48,11 +48,16 @@ static const struct ufs_dev_quirk ufs_mtk_dev_fixups[] = {
+ 	{}
+ };
+ 
++static const struct ufs_mtk_drv_data ufs_mtk_mt6785_drv_data = {
++	.ref_clk_ctrl_mode = REF_CLK_CTRL_HALF_HW_MODE,
++};
++
+ static const struct ufs_mtk_drv_data ufs_mtk_mt8183_drv_data = {
+ 	.ref_clk_ctrl_mode = REF_CLK_CTRL_HW_MODE,
+ };
+ 
+ static const struct of_device_id ufs_mtk_of_match[] = {
++	{ .compatible = "mediatek,mt6785-ufshci", .data = &ufs_mtk_mt6785_drv_data },
+ 	{ .compatible = "mediatek,mt8183-ufshci", .data = &ufs_mtk_mt8183_drv_data },
+ 	{ .compatible = "mediatek,mt8195-ufshci", .data = &ufs_mtk_mt8183_drv_data },
+ 	{},
+-- 
+2.56.0
+

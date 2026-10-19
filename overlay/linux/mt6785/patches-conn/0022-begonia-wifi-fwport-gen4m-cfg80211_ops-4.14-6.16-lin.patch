@@ -1,0 +1,414 @@
+From 639adccf546e3d5df9ce7aeb793497e10ea83f1d Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 01:27:41 +0200
+Subject: [PATCH 22/51] begonia-wifi (fwport-gen4m): cfg80211_ops 4.14->6.16
+ link_id + struct churn
+
+gl_cfg80211.{c,h} + gl_init.c ops table, all guarded by CFG80211_VERSION_CODE
+(single-link device: link_id accepted and ignored):
+- key ops add/get/del_key, set_default_key, set_default_mgmt_key: +int link_id (6.1)
+- tdls_mgmt: +int link_id after peer (6.1)
+- start_radar_detection: +int link_id trailing (6.3)
+- stop_ap, set_bitrate_mask, get_txpower: +unsigned int link_id (6.0)
+- change_beacon: cfg80211_beacon_data* -> cfg80211_ap_update* (deref .beacon) (6.0)
+- mgmt_frame_register: removed from cfg80211_ops in 5.8 -> guard the table slot
+- netif_napi_add: drop weight arg on 6.1+ (gl_init.c)
+- compat stdarg.h shim -> <linux/stdarg.h>
+No register value touched; signature/type/header only.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../connectivity/compat/include/stdarg.h      | 11 +++
+ .../wlan/gen4m/os/linux/gl_cfg80211.c         | 95 +++++++++++++++++--
+ .../wlan/gen4m/os/linux/gl_init.c             | 11 +++
+ .../wlan/gen4m/os/linux/include/gl_cfg80211.h | 61 ++++++++++--
+ 4 files changed, 164 insertions(+), 14 deletions(-)
+ create mode 100644 drivers/misc/mediatek/connectivity/compat/include/stdarg.h
+
+diff --git a/drivers/misc/mediatek/connectivity/compat/include/stdarg.h b/drivers/misc/mediatek/connectivity/compat/include/stdarg.h
+new file mode 100644
+index 000000000..a6937d774
+--- /dev/null
++++ b/drivers/misc/mediatek/connectivity/compat/include/stdarg.h
+@@ -0,0 +1,11 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * compat stdarg.h - the 4.14 vendor gen4m gl_kal.c does #include <stdarg.h>
++ * expecting the toolchain/freestanding header. Mainline kernels (5.15+) provide
++ * the kernel's own <linux/stdarg.h> and forbid the libc one. Redirect.
++ * Reached via the compat/include -I path that is on every gen4m TU's cmdline.
++ */
++#ifndef _COMPAT_STDARG_H
++#define _COMPAT_STDARG_H
++#include <linux/stdarg.h>
++#endif
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_cfg80211.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_cfg80211.c
+index 6d5a62b54..aa1d2fef9 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_cfg80211.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_cfg80211.c
+@@ -6255,9 +6255,16 @@ int mtk_uninit_ap_role(struct GLUE_INFO *prGlueInfo,
+ int mtk_cfg_start_radar_detection(struct wiphy *wiphy,
+ 				  struct net_device *dev,
+ 				  struct cfg80211_chan_def *chandef,
+-				  unsigned int cac_time_ms)
++				  unsigned int cac_time_ms
++#if KERNEL_VERSION(6, 3, 0) <= CFG80211_VERSION_CODE
++				  , int link_id
++#endif
++				  )
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
++#if KERNEL_VERSION(6, 3, 0) <= CFG80211_VERSION_CODE
++	(void)link_id;	/* single-link device */
++#endif
+ 
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+ 
+@@ -6516,11 +6523,18 @@ int mtk_cfg_change_iface(struct wiphy *wiphy,
+ }
+ 
+ int mtk_cfg_add_key(struct wiphy *wiphy,
+-		    struct net_device *ndev, u8 key_index,
++		    struct net_device *ndev,
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++		    int link_id,
++#endif
++		    u8 key_index,
+ 		    bool pairwise, const u8 *mac_addr,
+ 		    struct key_params *params)
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++	(void)link_id;	/* single-link device */
++#endif
+ 
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+ 
+@@ -6540,11 +6554,18 @@ int mtk_cfg_add_key(struct wiphy *wiphy,
+ }
+ 
+ int mtk_cfg_get_key(struct wiphy *wiphy,
+-		    struct net_device *ndev, u8 key_index,
++		    struct net_device *ndev,
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++		    int link_id,
++#endif
++		    u8 key_index,
+ 		    bool pairwise, const u8 *mac_addr, void *cookie,
+ 		    void (*callback)(void *cookie, struct key_params *))
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++	(void)link_id;	/* single-link device */
++#endif
+ 
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+ 
+@@ -6563,10 +6584,17 @@ int mtk_cfg_get_key(struct wiphy *wiphy,
+ }
+ 
+ int mtk_cfg_del_key(struct wiphy *wiphy,
+-		    struct net_device *ndev, u8 key_index,
++		    struct net_device *ndev,
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++		    int link_id,
++#endif
++		    u8 key_index,
+ 		    bool pairwise, const u8 *mac_addr)
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++	(void)link_id;	/* single-link device */
++#endif
+ 
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+ 
+@@ -6586,9 +6614,15 @@ int mtk_cfg_del_key(struct wiphy *wiphy,
+ 
+ int mtk_cfg_set_default_key(struct wiphy *wiphy,
+ 			    struct net_device *ndev,
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++			    int link_id,
++#endif
+ 			    u8 key_index, bool unicast, bool multicast)
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++	(void)link_id;	/* single-link device */
++#endif
+ 
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+ 
+@@ -6607,9 +6641,16 @@ int mtk_cfg_set_default_key(struct wiphy *wiphy,
+ }
+ 
+ int mtk_cfg_set_default_mgmt_key(struct wiphy *wiphy,
+-		struct net_device *ndev, u8 key_index)
++		struct net_device *ndev,
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++		int link_id,
++#endif
++		u8 key_index)
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++	(void)link_id;	/* single-link device */
++#endif
+ 
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+ 
+@@ -6734,7 +6775,14 @@ int mtk_cfg_tdls_oper(struct wiphy *wiphy,
+ 	return mtk_cfg80211_tdls_oper(wiphy, ndev, peer, oper);
+ }
+ 
+-#if KERNEL_VERSION(3, 18, 0) <= CFG80211_VERSION_CODE
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++int mtk_cfg_tdls_mgmt(struct wiphy *wiphy,
++		      struct net_device *dev,
++		      const u8 *peer, int link_id,
++		      u8 action_code, u8 dialog_token,
++		      u16 status_code, u32 peer_capability,
++		      bool initiator, const u8 *buf, size_t len)
++#elif KERNEL_VERSION(3, 18, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_tdls_mgmt(struct wiphy *wiphy,
+ 		      struct net_device *dev,
+ 		      const u8 *peer, u8 action_code, u8 dialog_token,
+@@ -6755,6 +6803,9 @@ int mtk_cfg_tdls_mgmt(struct wiphy *wiphy,
+ #endif
+ {
+ 	struct GLUE_INFO *prGlueInfo;
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++	(void)link_id;	/* single-link device */
++#endif
+ 
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+ 
+@@ -7393,11 +7444,22 @@ int mtk_cfg_start_ap(struct wiphy *wiphy,
+ 	return mtk_p2p_cfg80211_start_ap(wiphy, dev, settings);
+ }
+ 
++/* change_beacon's payload arg became struct cfg80211_ap_update * in 6.0
++ * (it wraps the old cfg80211_beacon_data as its first member 'beacon'). */
++#if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
++int mtk_cfg_change_beacon(struct wiphy *wiphy,
++			  struct net_device *dev,
++			  struct cfg80211_ap_update *info_update)
++#else
+ int mtk_cfg_change_beacon(struct wiphy *wiphy,
+ 			  struct net_device *dev,
+ 			  struct cfg80211_beacon_data *info)
++#endif
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
++#if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
++	struct cfg80211_beacon_data *info = &info_update->beacon;
++#endif
+ 
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+ 
+@@ -7415,9 +7477,16 @@ int mtk_cfg_change_beacon(struct wiphy *wiphy,
+ }
+ 
+ int mtk_cfg_stop_ap(struct wiphy *wiphy,
+-		    struct net_device *dev)
++		    struct net_device *dev
++#if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
++		    , unsigned int link_id
++#endif
++		    )
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
++#if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
++	(void)link_id;	/* single-link device */
++#endif
+ 
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+ 
+@@ -7452,10 +7521,16 @@ int mtk_cfg_set_wiphy_params(struct wiphy *wiphy,
+ 
+ int mtk_cfg_set_bitrate_mask(struct wiphy *wiphy,
+ 			     struct net_device *dev,
++#if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
++			     unsigned int link_id,
++#endif
+ 			     const u8 *peer,
+ 			     const struct cfg80211_bitrate_mask *mask)
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
++#if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
++	(void)link_id;	/* single-link device */
++#endif
+ 
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+ 
+@@ -7496,9 +7571,15 @@ int mtk_cfg_set_txpower(struct wiphy *wiphy,
+ 
+ int mtk_cfg_get_txpower(struct wiphy *wiphy,
+ 			struct wireless_dev *wdev,
++#if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
++			unsigned int link_id,
++#endif
+ 			int *dbm)
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
++#if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
++	(void)link_id;	/* single-link device */
++#endif
+ 
+ 	prGlueInfo = (struct GLUE_INFO *) wiphy_priv(wiphy);
+ 
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c
+index ac8bd5e26..45fbb4a1a 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/gl_init.c
+@@ -502,7 +502,11 @@ static struct cfg80211_ops mtk_cfg_ops = {
+ 	.cancel_remain_on_channel = mtk_cfg_cancel_remain_on_channel,
+ 	.mgmt_tx = mtk_cfg_mgmt_tx,
+ 	/* .mgmt_tx_cancel_wait        = mtk_cfg80211_mgmt_tx_cancel_wait, */
++	/* mgmt_frame_register was removed from cfg80211_ops in 5.8 (replaced by
++	 * update_mgmt_frame_registrations, which fullmac may leave unset). */
++#if KERNEL_VERSION(5, 8, 0) > CFG80211_VERSION_CODE
+ 	.mgmt_frame_register = mtk_cfg_mgmt_frame_register,
++#endif
+ 
+ #ifdef CONFIG_NL80211_TESTMODE
+ 	.testmode_cmd = mtk_cfg_testmode_cmd,
+@@ -1687,8 +1691,15 @@ static int wlanInit(struct net_device *prDev)
+ 		netdev_priv(prDev);
+ 	spin_lock_init(&prNetDevPrivate->napi_spinlock);
+ 	prNetDevPrivate->napi.dev = prDev;
++	/* netif_napi_add() dropped the per-instance weight arg in 6.1
++	 * (NAPI_POLL_WEIGHT=64 is the fixed default). */
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++	netif_napi_add(prNetDevPrivate->napi.dev,
++		&prNetDevPrivate->napi, kal_napi_poll);
++#else
+ 	netif_napi_add(prNetDevPrivate->napi.dev,
+ 		&prNetDevPrivate->napi, kal_napi_poll, 64);
++#endif
+ 	DBGLOG(INIT, INFO,
+ 		"GRO interface added successfully:%p\n", prDev);
+ #endif
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/include/gl_cfg80211.h b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/include/gl_cfg80211.h
+index 9b428bb8d..30f9659cc 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/include/gl_cfg80211.h
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/include/gl_cfg80211.h
+@@ -517,22 +517,41 @@ int mtk_cfg_change_iface(struct wiphy *wiphy,
+ 			 struct vif_params *params);
+ #endif
+ int mtk_cfg_add_key(struct wiphy *wiphy,
+-		    struct net_device *ndev, u8 key_index,
++		    struct net_device *ndev,
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++		    int link_id,
++#endif
++		    u8 key_index,
+ 		    bool pairwise, const u8 *mac_addr,
+ 		    struct key_params *params);
+ int mtk_cfg_get_key(struct wiphy *wiphy,
+-		    struct net_device *ndev, u8 key_index,
++		    struct net_device *ndev,
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++		    int link_id,
++#endif
++		    u8 key_index,
+ 		    bool pairwise, const u8 *mac_addr, void *cookie,
+ 		    void (*callback)(void *cookie, struct key_params *));
+ int mtk_cfg_del_key(struct wiphy *wiphy,
+-		    struct net_device *ndev, u8 key_index,
++		    struct net_device *ndev,
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++		    int link_id,
++#endif
++		    u8 key_index,
+ 		    bool pairwise, const u8 *mac_addr);
+ int mtk_cfg_set_default_key(struct wiphy *wiphy,
+ 			    struct net_device *ndev,
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++			    int link_id,
++#endif
+ 			    u8 key_index, bool unicast, bool multicast);
+ 
+ int mtk_cfg_set_default_mgmt_key(struct wiphy *wiphy,
+-		struct net_device *ndev, u8 key_index);
++		struct net_device *ndev,
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++		int link_id,
++#endif
++		u8 key_index);
+ 
+ #if KERNEL_VERSION(3, 16, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_get_station(struct wiphy *wiphy,
+@@ -572,7 +591,15 @@ int mtk_cfg_tdls_oper(struct wiphy *wiphy,
+ 		      struct net_device *ndev,
+ 		      u8 *peer, enum nl80211_tdls_operation oper);
+ #endif
+-#if KERNEL_VERSION(3, 18, 0) <= CFG80211_VERSION_CODE
++#if KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE
++int mtk_cfg_tdls_mgmt(struct wiphy *wiphy,
++		      struct net_device *ndev,
++		      const u8 *peer, int link_id,
++		      u8 action_code, u8 dialog_token,
++		      u16 status_code,
++		      u32 peer_capability, bool initiator, const u8 *buf,
++		      size_t len);
++#elif KERNEL_VERSION(3, 18, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_tdls_mgmt(struct wiphy *wiphy,
+ 		      struct net_device *ndev,
+ 		      const u8 *peer, u8 action_code, u8 dialog_token,
+@@ -707,7 +734,11 @@ int mtk_cfg_testmode_cmd(struct wiphy *wiphy, void *data,
+ int mtk_cfg_start_radar_detection(struct wiphy *wiphy,
+ 				  struct net_device *dev,
+ 				  struct cfg80211_chan_def *chandef,
+-				  unsigned int cac_time_ms);
++				  unsigned int cac_time_ms
++#if KERNEL_VERSION(6, 3, 0) <= CFG80211_VERSION_CODE
++				  , int link_id
++#endif
++				  );
+ #else
+ int mtk_cfg_start_radar_detection(struct wiphy *wiphy,
+ 				  struct net_device *dev,
+@@ -739,15 +770,28 @@ int mtk_cfg_disassoc(struct wiphy *wiphy,
+ int mtk_cfg_start_ap(struct wiphy *wiphy,
+ 		     struct net_device *dev,
+ 		     struct cfg80211_ap_settings *settings);
++#if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
++int mtk_cfg_change_beacon(struct wiphy *wiphy,
++			  struct net_device *dev,
++			  struct cfg80211_ap_update *info_update);
++#else
+ int mtk_cfg_change_beacon(struct wiphy *wiphy,
+ 			  struct net_device *dev,
+ 			  struct cfg80211_beacon_data *info);
++#endif
+ int mtk_cfg_stop_ap(struct wiphy *wiphy,
+-		    struct net_device *dev);
++		    struct net_device *dev
++#if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
++		    , unsigned int link_id
++#endif
++		    );
+ int mtk_cfg_set_wiphy_params(struct wiphy *wiphy,
+ 			     u32 changed);
+ int mtk_cfg_set_bitrate_mask(struct wiphy *wiphy,
+ 			     struct net_device *dev,
++#if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
++			     unsigned int link_id,
++#endif
+ 			     const u8 *peer,
+ 			     const struct cfg80211_bitrate_mask *mask);
+ int mtk_cfg_set_txpower(struct wiphy *wiphy,
+@@ -755,6 +799,9 @@ int mtk_cfg_set_txpower(struct wiphy *wiphy,
+ 			enum nl80211_tx_power_setting type, int mbm);
+ int mtk_cfg_get_txpower(struct wiphy *wiphy,
+ 			struct wireless_dev *wdev,
++#if KERNEL_VERSION(6, 0, 0) <= CFG80211_VERSION_CODE
++			unsigned int link_id,
++#endif
+ 			int *dbm);
+ #endif /* (CFG_ENABLE_WIFI_DIRECT_CFG_80211 != 0) */
+ 
+-- 
+2.56.0
+

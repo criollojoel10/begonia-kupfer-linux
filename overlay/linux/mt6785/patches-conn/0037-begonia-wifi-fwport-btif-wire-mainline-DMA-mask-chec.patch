@@ -1,0 +1,130 @@
+From 4c6e7cc298b1effe609347113b24207140db4439 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 09:25:19 +0200
+Subject: [PATCH 37/51] begonia-wifi (fwport-btif): wire mainline DMA mask +
+ check clk-get; make init trace visible
+
+The vendor BTIF binds 1100c000.btif and mtk_wcn_btif_open succeeds, but every
+TX writes 0 bytes (stp btif write fail, written(0)) -> chip-id hw_check fails
+-> func_on(WIFI) failed. Live BTIF snapshot: ctl04=0x0, dmaen4c=0x0 (control /
+DMA-enable never programmed) while reads (lsr=0x60, ier=1) return real values,
+i.e. the IP base is mapped but the DMA path never configured.
+
+Root cause (faithful forward-port gap, not the C logic): the BTIF defaults to
+DMA mode (ENABLE_BTIF_TX/RX_DMA=1), so _btif_tx_dma_setup() runs and allocates
+the vFIFO rings with dma_zalloc_coherent() in hal_btif_vfifo_init(). The 4.14
+vendor BSP configured the platform device DMA mask from board setup; on
+mainline the driver must request it, and the vendor source never did. With no
+dma_mask the coherent vFIFO alloc fails, _btif_tx_dma_setup() silently falls
+back to PIO, and TX_DMA_VFF stays unprogrammed -> 0-byte writes. This matches
+the reimpl mtk-btif.c, which sets dma_set_mask_and_coherent(DMA_BIT_MASK(32))
+before its dma_alloc_coherent() and gets DMA_EN=0x7 on the same node.
+
+Fixes (real port / mainline wiring, no stubs):
+ - mtk_btif_probe(): request the 32-bit DMA mask
+   (dma_set_mask_and_coherent, mainline equivalent of the BSP board DMA setup;
+   the AP-DMA VFF_ADDR is 32-bit so the rings must live in low 4 GB), and
+   propagate it. Include <linux/dma-mapping.h>.
+ - mtk_btif_probe(): faithful hardening - check the previously-discarded
+   hal_btif_clk_get_and_prepare() return; on failure clk_btif/clk_btif_apdma
+   are left as ERR_PTR and the open-path clk_enable() silently fails, leaving
+   the controller unconfigured. Propagate the error so probe fails loudly.
+
+Visibility (debug config):
+ - hal_log_print(): pr_debug -> pr_info so the entire BTIF init trace
+   (clk get/enable, hw_init, dma setup, tx-mode, any PIO fallback) and all
+   BTIF_ERR/WARN failure messages reach dmesg. They were compiled out by
+   pr_debug, which is why no [CCF]clk_btif= / DO BTIF PROBE line ever appeared.
+ - default mtk_btif_dbg_lvl: BTIF_LOG_INFO -> BTIF_LOG_LOUD so the DBG-level
+   clk/dma prints in btif_plat.c / btif_dma_plat.c are emitted too.
+
+The platform files (btif_plat.c, btif_dma_plat.c, mtk_btif_exp.c) and all
+inc/plat_inc headers remain byte-identical to the 4.14 vendor source; the
+compat shim register/clock/DMA-barrier primitives are real (no no-ops).
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ drivers/misc/mediatek/btif/common/mtk_btif.c  | 34 +++++++++++++++++--
+ .../btif/common/plat_inc/plat_common.h        |  2 +-
+ 2 files changed, 33 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/misc/mediatek/btif/common/mtk_btif.c b/drivers/misc/mediatek/btif/common/mtk_btif.c
+index 0156d57c3..c6a91fe67 100644
+--- a/drivers/misc/mediatek/btif/common/mtk_btif.c
++++ b/drivers/misc/mediatek/btif/common/mtk_btif.c
+@@ -22,6 +22,7 @@
+ #include <linux/cdev.h>
+ #include <linux/poll.h>
+ #include <linux/ratelimit.h>
++#include <linux/dma-mapping.h>
+ #include <uapi/linux/sched/types.h>
+ 
+ /*#include <mach/eint.h>*/
+@@ -210,7 +211,7 @@ static int g_max_pding_data_size = BTIF_RX_BUFFER_SIZE * 3 / 4;
+ #if BTIF_DBG_SUPPORT
+ int g_enable_btif_rxd_test;
+ #endif
+-static int mtk_btif_dbg_lvl = BTIF_LOG_INFO;
++static int mtk_btif_dbg_lvl = BTIF_LOG_LOUD;
+ #if BTIF_RXD_BE_BLOCKED_DETECT
+ static struct timeval btif_rxd_time_stamp[MAX_BTIF_RXD_TIME_REC];
+ #endif
+@@ -259,12 +260,41 @@ static int mtk_btif_probe(struct platform_device *pdev)
+ {
+ /*Chaozhong: ToDo: to be implement*/
+ /*register IRQ for BTIF and Tx Rx DMA and disable them by default*/
++	int i_ret;
++
+ 	BTIF_INFO_FUNC("DO BTIF PROBE\n");
+ 	platform_set_drvdata(pdev, &g_btif[0]);
+ 	g_btif[0].private_data = (struct device *)&pdev->dev;
+ 
++	/*
++	 * The AP-DMA BTIF channel programs a 32-bit physical address into
++	 * TX/RX_DMA_VFF_ADDR, so the coherent vFIFO rings must live in the
++	 * low 4 GB. The 4.14 vendor BSP set this DMA mask from board setup;
++	 * on mainline the driver must request it explicitly before the first
++	 * dma_alloc_coherent() in hal_btif_vfifo_init(). Without it the
++	 * platform device has no dma_mask and the vFIFO alloc fails, which
++	 * makes _btif_tx_dma_setup() fall back to PIO (TX writes 0 bytes).
++	 */
++	i_ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
++	if (i_ret) {
++		BTIF_ERR_FUNC("dma_set_mask_and_coherent(32) fail, ret(%d)\n",
++			      i_ret);
++		return i_ret;
++	}
++
+ #if !defined(CONFIG_MTK_CLKMGR)
+-	hal_btif_clk_get_and_prepare(pdev);
++	/*
++	 * Faithful hardening: the vendor discarded this return. If
++	 * devm_clk_get()/clk_prepare() fails, clk_btif / clk_btif_apdma are
++	 * left as ERR_PTR and the later clk_enable() in the open path
++	 * silently fails -> the BTIF controller stays unconfigured.
++	 */
++	i_ret = hal_btif_clk_get_and_prepare(pdev);
++	if (i_ret) {
++		BTIF_ERR_FUNC("hal_btif_clk_get_and_prepare fail, ret(%d)\n",
++			      i_ret);
++		return i_ret;
++	}
+ #endif
+ 
+ 	return 0;
+diff --git a/drivers/misc/mediatek/btif/common/plat_inc/plat_common.h b/drivers/misc/mediatek/btif/common/plat_inc/plat_common.h
+index 9a88cedb1..cc7731759 100644
+--- a/drivers/misc/mediatek/btif/common/plat_inc/plat_common.h
++++ b/drivers/misc/mediatek/btif/common/plat_inc/plat_common.h
+@@ -63,7 +63,7 @@ static int hal_log_print(const char *str, ...)
+ 	va_end(args);
+ 
+ 	if (ret > 0)
+-		pr_debug("%s", temp_sring);
++		pr_info("%s", temp_sring);
+ 
+ 	return ret;
+ }
+-- 
+2.56.0
+

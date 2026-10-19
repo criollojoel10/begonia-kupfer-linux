@@ -1,0 +1,171 @@
+From a40ca5acb9e75afb43de6d14e873d20be18d8a23 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 00:10:17 +0200
+Subject: [PATCH 07/51] begonia-wifi (fwport): more 4.14->6.x churn
+ (timer/class_create/fb/vm_flags/proc_ops)
+
+- compat header: del_timer*->timer_delete*; FB_EVENT_BLANK sentinel (fbdev
+  notifier path compiles + early-returns on mainline).
+- wmt_dev.c: vm_flags_clear() accessor; class_create() 1-arg.
+- fw_log_wmt.c: class_create() 1-arg.
+- wmt_dbg.c / wmt_user_proc.c / wmt_proc_dbg.c (x2): file_operations ->
+  proc_ops for proc_create() (.read/.write -> .proc_read/.proc_write,
+  drop .owner).
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../common/common_main/linux/fw_log_wmt.c     |  3 ++-
+ .../common/common_main/linux/wmt_dbg.c        |  8 +++---
+ .../common/common_main/linux/wmt_dev.c        |  6 +++--
+ .../common/common_main/linux/wmt_proc_dbg.c   | 16 ++++++------
+ .../common/common_main/linux/wmt_user_proc.c  |  6 ++---
+ .../compat/include/mtk-bsp-compat.h           | 25 +++++++++++++++++++
+ 6 files changed, 46 insertions(+), 18 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/fw_log_wmt.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/fw_log_wmt.c
+index 82c6dc58c..0c3b10eb0 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/fw_log_wmt.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/fw_log_wmt.c
+@@ -136,7 +136,8 @@ int fw_log_wmt_init(void)
+ 		goto error;
+ 	}
+ 
+-	fw_log_wmt_class = class_create(THIS_MODULE, DRIVER_NAME);
++	/* 4.14->6.4: class_create() no longer takes an owner argument. */
++	fw_log_wmt_class = class_create(DRIVER_NAME);
+ 	if (IS_ERR(fw_log_wmt_class)) {
+ 		pr_err("class_create fail\n");
+ 		goto error;
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dbg.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dbg.c
+index 5736dfcd3..59f7350c8 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dbg.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dbg.c
+@@ -1578,10 +1578,10 @@ ssize_t wmt_dbg_write(struct file *filp, const char __user *buffer, size_t count
+ 
+ INT32 wmt_dev_dbg_setup(VOID)
+ {
+-	static const struct file_operations wmt_dbg_fops = {
+-		.owner = THIS_MODULE,
+-		.read = wmt_dbg_read,
+-		.write = wmt_dbg_write,
++	/* 4.14->4.18+: proc_create() takes struct proc_ops, not file_operations. */
++	static const struct proc_ops wmt_dbg_fops = {
++		.proc_read = wmt_dbg_read,
++		.proc_write = wmt_dbg_write,
+ 	};
+ 	INT32 i_ret = 0;
+ 
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
+index a9e0b1da5..275cda6d1 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_dev.c
+@@ -1501,7 +1501,8 @@ static INT32 WMT_mmap(struct file *pFile, struct vm_area_struct *pVma)
+ 	unsigned long bufId = pVma->vm_pgoff;
+ 	P_CONSYS_EMI_ADDR_INFO emiInfo = mtk_wcn_consys_soc_get_emi_phy_add();
+ 
+-	pVma->vm_flags &= ~(VM_WRITE | VM_MAYWRITE);
++	/* 4.14->6.3: vm_area_struct.vm_flags is read-only; use accessor. */
++	vm_flags_clear(pVma, VM_WRITE | VM_MAYWRITE);
+ 	WMT_INFO_FUNC("WMT_mmap start:%lu end:%lu size: %lu buffer id=%lu\n",
+ 		pVma->vm_start, pVma->vm_end,
+ 		pVma->vm_end - pVma->vm_start, bufId);
+@@ -1606,7 +1607,8 @@ static INT32 WMT_init(VOID)
+ 	WMT_INFO_FUNC("driver(major %d) installed\n", gWmtMajor);
+ 
+ #if WMT_CREATE_NODE_DYNAMIC
+-	wmt_class = class_create(THIS_MODULE, "stpwmt");
++	/* 4.14->6.4: class_create() no longer takes an owner argument. */
++	wmt_class = class_create("stpwmt");
+ 	if (IS_ERR(wmt_class))
+ 		goto error;
+ 	wmt_dev = device_create(wmt_class, NULL, devID, NULL, "stpwmt");
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_proc_dbg.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_proc_dbg.c
+index bb26f2dd0..540d2d24f 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_proc_dbg.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_proc_dbg.c
+@@ -144,10 +144,10 @@ static ssize_t wmt_dev_proc_for_dump_info_write(struct file *filp, const char __
+ 
+ INT32 wmt_dev_proc_for_dump_info_setup(VOID)
+ {
+-	static const struct file_operations wmt_dump_info_fops = {
+-		.owner = THIS_MODULE,
+-		.read = wmt_dev_proc_for_dump_info_read,
+-		.write = wmt_dev_proc_for_dump_info_write,
++	/* 4.14->4.18+: proc_create() takes struct proc_ops, not file_operations. */
++	static const struct proc_ops wmt_dump_info_fops = {
++		.proc_read = wmt_dev_proc_for_dump_info_read,
++		.proc_write = wmt_dev_proc_for_dump_info_write,
+ 	};
+ 
+ 	osal_sleepable_lock_init(&g_dump_info_read_lock);
+@@ -239,10 +239,10 @@ static ssize_t wmt_dev_proc_for_aee_write(struct file *filp, const char __user *
+ 
+ INT32 wmt_dev_proc_for_aee_setup(VOID)
+ {
+-	static const struct file_operations wmt_aee_fops = {
+-		.owner = THIS_MODULE,
+-		.read = wmt_dev_proc_for_aee_read,
+-		.write = wmt_dev_proc_for_aee_write,
++	/* 4.14->4.18+: proc_create() takes struct proc_ops, not file_operations. */
++	static const struct proc_ops wmt_aee_fops = {
++		.proc_read = wmt_dev_proc_for_aee_read,
++		.proc_write = wmt_dev_proc_for_aee_write,
+ 	};
+ 
+ 	osal_sleepable_lock_init(&g_aee_read_lock);
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_user_proc.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_user_proc.c
+index b03e20a47..073824a53 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_user_proc.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/wmt_user_proc.c
+@@ -169,9 +169,9 @@ ssize_t wmt_user_proc_write(struct file *filp, const char __user *buffer, size_t
+ 
+ INT32 wmt_dev_user_proc_setup(VOID)
+ {
+-	static const struct file_operations wmt_user_proc_fops = {
+-		.owner = THIS_MODULE,
+-		.write = wmt_user_proc_write,
++	/* 4.14->4.18+: proc_create() takes struct proc_ops, not file_operations. */
++	static const struct proc_ops wmt_user_proc_fops = {
++		.proc_write = wmt_user_proc_write,
+ 	};
+ 	INT32 i_ret = 0;
+ 
+diff --git a/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h b/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
+index d8f8e421a..df069e5d7 100644
+--- a/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
++++ b/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
+@@ -47,6 +47,31 @@ struct timeval {
+ };
+ #endif
+ 
++/* from_timer() was renamed to timer_container_of() in 6.16. */
++#ifndef from_timer
++#define from_timer(var, callback_timer, timer_fieldname) 	timer_container_of(var, callback_timer, timer_fieldname)
++#endif
++
++/* rtc_time_to_tm() (32-bit) removed; use the 64-bit variant. */
++#ifndef rtc_time_to_tm
++#define rtc_time_to_tm(time, tm) rtc_time64_to_tm((time64_t)(time), (tm))
++#endif
++
++/* del_timer()/del_timer_sync() removed in 6.15; renamed timer_delete*(). */
++#ifndef del_timer
++#define del_timer(t)      timer_delete(t)
++#endif
++#ifndef del_timer_sync
++#define del_timer_sync(t) timer_delete_sync(t)
++#endif
++
++/* fbdev FB_EVENT_BLANK notifier was removed. The wmt fb notifier is never
++ * registered on mainline (no fb_register_client); define the sentinel so the
++ * callback compiles and always early-returns. */
++#ifndef FB_EVENT_BLANK
++#define FB_EVENT_BLANK 0x09
++#endif
++
+ /* --- adapter KERNEL_* macros the adapter header leaves UNDEFINED ---------- *
+  * (clk_buf / pmic_ldo blocks are gated on CONFIG_MACH_* / CONFIG_MTK_PMIC_CHIP_*
+  * which are unset on mainline). No-op at the API level - no hardware touched.  */
+-- 
+2.56.0
+

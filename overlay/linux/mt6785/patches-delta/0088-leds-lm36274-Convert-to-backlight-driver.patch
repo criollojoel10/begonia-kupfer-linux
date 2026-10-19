@@ -1,0 +1,246 @@
+From 74fd7b53f90012d6f5e941aeee563b2e36a83cef Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Thu, 10 Jul 2025 16:37:54 +0200
+Subject: [PATCH 088/115] leds: lm36274: Convert to backlight driver
+
+LM36274 should be backlight driver as that is its only purpose.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/leds/Kconfig                          |  8 ---
+ drivers/leds/Makefile                         |  1 -
+ drivers/video/backlight/Kconfig               |  8 +++
+ drivers/video/backlight/Makefile              |  1 +
+ .../backlight/lm36274_bl.c}                   | 64 +++++++++++++------
+ 5 files changed, 52 insertions(+), 30 deletions(-)
+ rename drivers/{leds/leds-lm36274.c => video/backlight/lm36274_bl.c} (70%)
+
+diff --git a/drivers/leds/Kconfig b/drivers/leds/Kconfig
+index f4a0a3c8c..017e471c0 100644
+--- a/drivers/leds/Kconfig
++++ b/drivers/leds/Kconfig
+@@ -981,14 +981,6 @@ config LEDS_LM3697
+ 	  Say Y to enable the LM3697 LED driver for TI LMU devices.
+ 	  This supports the LED device LM3697.
+ 
+-config LEDS_LM36274
+-	tristate "LED driver for LM36274"
+-	depends on LEDS_CLASS && MFD_TI_LMU
+-	select LEDS_TI_LMU_COMMON
+-	help
+-	  Say Y to enable the LM36274 LED driver for TI LMU devices.
+-	  This supports the LED device LM36274.
+-
+ config LEDS_ST1202
+ 	tristate "LED Support for STMicroelectronics LED1202 I2C chips"
+ 	depends on LEDS_CLASS
+diff --git a/drivers/leds/Makefile b/drivers/leds/Makefile
+index 7db376891..20bf74ccf 100644
+--- a/drivers/leds/Makefile
++++ b/drivers/leds/Makefile
+@@ -43,7 +43,6 @@ obj-$(CONFIG_LEDS_LM3530)		+= leds-lm3530.o
+ obj-$(CONFIG_LEDS_LM3532)		+= leds-lm3532.o
+ obj-$(CONFIG_LEDS_LM3533)		+= leds-lm3533.o
+ obj-$(CONFIG_LEDS_LM355x)		+= leds-lm355x.o
+-obj-$(CONFIG_LEDS_LM36274)		+= leds-lm36274.o
+ obj-$(CONFIG_LEDS_LM3642)		+= leds-lm3642.o
+ obj-$(CONFIG_LEDS_LM3692X)		+= leds-lm3692x.o
+ obj-$(CONFIG_LEDS_LM3697)		+= leds-lm3697.o
+diff --git a/drivers/video/backlight/Kconfig b/drivers/video/backlight/Kconfig
+index 39cb7dfb9..25b61c8f9 100644
+--- a/drivers/video/backlight/Kconfig
++++ b/drivers/video/backlight/Kconfig
+@@ -411,6 +411,14 @@ config BACKLIGHT_LM3509
+ 	help
+ 	  This supports TI LM3509 Backlight Driver
+ 
++config BACKLIGHT_LM36274
++	tristate "Backlight Driver for LM36274"
++	depends on MFD_TI_LMU
++	select LEDS_TI_LMU_COMMON
++	help
++	  Say Y to enable the LM36274 Backlight Driver for TI LMU devices.
++	  This supports the LED device LM36274.
++
+ config BACKLIGHT_LM3630A
+ 	tristate "Backlight Driver for LM3630A"
+ 	depends on I2C && PWM
+diff --git a/drivers/video/backlight/Makefile b/drivers/video/backlight/Makefile
+index 21c8313cf..ab0defc6c 100644
+--- a/drivers/video/backlight/Makefile
++++ b/drivers/video/backlight/Makefile
+@@ -41,6 +41,7 @@ obj-$(CONFIG_BACKLIGHT_KTD2801)		+= ktd2801-backlight.o
+ obj-$(CONFIG_BACKLIGHT_KTZ8866)		+= ktz8866.o
+ obj-$(CONFIG_BACKLIGHT_LM3509)		+= lm3509_bl.o
+ obj-$(CONFIG_BACKLIGHT_LM3533)		+= lm3533_bl.o
++obj-$(CONFIG_BACKLIGHT_LM36274)		+= lm36274_bl.o
+ obj-$(CONFIG_BACKLIGHT_LM3630A)		+= lm3630a_bl.o
+ obj-$(CONFIG_BACKLIGHT_LM3639)		+= lm3639_bl.o
+ obj-$(CONFIG_BACKLIGHT_LOCOMO)		+= locomolcd.o
+diff --git a/drivers/leds/leds-lm36274.c b/drivers/video/backlight/lm36274_bl.c
+similarity index 70%
+rename from drivers/leds/leds-lm36274.c
+rename to drivers/video/backlight/lm36274_bl.c
+index 7fd8365c2..666f568b1 100644
+--- a/drivers/leds/leds-lm36274.c
++++ b/drivers/video/backlight/lm36274_bl.c
+@@ -1,11 +1,11 @@
+ // SPDX-License-Identifier: GPL-2.0
+-// TI LM36274 LED chip family driver
++// TI LM36274 Backlight chip family driver
+ // Copyright (C) 2019 Texas Instruments Incorporated - https://www.ti.com/
+ 
++#include <linux/backlight.h>
+ #include <linux/bitops.h>
+ #include <linux/device.h>
+ #include <linux/err.h>
+-#include <linux/leds.h>
+ #include <linux/leds-ti-lmu-common.h>
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
+@@ -14,15 +14,13 @@
+ #include <linux/mfd/ti-lmu.h>
+ #include <linux/mfd/ti-lmu-register.h>
+ 
+-#include <uapi/linux/uleds.h>
+-
+ #define LM36274_MAX_STRINGS	4
+ #define LM36274_BL_EN		BIT(4)
+ 
+ /**
+  * struct lm36274
+  * @pdev: platform device
+- * @led_dev: led class device
++ * @bl_dev: backlight device
+  * @lmu_data: Register and setting values for common code
+  * @regmap: Devices register map
+  * @dev: Pointer to the devices device struct
+@@ -31,7 +29,7 @@
+  */
+ struct lm36274 {
+ 	struct platform_device *pdev;
+-	struct led_classdev led_dev;
++	struct backlight_device *bl_dev;
+ 	struct ti_lmu_bank lmu_data;
+ 	struct regmap *regmap;
+ 	struct device *dev;
+@@ -40,14 +38,19 @@ struct lm36274 {
+ 	int num_leds;
+ };
+ 
+-static int lm36274_brightness_set(struct led_classdev *led_cdev,
+-				  enum led_brightness brt_val)
++static int lm36274_bl_update_status(struct backlight_device *bl_dev)
+ {
+-	struct lm36274 *chip = container_of(led_cdev, struct lm36274, led_dev);
++	struct lm36274 *chip = bl_get_data(bl_dev);
++	int brt_val = backlight_get_brightness(bl_dev);
+ 
+ 	return ti_lmu_common_set_brightness(&chip->lmu_data, brt_val);
+ }
+ 
++static const struct backlight_ops lm36274_bl_ops = {
++	.options = BL_CORE_SUSPENDRESUME,
++	.update_status = lm36274_bl_update_status,
++};
++
+ static int lm36274_init(struct lm36274 *chip)
+ {
+ 	int enable_val = 0;
+@@ -67,10 +70,12 @@ static int lm36274_init(struct lm36274 *chip)
+ }
+ 
+ static int lm36274_parse_dt(struct lm36274 *chip,
+-			    struct led_init_data *init_data)
++			    struct led_init_data *init_data,
++			    struct backlight_properties *props)
+ {
+ 	struct device *dev = chip->dev;
+ 	struct fwnode_handle *child;
++	u32 brightness;
+ 	int ret;
+ 
+ 	/* There should only be 1 node */
+@@ -97,6 +102,19 @@ static int lm36274_parse_dt(struct lm36274 *chip,
+ 		goto err;
+ 	}
+ 
++	ret = fwnode_property_read_u32(child, "max-brightness", &brightness);
++	if (ret)
++		brightness = MAX_BRIGHTNESS_11BIT;
++
++	props->max_brightness = min_t(u32, brightness, MAX_BRIGHTNESS_11BIT);
++
++	ret = fwnode_property_read_u32(child, "default-brightness",
++				       &brightness);
++	if (ret)
++		brightness = props->max_brightness;
++
++	props->brightness = min_t(u32, brightness, props->max_brightness);
++
+ 	return 0;
+ err:
+ 	fwnode_handle_put(child);
+@@ -110,6 +128,10 @@ static int lm36274_probe(struct platform_device *pdev)
+ 	struct lm36274 *chip;
+ 	int ret;
+ 
++	struct backlight_properties props = {
++		.type = BACKLIGHT_RAW,
++	};
++
+ 	chip = devm_kzalloc(&pdev->dev, sizeof(*chip), GFP_KERNEL);
+ 	if (!chip)
+ 		return -ENOMEM;
+@@ -119,7 +141,7 @@ static int lm36274_probe(struct platform_device *pdev)
+ 	chip->regmap = lmu->regmap;
+ 	platform_set_drvdata(pdev, chip);
+ 
+-	ret = lm36274_parse_dt(chip, &init_data);
++	ret = lm36274_parse_dt(chip, &init_data, &props);
+ 	if (ret) {
+ 		dev_err(chip->dev, "Failed to parse DT node\n");
+ 		return ret;
+@@ -137,16 +159,16 @@ static int lm36274_probe(struct platform_device *pdev)
+ 	chip->lmu_data.msb_brightness_reg = LM36274_REG_BRT_MSB;
+ 	chip->lmu_data.lsb_brightness_reg = LM36274_REG_BRT_LSB;
+ 
+-	chip->led_dev.max_brightness = MAX_BRIGHTNESS_11BIT;
+-	chip->led_dev.brightness_set_blocking = lm36274_brightness_set;
+-
+-	ret = devm_led_classdev_register_ext(chip->dev, &chip->led_dev,
+-					     &init_data);
+-	if (ret)
+-		dev_err(chip->dev, "Failed to register LED for node %pfw\n",
++	chip->bl_dev = devm_backlight_device_register(&pdev->dev, pdev->name,
++						      &pdev->dev, chip,
++						      &lm36274_bl_ops, &props);
++	if (IS_ERR(chip->bl_dev))
++		dev_err(chip->dev,
++			"Failed to register backlight for node %pfw\n",
+ 			init_data.fwnode);
+ 
+ 	fwnode_handle_put(init_data.fwnode);
++	backlight_update_status(chip->bl_dev);
+ 
+ 	return ret;
+ }
+@@ -160,12 +182,12 @@ MODULE_DEVICE_TABLE(of, of_lm36274_leds_match);
+ static struct platform_driver lm36274_driver = {
+ 	.probe  = lm36274_probe,
+ 	.driver = {
+-		.name = "lm36274-leds",
++		.name = "lm36274-backlight",
+ 		.of_match_table = of_lm36274_leds_match,
+ 	},
+ };
+-module_platform_driver(lm36274_driver)
++module_platform_driver(lm36274_driver);
+ 
+-MODULE_DESCRIPTION("Texas Instruments LM36274 LED driver");
++MODULE_DESCRIPTION("Texas Instruments LM36274 Backlight driver");
+ MODULE_AUTHOR("Dan Murphy <dmurphy@ti.com>");
+ MODULE_LICENSE("GPL v2");
+-- 
+2.56.0
+

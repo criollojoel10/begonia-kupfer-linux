@@ -1,0 +1,34 @@
+From ee5eb87980f13638567a300ea31adebab2cdb0e4 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sat, 12 Jul 2025 18:07:25 +0200
+Subject: [PATCH 097/115] arm64: dts: mediatek: mt6785-xiaomi-begonia: Enable
+ vibrator
+
+Add vibrator support using mt6359_vibr_ldo_reg regulator.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts
+index 9b66c3e3e..81045676c 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts
+@@ -11,6 +11,13 @@ / {
+ 	model = "Xiaomi Redmi Note 8 Pro";
+ 	compatible = "xiaomi,begonia", "mediatek,mt6785";
+ 	chassis-type = "handset";
++
++	vibrator {
++		compatible = "regulator-haptic";
++		haptic-supply = <&mt6359_vibr_ldo_reg>;
++		max-microvolt = <2800000>;
++		min-microvolt = <1200000>;
++	};
+ };
+ 
+ &cci {
+-- 
+2.56.0
+

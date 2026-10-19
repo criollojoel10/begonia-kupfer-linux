@@ -1,0 +1,206 @@
+From 910fd80c5dd616072e5f84388f76dee045a5464e Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 08:58:52 +0200
+Subject: [PATCH 34/51] begonia-wifi (fwport-full): port stp_sdio/stp_uart
+ transports 4.14 -> 6.16
+
+stp_sdio.c: proc_create() now takes struct proc_ops, not file_operations -
+convert the three debug fops (rxdbg/own/txdbg) to proc_ops with .proc_read/
+.proc_write (same blessed pattern as wmt_proc_dbg.c).
+
+stp_uart.c: tty line-discipline API churn:
+ - tty_port.low_latency removed from the tty core - drop the assignments
+   (the tty layer manages flip-buffer latency itself now).
+ - tty_ldisc_ops.ioctl lost its struct file* arg; n_tty_ioctl_helper() is now
+   (tty, cmd, arg).
+ - tty_ldisc_ops.read gained (void **cookie, unsigned long offset).
+ - tty_ldisc_ops.receive_buf flag arg is const u8 *fp, count is size_t.
+ - tty_ldisc_ops.poll returns __poll_t.
+ - tty_ldisc_ops.magic / TTY_LDISC_MAGIC removed; ldisc number moves to .num.
+ - tty_register_ldisc()/tty_unregister_ldisc() take the ops pointer (the old
+   number-based forms are gone); promote stp_uart_ldisc to file scope so exit
+   can pass it to tty_unregister_ldisc().
+
+Real transport logic untouched - signature/header/API churn only.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../common/common_main/linux/stp_sdio.c       | 21 +++++----
+ .../common/common_main/linux/stp_uart.c       | 47 ++++++++++++++-----
+ 2 files changed, 46 insertions(+), 22 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/stp_sdio.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/stp_sdio.c
+index 98e0b3c48..fac406b8b 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/stp_sdio.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/stp_sdio.c
+@@ -184,9 +184,10 @@ static struct timeval old = {0};
+ static ssize_t stp_sdio_rxdbg_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos);
+ static ssize_t stp_sdio_rxdbg_write(struct file *filp, const char __user *buf, size_t count,
+ 			     loff_t *f_pos);
+-static const struct file_operations stp_sdio_rxdbg_fops = {
+-	.read = stp_sdio_rxdbg_read,
+-	.write = stp_sdio_rxdbg_write,
++/* 4.14->4.18+: proc_create() takes struct proc_ops, not file_operations. */
++static const struct proc_ops stp_sdio_rxdbg_fops = {
++	.proc_read = stp_sdio_rxdbg_read,
++	.proc_write = stp_sdio_rxdbg_write,
+ };
+ 
+ #endif
+@@ -197,9 +198,10 @@ static struct proc_dir_entry *gStpSdioOwnEntry;
+ static ssize_t stp_sdio_own_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos);
+ static ssize_t stp_sdio_own_write(struct file *filp, const char __user *buf, size_t count,
+ 			   loff_t *f_pos);
+-static const struct file_operations stp_sdio_own_fops = {
+-	.read = stp_sdio_own_read,
+-	.write = stp_sdio_own_write,
++/* 4.14->4.18+: proc_create() takes struct proc_ops, not file_operations. */
++static const struct proc_ops stp_sdio_own_fops = {
++	.proc_read = stp_sdio_own_read,
++	.proc_write = stp_sdio_own_write,
+ };
+ 
+ #endif
+@@ -211,9 +213,10 @@ static struct proc_dir_entry *gStpSdioTxDbgEntry;
+ static ssize_t stp_sdio_txdbg_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos);
+ static ssize_t stp_sdio_txdbg_write(struct file *filp, const char __user *buf, size_t count,
+ 			     loff_t *f_pos);
+-static const struct file_operations stp_sdio_txdbg_fops = {
+-	.read = stp_sdio_txdbg_read,
+-	.write = stp_sdio_txdbg_write,
++/* 4.14->4.18+: proc_create() takes struct proc_ops, not file_operations. */
++static const struct proc_ops stp_sdio_txdbg_fops = {
++	.proc_read = stp_sdio_txdbg_read,
++	.proc_write = stp_sdio_txdbg_write,
+ };
+ 
+ #if STP_SDIO_TXDBG
+diff --git a/drivers/misc/mediatek/connectivity/common/common_main/linux/stp_uart.c b/drivers/misc/mediatek/connectivity/common/common_main/linux/stp_uart.c
+index f6a21a339..541ae2140 100644
+--- a/drivers/misc/mediatek/connectivity/common/common_main/linux/stp_uart.c
++++ b/drivers/misc/mediatek/connectivity/common/common_main/linux/stp_uart.c
+@@ -204,7 +204,8 @@ static INT32 stp_uart_tty_open(struct tty_struct *tty)
+ 	UART_PR_DBG("stp_uart_tty_opentty: %p\n", tty);
+ 
+ 	tty->receive_room = 65536;
+-	tty->port->low_latency = 1;
++	/* 4.14->6.x: tty_port.low_latency was removed from the tty core; the tty
++	 * layer now manages flip-buffer latency itself, so the assignment is gone. */
+ 
+ 	/* Flush any pending characters in the driver and line discipline. */
+ 
+@@ -339,7 +340,11 @@ static VOID stp_uart_rx_handling(ULONG func_data)
+ 		UART_PR_DBG("finish, fifolen(%d)\n", kfifo_len(g_stp_uart_rx_fifo));
+ }
+ 
+-static VOID stp_uart_tty_receive(struct tty_struct *tty, const unsigned char *data, PINT8 flags, INT32 count)
++/* 4.14->6.x: tty_ldisc_ops.receive_buf is
++ *   void (*)(struct tty_struct *, const u8 *cp, const u8 *fp, size_t count)
++ * (flag bytes are now a const u8 * named fp; count is size_t). */
++static VOID stp_uart_tty_receive(struct tty_struct *tty, const unsigned char *data,
++				 const unsigned char *flags, size_t count)
+ {
+ 	UINT32 fifo_avail_len = LDISC_RX_FIFO_SIZE - kfifo_len(g_stp_uart_rx_fifo);
+ 	UINT32 how_much_put = 0;
+@@ -570,19 +575,21 @@ static VOID stp_uart_tty_receive(struct tty_struct *tty, const PUINT8 data, PINT
+  *
+  * Return Value:    Command dependent
+  */
+-static INT32 stp_uart_tty_ioctl(struct tty_struct *tty, struct file *file, UINT32 cmd, ULONG arg)
++/* 4.14->6.x: tty_ldisc_ops.ioctl lost its 'struct file *' argument and
++ * n_tty_ioctl_helper() is now n_tty_ioctl_helper(tty, cmd, arg). */
++static INT32 stp_uart_tty_ioctl(struct tty_struct *tty, UINT32 cmd, ULONG arg)
+ {
+ 	INT32 err = 0;
+ 
+ 	switch (cmd) {
+ 	case HCIUARTSETPROTO:
+-		UART_PR_DBG("<!!> Set low_latency to TRUE <!!>\n");
+-		tty->port->low_latency = 1;
++		/* 4.14->6.x: tty_port.low_latency was removed; nothing to set. */
++		UART_PR_DBG("<!!> HCIUARTSETPROTO (low_latency removed in mainline) <!!>\n");
+ 
+ 		break;
+ 	default:
+ 		UART_PR_DBG("<!!> n_tty_ioctl_helper <!!>\n");
+-		err = n_tty_ioctl_helper(tty, file, cmd, arg);
++		err = n_tty_ioctl_helper(tty, cmd, arg);
+ 		break;
+ 	};
+ 
+@@ -592,8 +599,12 @@ static INT32 stp_uart_tty_ioctl(struct tty_struct *tty, struct file *file, UINT3
+ /*
+  * We don't provide read/write/poll interface for user space.
+  */
++/* 4.14->6.x: tty_ldisc_ops.read gained (void **cookie, unsigned long offset)
++ * and uses a kernel u8 * buffer; .write keeps (tty, file, const u8 *, size_t).
++ * We provide no user read/write interface, so both stay no-op returns. */
+ static ssize_t stp_uart_tty_read(struct tty_struct *tty, struct file *file,
+-				 unsigned char __user *buf, size_t nr)
++				 unsigned char *buf, size_t nr,
++				 void **cookie, unsigned long offset)
+ {
+ 	return 0;
+ }
+@@ -604,7 +615,8 @@ static ssize_t stp_uart_tty_write(struct tty_struct *tty, struct file *file,
+ 	return 0;
+ }
+ 
+-static UINT32 stp_uart_tty_poll(struct tty_struct *tty, struct file *filp, poll_table *wait)
++/* 4.14->6.x: tty_ldisc_ops.poll returns __poll_t. */
++static __poll_t stp_uart_tty_poll(struct tty_struct *tty, struct file *filp, poll_table *wait)
+ {
+ 	return 0;
+ }
+@@ -704,9 +716,14 @@ INT32 mtk_wcn_uart_tx(const PUINT8 data, const UINT32 size, PUINT32 written_size
+ 	return 0;
+ }
+ 
++/* 4.14->6.x: promoted from a function-local 'static' to file scope so that
++ * mtk_wcn_stp_uart_exit() can pass it to tty_unregister_ldisc(), which now takes
++ * the ops pointer (the old number-based tty_unregister_ldisc(N_MTKSTP) is gone).
++ * Same single static instance as before, just visible to both init and exit. */
++static struct tty_ldisc_ops stp_uart_ldisc;
++
+ static INT32 mtk_wcn_stp_uart_init(VOID)
+ {
+-	static struct tty_ldisc_ops stp_uart_ldisc;
+ 	INT32 err;
+ 	INT32 fifo_init_done = 0;
+ 
+@@ -751,7 +768,9 @@ static INT32 mtk_wcn_stp_uart_init(VOID)
+ 
+ 	/* Register the tty discipline */
+ 	memset(&stp_uart_ldisc, 0, sizeof(stp_uart_ldisc));
+-	stp_uart_ldisc.magic = TTY_LDISC_MAGIC;
++	/* 4.14->6.x: tty_ldisc_ops lost .magic/TTY_LDISC_MAGIC; the ldisc number is
++	 * now carried in .num and tty_register_ldisc() takes only the ops pointer. */
++	stp_uart_ldisc.num = N_MTKSTP;
+ 	stp_uart_ldisc.name = "n_mtkstp";
+ 	stp_uart_ldisc.open = stp_uart_tty_open;
+ 	stp_uart_ldisc.close = stp_uart_tty_close;
+@@ -763,7 +782,7 @@ static INT32 mtk_wcn_stp_uart_init(VOID)
+ 	stp_uart_ldisc.write_wakeup = stp_uart_tty_wakeup;
+ 	stp_uart_ldisc.owner = THIS_MODULE;
+ 
+-	err = tty_register_ldisc(N_MTKSTP, &stp_uart_ldisc);
++	err = tty_register_ldisc(&stp_uart_ldisc);
+ 	if (err) {
+ 		UART_PR_ERR("MTK STP line discipline registration failed. (%d)\n", err);
+ 		goto init_err;
+@@ -804,8 +823,10 @@ static VOID mtk_wcn_stp_uart_exit(VOID)
+ 
+ 	mtk_wcn_stp_register_if_tx(STP_UART_IF_TX, NULL);	/* unregister if_tx function */
+ 
+-	/* Release tty registration of line discipline */
+-	err = tty_unregister_ldisc(N_MTKSTP);
++	/* Release tty registration of line discipline.
++	 * 4.14->6.x: tty_unregister_ldisc() takes the ops pointer and is void. */
++	tty_unregister_ldisc(&stp_uart_ldisc);
++	err = 0;
+ 	if (err)
+ 		UART_PR_ERR("Can't unregister MTK STP line discipline (%d)\n", err);
+ 
+-- 
+2.56.0
+

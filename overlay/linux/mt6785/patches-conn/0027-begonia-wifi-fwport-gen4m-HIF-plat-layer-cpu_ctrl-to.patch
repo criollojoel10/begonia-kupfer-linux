@@ -1,0 +1,139 @@
+From 31f6cfd13295a0a21e3c6fe838f97fabbf097cf9 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 01:46:00 +0200
+Subject: [PATCH 27/51] begonia-wifi (fwport-gen4m): HIF/plat layer -
+ cpu_ctrl/topo_ctrl stubs, list_sort, platform remove
+
+- compat cpu_ctrl.h + topo_ctrl.h stubs: plat_priv kalBoostCpu uses the MTK BSP
+  CPU-DVFS userlimit interface (throughput-boost only, absent on mainline) ->
+  no-op update_userlimit_cpu_freq / topo_ctrl_get_nr_clusters. No HW touched.
+- kal_pdma.c: list_sort comparator gained const list_head args in 5.2.
+- axi.c: platform_driver.remove became void-returning in 6.11.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../connectivity/compat/include/cpu_ctrl.h    | 35 +++++++++++++++++++
+ .../connectivity/compat/include/topo_ctrl.h   | 21 +++++++++++
+ .../wlan/gen4m/os/linux/hif/axi/axi.c         |  7 ++++
+ .../wlan/gen4m/os/linux/hif/common/kal_pdma.c |  6 ++++
+ 4 files changed, 69 insertions(+)
+ create mode 100644 drivers/misc/mediatek/connectivity/compat/include/cpu_ctrl.h
+ create mode 100644 drivers/misc/mediatek/connectivity/compat/include/topo_ctrl.h
+
+diff --git a/drivers/misc/mediatek/connectivity/compat/include/cpu_ctrl.h b/drivers/misc/mediatek/connectivity/compat/include/cpu_ctrl.h
+new file mode 100644
+index 000000000..f2442216f
+--- /dev/null
++++ b/drivers/misc/mediatek/connectivity/compat/include/cpu_ctrl.h
+@@ -0,0 +1,35 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * compat cpu_ctrl.h - stub for the begonia gen4m forward-port.
++ *
++ * The vendor plat_priv.c (kalBoostCpu) raises the CPU frequency floor during
++ * high WiFi throughput via the MTK BSP CPU-DVFS "userlimit" interface. That
++ * interface is not present in mainline. Stubbing it is correctness-neutral:
++ * it is a throughput optimisation only, touches no connectivity hardware, and
++ * writes no device register. Reached via the compat/include -I path.
++ */
++#ifndef _COMPAT_CPU_CTRL_H
++#define _COMPAT_CPU_CTRL_H
++
++#include <linux/types.h>
++
++/* DVFS kicker ids - only CPU_KIR_WIFI is referenced. */
++enum ppm_kicker {
++	CPU_KIR_WIFI = 0,
++};
++
++/* Per-cluster min/max frequency request. Layout matches the field names the
++ * vendor uses (.min/.max); values are ignored by the stub. */
++struct ppm_limit_data {
++	int min;
++	int max;
++};
++
++static inline int update_userlimit_cpu_freq(int kicker, int num_cluster,
++					    struct ppm_limit_data *freq_limit)
++{
++	(void)kicker; (void)num_cluster; (void)freq_limit;
++	return 0;	/* no-op: CPU DVFS floor not modelled on mainline */
++}
++
++#endif /* _COMPAT_CPU_CTRL_H */
+diff --git a/drivers/misc/mediatek/connectivity/compat/include/topo_ctrl.h b/drivers/misc/mediatek/connectivity/compat/include/topo_ctrl.h
+new file mode 100644
+index 000000000..38b13c8f1
+--- /dev/null
++++ b/drivers/misc/mediatek/connectivity/compat/include/topo_ctrl.h
+@@ -0,0 +1,21 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * compat topo_ctrl.h - stub for the begonia gen4m forward-port.
++ *
++ * The vendor plat_priv.c queries the CPU cluster count to size its per-cluster
++ * frequency-floor request (a throughput optimisation - see cpu_ctrl.h). The
++ * MTK BSP performance/topology service is absent on mainline. Returning the
++ * MT6785 cluster count keeps the (no-op) freq-set loop well-formed. No
++ * hardware is touched. Reached via the compat/include -I path.
++ */
++#ifndef _COMPAT_TOPO_CTRL_H
++#define _COMPAT_TOPO_CTRL_H
++
++/* MT6785 (Helio G90T): 2 clusters (2x A76 + 6x A55). The value only bounds the
++ * loop in kalSetCpuFreq(); the result is discarded by the cpu_ctrl stub. */
++static inline unsigned int topo_ctrl_get_nr_clusters(void)
++{
++	return 2;
++}
++
++#endif /* _COMPAT_TOPO_CTRL_H */
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/hif/axi/axi.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/hif/axi/axi.c
+index 9ade95281..c13f4f08b 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/hif/axi/axi.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/hif/axi/axi.c
+@@ -804,7 +804,12 @@ static int mtk_axi_probe(IN struct platform_device *pdev)
+ 	return ret;
+ }
+ 
++/* platform_driver.remove became void (*)(struct platform_device *) in 6.11. */
++#if KERNEL_VERSION(6, 11, 0) <= CFG80211_VERSION_CODE
++static void mtk_axi_remove(struct platform_device *pdev)
++#else
+ static int mtk_axi_remove(IN struct platform_device *pdev)
++#endif
+ {
+ 	axiCsrIounmap(pdev);
+ 
+@@ -822,7 +827,9 @@ static int mtk_axi_remove(IN struct platform_device *pdev)
+ 	hifAxiRemove();
+ #endif
+ 	platform_set_drvdata(pdev, NULL);
++#if KERNEL_VERSION(6, 11, 0) > CFG80211_VERSION_CODE
+ 	return 0;
++#endif
+ }
+ 
+ static int mtk_axi_suspend(IN struct platform_device *pdev,
+diff --git a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/hif/common/kal_pdma.c b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/hif/common/kal_pdma.c
+index 32b25d8ed..8a507c058 100644
+--- a/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/hif/common/kal_pdma.c
++++ b/drivers/misc/mediatek/connectivity/wlan/gen4m/os/linux/hif/common/kal_pdma.c
+@@ -739,8 +739,14 @@ static bool kalDevKickMsduData(struct GLUE_INFO *prGlueInfo)
+ 	return fgRet;
+ }
+ 
++/* list_sort()'s comparator gained const list_head args in 5.2. */
++#if KERNEL_VERSION(5, 2, 0) <= CFG80211_VERSION_CODE
++static int kalAmsduTxDCmp(void *prPriv, const struct list_head *prList1,
++			  const struct list_head *prList2)
++#else
+ static int kalAmsduTxDCmp(void *prPriv, struct list_head *prList1,
+ 			  struct list_head *prList2)
++#endif
+ {
+ 	struct TX_DATA_REQ *prTxReq1, *prTxReq2;
+ 	struct sk_buff *prSkb1, *prSkb2;
+-- 
+2.56.0
+

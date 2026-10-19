@@ -1,0 +1,32 @@
+From cb46770252fc89a5c9951ff1513e81d982e00f4f Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Thu, 12 Jun 2025 21:06:31 +0200
+Subject: [PATCH 001/115] dt-bindings: arm: mediatek: Add MT6785 Xiaomi Redmi
+ Note 8 Pro
+
+Add an entry for the Mediatek Helio G90T based Xiaomi Redmi Note 8 Pro,
+also known as begonia. This device is a 6.53 inch smartphone.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ Documentation/devicetree/bindings/arm/mediatek.yaml | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/arm/mediatek.yaml b/Documentation/devicetree/bindings/arm/mediatek.yaml
+index 382d0eb4d..991de1c05 100644
+--- a/Documentation/devicetree/bindings/arm/mediatek.yaml
++++ b/Documentation/devicetree/bindings/arm/mediatek.yaml
+@@ -62,6 +62,10 @@ properties:
+           - enum:
+               - mediatek,mt6779-evb
+           - const: mediatek,mt6779
++      - items:
++          - enum:
++              - xiaomi,begonia
++          - const: mediatek,mt6785
+       - items:
+           - enum:
+               - mediatek,mt6795-evb
+-- 
+2.56.0
+

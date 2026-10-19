@@ -1,0 +1,52 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+index c9791ba00..b0077dbde 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+@@ -11,6 +11,8 @@
+ 
+ #include "mt6785.dtsi"
+ #include "mt6359.dtsi"
++#include <dt-bindings/interrupt-controller/arm-gic.h>
++#include <dt-bindings/interrupt-controller/irq.h>
+ 
+ / {
+ 	chassis-type = "handset";
+@@ -43,6 +45,23 @@ scp {
+ 		compatible = "mediatek,scp";
+ 	};
+ 
++	/*
++	 * Vendor WMT connectivity-combo node. begonia's conn is SoC-integrated;
++	 * stock has no combo node and reaches the conn MCU via consys@18002000.
++	 * No driver platform-binds this compatible - it is only read by
++	 * of_find_compatible_node() fallbacks for the BGF EINT (idx 1 = BGF_EINT,
++	 * GIC_SPI 321). idx 0 (WIFI_EINT) y los pines gpio_combo_* no son
++	 * obtenibles del DT stock de begonia, asi que idx 0 es un placeholder y
++	 * los pines se omiten (los pines que faltan leen DEFAULT_PIN_ID).
++	 */
++	connectivity_combo: connectivity-combo {
++		compatible = "mediatek,connectivity-combo";
++		/* idx 0: WIFI_EINT placeholder (no disponible) ; idx 1: BGF_EINT */
++		interrupts = <GIC_SPI 78 IRQ_TYPE_LEVEL_LOW>,	/* placeholder */
++			     <GIC_SPI 321 IRQ_TYPE_LEVEL_LOW>;	/* BGF_EINT */
++		status = "okay";
++	};
++
+ 	volume_buttons: volume-buttons {
+ 		compatible = "gpio-keys";
+ 		pinctrl-names = "default";
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785.dtsi b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+index c56cd4f9d..015711424 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+@@ -2069,8 +2069,8 @@ consys: consys@18002000 {
+ 		 * (consys_hw_vcn28_ctrl, non-co-clock path). Without them the A-die
+ 		 * has no RF/PLL clock and the WFSYS rgu (0x180602cc[2]) never arms. */
+ 		vcn18-supply = <&mt6359_vcn18_ldo_reg>;
+-		vcn33_1_wifi-supply = <&mt6359_vcn33_1_wifi_ldo_reg>;
+-		vcn33_2_wifi-supply = <&mt6359_vcn33_2_wifi_ldo_reg>;
++		vcn33_1_wifi-supply = <&mt6359_vcn33_1_ldo_reg>;
++		vcn33_2_wifi-supply = <&mt6359_vcn33_2_ldo_reg>;
+ 		status = "okay";
+ 	};
+ };

@@ -1,0 +1,113 @@
+From 919c5622f1a4561f51508a00aa766bc4fbcfe5d3 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 00:54:22 +0200
+Subject: [PATCH 18/51] begonia-wifi (fwport-dt): reconcile consys reg order +
+ irqs to stock; disable overlapping wmac; add combo stub
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ arch/arm64/boot/dts/mediatek/mt6785.dtsi | 75 ++++++++++++++++++------
+ 1 file changed, 57 insertions(+), 18 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785.dtsi b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+index a244539c0..b1ec901bb 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+@@ -1998,23 +1998,46 @@ consys: consys@18002000 {
+ 		#address-cells = <2>;
+ 		#size-cells = <2>;
+ 		ranges;
+-		reg = <0 0x18002000 0 0x1000>,	/* MCU CONFIG */
+-		      <0 0x10003000 0 0x1000>,	/* INFRA_AO_PERICFG (vendor consys reg index 11); conninfra uses +0x438 here for CON_PWR_ON. Vendor's actual INFRACFG_AO is reg index 2 = 0x10001000 (TOPAXI bus-protect + EMI remap @ +0x380), hardcoded in both drivers */
+-		      <0 0x10006000 0 0x1000>,	/* SPM */
+-		      <0 0x10007000 0 0x0100>,	/* AP_RGU */
+-		      <0 0x18007000 0 0x1000>,	/* CONN_HIF_ON */
+-		      <0 0x180b1000 0 0x1000>,	/* CONN_TOP_MISC_OFF */
+-		      <0 0x180a3000 0 0x1000>,	/* CONN_MCU_CFG_ON */
+-		      <0 0x180a5000 0 0x0800>,	/* CONN_MCU_CIRQ */
+-		      <0 0x180c1000 0 0x1000>,	/* CONN_TOP_MISC_ON */
+-		      <0 0x18004000 0 0x1000>,	/* CONN_HIF_PDMA */
+-		      <0 0x10000000 0 0x1000>,	/* TOPCKGEN (clocks; bus-protect is actually at INFRACFG 0x10001000, mapped via fixed-phys in the driver) */
+-		      <0 0x180b3000 0 0x0100>;	/* WPLL */
+-		reg-names = "mcu-cfg", "infracfg-ao", "spm", "ap-rgu",
+-			    "conn-hif-on", "conn-top-misc-off",
+-			    "conn-mcu-cfg-on", "conn-mcu-cirq",
+-			    "conn-top-misc-on", "conn-hif-pdma",
+-			    "topckgen", "wpll";
++		/*
++		 * REG ORDER IS STOCK-ORDER, not reimpl-order. The vendor WMT
++		 * driver (consys_read_reg_from_dts in mt6785.c) iomaps these by
++		 * NUMERIC index via the CONSYS_BASE_ADDRESS_INDEX enum, and
++		 * mtk_wcn_consys_reg_ctrl() re-reads the raw "reg" array by the
++		 * same index. The ordering below matches stock begonia-r-oss
++		 * mt6785.dts consys@18002000 (reg index -> physaddr) exactly:
++		 *   0 MCU_BASE 1 TOP_RGU 2 INFRACFG_AO 3 SPM 4 CONN_HIF_ON
++		 *   5 TOP_MISC_OFF 6 MCU_CFG_ON 7 MCU_CIRQ 8 TOP_MISC_ON
++		 *   9 CONN_HIF_PDMA 10 AP_PCCIF4 11 INFRA_AO_PERICFG
++		 * The previous (reimpl) order scrambled indices 1,2,3,10,11 and
++		 * dropped AP_PCCIF4 (0x1024c000) -> would iomap wrong regions.
++		 */
++		reg = <0 0x18002000 0 0x1000>,	/* 0  CONN_MCU_CONFIG_BASE */
++		      <0 0x10007000 0 0x0100>,	/* 1  TOP_RGU_BASE */
++		      <0 0x10001000 0 0x1000>,	/* 2  INFRACFG_AO_BASE */
++		      <0 0x10006000 0 0x1000>,	/* 3  SPM_BASE */
++		      <0 0x18007000 0 0x1000>,	/* 4  CONN_HIF_ON_BASE */
++		      <0 0x180b1000 0 0x1000>,	/* 5  CONN_TOP_MISC_OFF_BASE */
++		      <0 0x180a3000 0 0x1000>,	/* 6  CONN_MCU_CFG_ON_BASE */
++		      <0 0x180a5000 0 0x0800>,	/* 7  CONN_MCU_CIRQ_BASE */
++		      <0 0x180c1000 0 0x1000>,	/* 8  CONN_TOP_MISC_ON_BASE */
++		      <0 0x18004000 0 0x1000>,	/* 9  CONN_HIF_PDMA_BASE */
++		      <0 0x1024c000 0 0x0040>,	/* 10 AP2MD_PCCIF4_BASE */
++		      <0 0x10003000 0 0x1000>;	/* 11 INFRA_AO_PERICFG_BASE */
++		/* BGF_EINT, WDT_EINT, conn2ap_sw_irq (stock order; the vendor
++		 * reads irq idx 0 = BGF_EINT and idx 2 = conn2ap_sw_irq). */
++		interrupts = <GIC_SPI 321 IRQ_TYPE_LEVEL_LOW>,	/* BGF_EINT */
++			     <GIC_SPI 78 IRQ_TYPE_LEVEL_LOW>,	/* WDT_EINT */
++			     <GIC_SPI 323 IRQ_TYPE_EDGE_RISING>;	/* conn2ap_sw_irq */
++		/*
++		 * Vendor consys_clk_get_from_dts() requires clocks named "conn"
++		 * AND "ccif" or probe aborts. "ccif" = INFRACFG CCIF4 AP gate
++		 * (stock INFRACFG_AO_CCIF4_AP_CG). "conn" was stock's
++		 * <&scpsys SCP_SYS_CONN> clock-wrapper around the conn power
++		 * domain; mainline models conn power as the genpd
++		 * power-domains phandle below, so there is no 1:1 mainline
++		 * "conn" CLOCK. See report: the "conn" clock is the one
++		 * UNRESOLVED probe blocker (cannot be sourced DT-only).
++		 */
+ 		clocks = <&infracfg CLK_INFRA_CCIF4_AP>;
+ 		clock-names = "ccif";
+ 		power-domains = <&spm MT6785_POWER_DOMAIN_CONN>;
+@@ -2024,6 +2047,11 @@ consys: consys@18002000 {
+ 		 * non-co-clock so the vendor runtime relies on the preloader
+ 		 * leaving it HW-on; mainline has no mt6359 clk-buf driver. */
+ 		mediatek,pmic = <&pmic>;
++		/* HYGIENE: vendor mtk_wcn_get_regmap() reads the property name
++		 * "pmic" (not "mediatek,pmic"); provide both so the vendor finds
++		 * the mt6359 regmap. Non-fatal if absent (logs INFO, continues
++		 * with g_regmap=NULL), so this is hygiene, not a probe gate. */
++		pmic = <&pmic>;
+ 		/* BTIF (WMT control channel to the conn MCU). The conninfra driver
+ 		 * sends the WMT FUNCTION_CTRL command that arms the WFSYS over this. */
+ 		mediatek,btif = <&btif>;
+@@ -2071,6 +2099,17 @@ wmac: wmac@18000000 {
+ 		 * driver (consys_reserved). The wmac side reads firmware over the
+ 		 * mt76 FWDL ring (DMA), not the carveout. */
+ 		power-domains = <&spm MT6785_POWER_DOMAIN_CONN>;
+-		status = "okay";
++		/*
++		 * Stage-1 vendor-WMT forward-port: DISABLED. This reimpl mt76
++		 * node ("mediatek,mt6785-wmac") maps the 16 MB conn window
++		 * 0x18000000..0x19000000, which OVERLAPS the vendor consys
++		 * regions (MCU 0x18002000, HIF_ON 0x18007000, HIF_PDMA
++		 * 0x18004000, TOP_MISC_* 0x180b/c000). With the vendor stack
++		 * driving conn bring-up, this node must not also probe and
++		 * claim/power-cycle the shared conn power-domain. Re-enable in
++		 * Stage 2 when gen4m owns the wlan MAC. Driver also disabled via
++		 * CONFIG_MT7615_MT6785_WMAC=n in pmaports.
++		 */
++		status = "disabled";
+ 	};
+ };
+-- 
+2.56.0
+

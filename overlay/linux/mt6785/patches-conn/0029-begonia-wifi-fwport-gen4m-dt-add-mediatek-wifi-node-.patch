@@ -1,0 +1,86 @@
+From 2390b98b195657ad9d686bb90b5cd30c22499dbf Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 02:18:26 +0200
+Subject: [PATCH 29/51] begonia-wifi (fwport-gen4m-dt): add mediatek,wifi node
+ + wifi_mem so gen4m AXI HIF probes
+
+gen4m os/linux/hif/axi/axi.c is a standalone platform_driver matching compatible
+"mediatek,wifi"; without that DT node mtk_axi_probe never fires -> no wlan0. The
+reimpl mt76 wmac node was disabled (overlap), leaving no wifi node. Re-add it from
+stock begonia-r-oss mt6785.dts:
+ - wifi@18000000 under &soc (so of_platform_populate creates its platform_device):
+   reg[0]=WF CSR window (of_iomap), interrupts=WF irq SPI 322 (irq_of_parse_and_map
+   + request_irq), memory-region=wifi_mem (of_reserved_mem_device_init), power-domains
+   =CONN. The 1 MB reg overlaps consys sub-regions but is SAFE: both map via
+   non-exclusive of_iomap and gen4m ignores its unchecked request_mem_region result
+   (same as stock). Reimpl mediatek,mt6785-wmac stays disabled.
+ - wifi_mem: 3 MB shared-dma-pool (gen4m HIF DMA pool), dynamic per stock; distinct
+   from the fixed conn-MCU EMI carveout at 0xab000000.
+Verified in built DTB (dtc): node present, status okay, reg/irq/memory-region/pd correct.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../mt6785-xiaomi-begonia-common.dtsi         | 15 +++++++++++++
+ arch/arm64/boot/dts/mediatek/mt6785.dtsi      | 22 +++++++++++++++++++
+ 2 files changed, 37 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+index da1606aa6..c9791ba00 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia-common.dtsi
+@@ -748,4 +748,19 @@ consys_reserved: consys@ab000000 {
+ 		no-map;
+ 		reg = <0 0xab000000 0 0x400000>;
+ 	};
++
++	/* gen4m WLAN HIF DMA pool (separate from the conn-MCU EMI carveout
++	 * above). The gen4m AXI HIF calls of_reserved_mem_device_init() on the
++	 * "mediatek,wifi" node's memory-region for its DMA-coherent allocations.
++	 * Dynamic shared-dma-pool exactly per stock begonia-r-oss mt6785.dts
++	 * wifi-reserve-memory (the comment above notes a dynamic alloc lands at
++	 * ~0xbc000000 = stock's WiFi EMI region, which is correct HERE — only the
++	 * conn carveout must be fixed at 0xab000000). */
++	wifi_mem: wifi-reserve-memory {
++		compatible = "shared-dma-pool";
++		no-map;
++		size = <0 0x300000>;
++		alignment = <0 0x1000000>;
++		alloc-ranges = <0 0x40000000 0 0x80000000>;
++	};
+ };
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785.dtsi b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+index b1ec901bb..f32c9a2f7 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+@@ -1993,6 +1993,28 @@ larb6: larb@1a001000 {
+ };
+ 
+ &soc {
++	/* gen4m fullmac WLAN device (vendor forward-port, Stage 2). The gen4m
++	 * AXI HIF (os/linux/hif/axi/axi.c) is a standalone platform_driver that
++	 * binds compatible "mediatek,wifi": it of_iomap()s reg[0] (WF CSR
++	 * window), irq_of_parse_and_map()s interrupt 0 + request_irq()s it, and
++	 * of_reserved_mem_device_init()s memory-region for its DMA pool.
++	 * reg/irq/memory-region match stock begonia-r-oss mt6785.dts
++	 * "mediatek,wifi" node. Must be a &soc child (not nested under consys)
++	 * so of_platform_populate() creates its platform_device. The 1 MB reg
++	 * overlaps the consys sub-regions (MCU 0x18002000, HIF 0x18004/7000,
++	 * TOP_MISC 0x180b/c000), which is SAFE: both drivers map via
++	 * non-exclusive of_iomap and gen4m ignores its unchecked
++	 * request_mem_region result — identical to the stock layout. The reimpl
++	 * mt76 "mediatek,mt6785-wmac" node (also at 0x18000000) stays disabled. */
++	wifi: wifi@18000000 {
++		compatible = "mediatek,wifi";
++		reg = <0 0x18000000 0 0x100000>;
++		interrupts = <GIC_SPI 322 IRQ_TYPE_LEVEL_LOW>;	/* WF_HIF irq */
++		memory-region = <&wifi_mem>;
++		power-domains = <&spm MT6785_POWER_DOMAIN_CONN>;
++		status = "okay";
++	};
++
+ 	consys: consys@18002000 {
+ 		compatible = "mediatek,mt6785-consys";
+ 		#address-cells = <2>;
+-- 
+2.56.0
+

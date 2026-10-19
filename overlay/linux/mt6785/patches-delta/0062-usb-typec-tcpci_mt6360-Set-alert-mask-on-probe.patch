@@ -1,0 +1,49 @@
+From aa384ae0674af007340c562e327566d268f4957e Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Tue, 5 Aug 2025 16:51:19 +0200
+Subject: [PATCH 062/115] usb: typec: tcpci_mt6360: Set alert mask on probe
+
+Without this it does not work on MT6785 begonia.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ drivers/usb/typec/tcpm/tcpci_mt6360.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/drivers/usb/typec/tcpm/tcpci_mt6360.c b/drivers/usb/typec/tcpm/tcpci_mt6360.c
+index 881ffacbf..4a33e576f 100644
+--- a/drivers/usb/typec/tcpm/tcpci_mt6360.c
++++ b/drivers/usb/typec/tcpm/tcpci_mt6360.c
+@@ -66,6 +66,10 @@ static int mt6360_tcpc_init(struct tcpci *tcpci, struct tcpci_data *tdata)
+ 	if (ret)
+ 		return ret;
+ 
++	ret = mt6360_tcpc_write16(regmap, TCPC_ALERT, 0xffff);
++	if (ret)
++		return ret;
++
+ 	/* config I2C timeout reset enable , and timeout to 200ms */
+ 	ret = regmap_write(regmap, MT6360_REG_I2CTORST, 0x8F);
+ 	if (ret)
+@@ -172,6 +176,18 @@ static int mt6360_tcpc_probe(struct platform_device *pdev)
+ 		return ret;
+ 	}
+ 
++	const u16 alert_mask = TCPC_ALERT_TX_SUCCESS | TCPC_ALERT_TX_DISCARDED |
++			       TCPC_ALERT_TX_FAILED | TCPC_ALERT_RX_HARD_RST |
++			       TCPC_ALERT_RX_STATUS | TCPC_ALERT_POWER_STATUS |
++			       TCPC_ALERT_CC_STATUS;
++
++	ret = mt6360_tcpc_write16(mti->tdata.regmap, TCPC_ALERT_MASK, alert_mask);
++	if (ret) {
++		dev_err(mti->dev, "Failed to set alert mask\n");
++		tcpci_unregister_port(mti->tcpci);
++		return ret;
++	}
++
+ 	device_init_wakeup(&pdev->dev, true);
+ 	platform_set_drvdata(pdev, mti);
+ 
+-- 
+2.56.0
+

@@ -1,0 +1,39 @@
+From 5d43486bbe8240e95cfa4c9bacef41c7e30d6735 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Sat, 12 Jul 2025 19:34:32 +0200
+Subject: [PATCH 100/115] arm64: dts: mediatek: mt6785-xiaomi-begonia: Enable
+ UFS
+
+Add ufshci and ufsphy nodes for UFS storage.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../boot/dts/mediatek/mt6785-xiaomi-begonia.dts   | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts
+index 29c5d632b..a7dc153a9 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6785-xiaomi-begonia.dts
+@@ -147,3 +147,18 @@ power {
+ 		};
+ 	};
+ };
++
++&ufshci {
++	mediatek,ufs-disable-mcq;
++	mediatek,ufs-support-va09;
++
++	va09-supply = <&mt6359_va09_ldo_reg>;
++	vcc-supply = <&mt6359_vemc_ldo_reg>;
++	vccq2-supply = <&mt6359_vufs_ldo_reg>;
++
++	status = "okay";
++};
++
++&ufsphy {
++	status = "okay";
++};
+-- 
+2.56.0
+

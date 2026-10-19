@@ -1,0 +1,59 @@
+From 458a7f02dec6a22f99d2cb811550d7c1e46fff50 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 00:40:12 +0200
+Subject: [PATCH 17/51] begonia-wifi (fwport): BTIF DMA barriers
+ direction-aware + correct for coherent vFIFO
+
+The vFIFO RX/TX buffers are dma_alloc_coherent (hal_btif_vfifo_init), so the
+mainline-correct primitive for the removed __dma_unmap_area/__dma_flush_area is
+an ordering barrier, not dma_sync_single_* (which is for streaming maps). Make
+__dma_unmap_area direction-aware (rmb on FROM_DEVICE, wmb otherwise) and document
+the rationale. De-escalates the earlier false-alarm flag on the RX-DMA gate path.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ .../compat/include/mtk-bsp-compat.h           | 25 ++++++++++++++-----
+ 1 file changed, 19 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h b/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
+index bed82f683..3131b30ee 100644
+--- a/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
++++ b/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
+@@ -90,15 +90,28 @@ static inline struct timespec ktime_to_timespec(ktime_t kt)
+ #define dma_zalloc_coherent(d, s, h, f) dma_alloc_coherent((d), (s), (h), (f))
+ #endif
+ 
+-/* arm64 arch-internal cache maintenance (__dma_unmap_area/__dma_flush_area)
+- * are no longer exported to drivers. The vendor BTIF uses them around its
+- * vFIFO DMA buffers. Backed here with a DMB barrier for the build; correct
+- * cache-coherency wiring (dma_sync_single_for_*()/arch_sync_dma_*) is a
+- * later-stage concern - FLAG: revisit before trusting BTIF DMA at runtime. */
++/* arm64's internal cache-maintenance helpers __dma_unmap_area/__dma_flush_area
++ * are not exported to drivers on mainline. The vendor BTIF used them around its
++ * RX/TX vFIFO buffers - but those buffers are allocated with dma_alloc_coherent()
++ * (hal_btif_vfifo_init(), mtk_btif.c). For a *coherent* allocation the DMA API
++ * guarantees CPU/device coherency WITHOUT explicit cache maintenance; the only
++ * requirement is ordering. An ordering barrier is therefore the correct and
++ * sufficient mainline primitive here - dma_sync_single_*() is for streaming
++ * (dma_map_single) mappings and must NOT be used on a coherent buffer.
++ *   __dma_unmap_area(.., DMA_FROM_DEVICE): order the CPU read after DMA done -> dma_rmb()
++ *   __dma_flush_area(): order CPU writes before the device reads them   -> dma_wmb()
++ * (The TX path already issues mb() before __dma_flush_area, so this is belt-and-braces.) */
+ #ifndef __dma_unmap_area
+ #include <asm/barrier.h>
++#include <linux/dma-direction.h>
+ static inline void __dma_unmap_area(const void *addr, size_t size, int dir)
+-{ (void)addr; (void)size; (void)dir; dma_rmb(); }
++{
++	(void)addr; (void)size;
++	if (dir == DMA_FROM_DEVICE)
++		dma_rmb();
++	else
++		dma_wmb();
++}
+ #endif
+ #ifndef __dma_flush_area
+ static inline void __dma_flush_area(const void *addr, size_t size)
+-- 
+2.56.0
+

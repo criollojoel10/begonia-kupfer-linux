@@ -1,0 +1,28 @@
+From c44a92486f4c8b050e06010f42a5823bb5e55419 Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 9 Jul 2025 17:04:37 +0200
+Subject: [PATCH 002/115] dt-bindings: interrupt-controller:
+ mediatek,mt6577-sysirq: Add support for MT6785
+
+Add mediatek,mt6785-sysirq compatible with mediatek,mt6577-sysirq fallback.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ .../bindings/interrupt-controller/mediatek,mt6577-sysirq.yaml    | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/interrupt-controller/mediatek,mt6577-sysirq.yaml b/Documentation/devicetree/bindings/interrupt-controller/mediatek,mt6577-sysirq.yaml
+index 30d76692c..54ba541fc 100644
+--- a/Documentation/devicetree/bindings/interrupt-controller/mediatek,mt6577-sysirq.yaml
++++ b/Documentation/devicetree/bindings/interrupt-controller/mediatek,mt6577-sysirq.yaml
+@@ -29,6 +29,7 @@ properties:
+               - mediatek,mt6755-sysirq
+               - mediatek,mt6765-sysirq
+               - mediatek,mt6779-sysirq
++              - mediatek,mt6785-sysirq
+               - mediatek,mt6795-sysirq
+               - mediatek,mt6797-sysirq
+               - mediatek,mt7622-sysirq
+-- 
+2.56.0
+

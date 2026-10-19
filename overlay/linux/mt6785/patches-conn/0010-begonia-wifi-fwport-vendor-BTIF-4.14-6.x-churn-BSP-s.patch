@@ -1,0 +1,160 @@
+From 3e8518011de1e77038b94df3a768fd3d7c5362ac Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 00:16:51 +0200
+Subject: [PATCH 10/51] begonia-wifi (fwport): vendor BTIF 4.14->6.x churn +
+ BSP stubs
+
+- compat header: struct timespec; do_gettimeofday()->ktime_get_real_ts64;
+  ktime_to_timespec()->64-bit wrapper; dma_zalloc_coherent->dma_alloc_coherent;
+  __dma_unmap_area/__dma_flush_area build shims (barrier only - FLAGGED: real
+  cache-coherency wiring needed before trusting BTIF DMA at runtime).
+- compat/sync_write.h: faithful mt_reg_sync_write{b,w,l,q} (raw write + mb()).
+- compat/mtk_lpae.h: enable_4G()=0 + no-op LPAE remap macros (begonia !LPAE path).
+- mtk_btif.c: .remove returns void (6.11); class_create() 1-arg.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ drivers/misc/mediatek/btif/common/mtk_btif.c  |  5 +-
+ .../compat/include/mtk-bsp-compat.h           | 58 +++++++++++++++++++
+ .../connectivity/compat/include/mtk_lpae.h    | 12 +++-
+ .../connectivity/compat/include/sync_write.h  | 17 +++++-
+ 4 files changed, 84 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/misc/mediatek/btif/common/mtk_btif.c b/drivers/misc/mediatek/btif/common/mtk_btif.c
+index 89d691fca..a9247e8a6 100644
+--- a/drivers/misc/mediatek/btif/common/mtk_btif.c
++++ b/drivers/misc/mediatek/btif/common/mtk_btif.c
+@@ -47,7 +47,7 @@
+ 
+ /*-----------static function declearation----------------*/
+ static int mtk_btif_probe(struct platform_device *pdev);
+-static int mtk_btif_remove(struct platform_device *pdev);
++static void mtk_btif_remove(struct platform_device *pdev);
+ static int mtk_btif_suspend(struct platform_device *pdev, pm_message_t state);
+ static int mtk_btif_resume(struct platform_device *pdev);
+ static int mtk_btif_drv_resume(struct device *dev);
+@@ -522,7 +522,8 @@ static int btif_chrdev_init(void)
+ 	}
+ 	BTIF_INFO_FUNC("add btif dev to kernel succeed\n");
+ 
+-	p_btif_class = class_create(THIS_MODULE, p_btif_dev_name);
++	/* 4.14->6.4: class_create() no longer takes an owner argument. */
++	p_btif_class = class_create(p_btif_dev_name);
+ 	if (IS_ERR(p_btif_class)) {
+ 		BTIF_ERR_FUNC("error happened when doing class_create\n");
+ 		unregister_chrdev_region(btif_dev, 1);
+diff --git a/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h b/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
+index df069e5d7..bed82f683 100644
+--- a/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
++++ b/drivers/misc/mediatek/connectivity/compat/include/mtk-bsp-compat.h
+@@ -47,6 +47,64 @@ struct timeval {
+ };
+ #endif
+ 
++/* struct timespec removed (Y2038); restore classic layout for vendor log
++ * structs that embed it (mtk_btif _btif_log_buf_t_.ts). */
++#ifndef _COMPAT_STRUCT_TIMESPEC
++#define _COMPAT_STRUCT_TIMESPEC
++struct timespec {
++	long	tv_sec;
++	long	tv_nsec;
++};
++#endif
++
++/* do_gettimeofday(struct timeval *) removed; back with ktime_get_real_ts64. */
++#ifndef do_gettimeofday
++#include <linux/ktime.h>
++#include <linux/timekeeping.h>
++static inline void do_gettimeofday(struct timeval *tv)
++{
++	struct timespec64 _n;
++
++	ktime_get_real_ts64(&_n);
++	tv->tv_sec = _n.tv_sec;
++	tv->tv_usec = _n.tv_nsec / 1000;
++}
++#endif
++
++/* ktime_to_timespec() removed; provide a wrapper returning the compat
++ * struct timespec via the 64-bit variant. */
++#ifndef ktime_to_timespec
++static inline struct timespec ktime_to_timespec(ktime_t kt)
++{
++	struct timespec64 _t = ktime_to_timespec64(kt);
++	struct timespec _r;
++
++	_r.tv_sec = _t.tv_sec;
++	_r.tv_nsec = _t.tv_nsec;
++	return _r;
++}
++#endif
++
++/* dma_zalloc_coherent() removed; dma_alloc_coherent() now zeroes. */
++#ifndef dma_zalloc_coherent
++#define dma_zalloc_coherent(d, s, h, f) dma_alloc_coherent((d), (s), (h), (f))
++#endif
++
++/* arm64 arch-internal cache maintenance (__dma_unmap_area/__dma_flush_area)
++ * are no longer exported to drivers. The vendor BTIF uses them around its
++ * vFIFO DMA buffers. Backed here with a DMB barrier for the build; correct
++ * cache-coherency wiring (dma_sync_single_for_*()/arch_sync_dma_*) is a
++ * later-stage concern - FLAG: revisit before trusting BTIF DMA at runtime. */
++#ifndef __dma_unmap_area
++#include <asm/barrier.h>
++static inline void __dma_unmap_area(const void *addr, size_t size, int dir)
++{ (void)addr; (void)size; (void)dir; dma_rmb(); }
++#endif
++#ifndef __dma_flush_area
++static inline void __dma_flush_area(const void *addr, size_t size)
++{ (void)addr; (void)size; dma_wmb(); }
++#endif
++
+ /* from_timer() was renamed to timer_container_of() in 6.16. */
+ #ifndef from_timer
+ #define from_timer(var, callback_timer, timer_fieldname) 	timer_container_of(var, callback_timer, timer_fieldname)
+diff --git a/drivers/misc/mediatek/connectivity/compat/include/mtk_lpae.h b/drivers/misc/mediatek/connectivity/compat/include/mtk_lpae.h
+index b829296c9..0e4b4edc5 100644
+--- a/drivers/misc/mediatek/connectivity/compat/include/mtk_lpae.h
++++ b/drivers/misc/mediatek/connectivity/compat/include/mtk_lpae.h
+@@ -1,5 +1,11 @@
+ /* SPDX-License-Identifier: GPL-2.0 */
+-/* compat stub for BSP header mtk_lpae.h (begonia fwport) */
+-#ifndef _COMPAT_STUB_MTK_LPAE_H
+-#define _COMPAT_STUB_MTK_LPAE_H
++/* compat: mtk_lpae.h (begonia fwport). begonia runs without the BSP 4G-LPAE
++ * remap; enable_4G() returns 0 (faithful to the !CONFIG_ARM_LPAE vendor path),
++ * so the CROSS_OVERFLOW / MAPPING_DRAM macros are no-ops. */
++#ifndef _COMPAT_MTK_LPAE_H
++#define _COMPAT_MTK_LPAE_H
++static inline unsigned int enable_4G(void) { return 0; }
++#define MT_OVERFLOW_ADDR_START 0
++#define CROSS_OVERFLOW_ADDR_TRANSFER(phy_addr, size, ret) do { (ret) = 0; } while (0)
++#define MAPPING_DRAM_ACCESS_ADDR(phy_addr) do { } while (0)
+ #endif
+diff --git a/drivers/misc/mediatek/connectivity/compat/include/sync_write.h b/drivers/misc/mediatek/connectivity/compat/include/sync_write.h
+index f5289bd6c..cc1dda7bd 100644
+--- a/drivers/misc/mediatek/connectivity/compat/include/sync_write.h
++++ b/drivers/misc/mediatek/connectivity/compat/include/sync_write.h
+@@ -1,5 +1,16 @@
+ /* SPDX-License-Identifier: GPL-2.0 */
+-/* compat stub for BSP header sync_write.h (begonia fwport) */
+-#ifndef _COMPAT_STUB_SYNC_WRITE_H
+-#define _COMPAT_STUB_SYNC_WRITE_H
++/* compat: sync_write.h (begonia fwport). Faithful copy of the vendor MMIO
++ * sync-write macros (raw write + full barrier). These are write *primitives*,
++ * not register values. */
++#ifndef _COMPAT_SYNC_WRITE_H
++#define _COMPAT_SYNC_WRITE_H
++#include <linux/io.h>
++#include <asm/barrier.h>
++
++#define mt_reg_sync_writel(v, a) 	do { __raw_writel((v), (void __force __iomem *)((a))); mb(); } while (0)
++#define mt_reg_sync_writew(v, a) 	do { __raw_writew((v), (void __force __iomem *)((a))); mb(); } while (0)
++#define mt_reg_sync_writeb(v, a) 	do { __raw_writeb((v), (void __force __iomem *)((a))); mb(); } while (0)
++#ifdef CONFIG_64BIT
++#define mt_reg_sync_writeq(v, a) 	do { __raw_writeq((v), (void __force __iomem *)((a))); mb(); } while (0)
++#endif
+ #endif
+-- 
+2.56.0
+

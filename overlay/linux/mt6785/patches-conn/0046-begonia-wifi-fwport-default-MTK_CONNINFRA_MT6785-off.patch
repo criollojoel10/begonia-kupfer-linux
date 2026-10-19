@@ -1,0 +1,38 @@
+From 5fa8c9ca1d029c5c16987998a88d004024dd25c8 Mon Sep 17 00:00:00 2001
+From: Michal Andrzejczak <mit.mis@gmail.com>
+Date: Thu, 18 Jun 2026 16:41:58 +0200
+Subject: [PATCH 46/51] begonia-wifi (fwport): default MTK_CONNINFRA_MT6785 off
+ (vendor consys conflict)
+
+The reimpl conninfra binds the same "mediatek,mt6785-consys" node as the vendor
+WMT consys driver (mtk_wmt). default m if ARCH_MEDIATEK made it auto-enable and
+win the bind, so the vendor probe never set gConEmiPhyBase and consys power-on
+failed (EMI base invalid). Default it off; the vendor forward-port is the active
+path.
+
+Signed-off-by: Michal Andrzejczak <mit.mis@gmail.com>
+---
+ drivers/soc/mediatek/Kconfig | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/soc/mediatek/Kconfig b/drivers/soc/mediatek/Kconfig
+index cfb66456b..0c6a3c07a 100644
+--- a/drivers/soc/mediatek/Kconfig
++++ b/drivers/soc/mediatek/Kconfig
+@@ -94,7 +94,12 @@ config MTK_CONNINFRA_MT6785
+ 	depends on ARCH_MEDIATEK || COMPILE_TEST
+ 	depends on OF
+ 	select CRC16
+-	default m if ARCH_MEDIATEK
++	# Default OFF: this from-scratch reimpl binds "mediatek,mt6785-consys" and
++	# conflicts with the vendor WMT consys driver (mtk_wmt) for that DT node.
++	# The vendor forward-port (MTK_WMT_FWPORT) is the active path; enabling this
++	# steals the node so the vendor probe never sets gConEmiPhyBase ("EMI base
++	# address is invalid"). Enable only when running the standalone reimpl.
++	default n
+ 	help
+ 	  Power-management driver for the MediaTek MT6785 (Helio G90T)
+ 	  connectivity subsystem (BT/WiFi/FM/GPS shared MCU).  Attaches
+-- 
+2.56.0
+

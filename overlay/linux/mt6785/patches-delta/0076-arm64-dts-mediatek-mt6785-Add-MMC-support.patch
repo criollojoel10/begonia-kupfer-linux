@@ -1,0 +1,48 @@
+From 12155724534b9dc894286b2556852afbc4fb76ff Mon Sep 17 00:00:00 2001
+From: Dinolek <git@dinolek.me>
+Date: Wed, 9 Jul 2025 13:54:21 +0200
+Subject: [PATCH 076/115] arm64: dts: mediatek: mt6785: Add MMC support
+
+Add devicetree nodes for MMC controllers.
+
+Signed-off-by: Dinolek <git@dinolek.me>
+---
+ arch/arm64/boot/dts/mediatek/mt6785.dtsi | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6785.dtsi b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+index ae0316b77..41f2bf7f9 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6785.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6785.dtsi
+@@ -1385,6 +1385,28 @@ audsys: clock-controller@11210000 {
+ 			#clock-cells = <1>;
+ 		};
+ 
++		mmc0: mmc@11230000 {
++			compatible = "mediatek,mt6785-mmc", "mediatek,mt8183-mmc";
++			reg = <0 0x11230000 0 0x1000>, <0 0x11f50000 0 0x1000>;
++			interrupts = <GIC_SPI 101 IRQ_TYPE_LEVEL_LOW>;
++			clocks = <&topckgen CLK_TOP_MSDC50_0>,
++				 <&infracfg CLK_INFRA_MSDC0>,
++				 <&infracfg CLK_INFRA_MSDC0_SRC>;
++			clock-names = "source", "hclk", "source_cg";
++			status = "disabled";
++		};
++
++		mmc1: mmc@11240000 {
++			compatible = "mediatek,mt6785-mmc", "mediatek,mt8183-mmc";
++			reg = <0 0x11240000 0 0x1000>, <0 0x11e10000 0 0x1000>;
++			interrupts = <GIC_SPI 102 IRQ_TYPE_LEVEL_LOW>;
++			clocks = <&topckgen CLK_TOP_MSDC30_1>,
++				 <&infracfg CLK_INFRA_MSDC1>,
++				 <&infracfg CLK_INFRA_MSDC1_SRC>;
++			clock-names = "source", "hclk", "source_cg";
++			status = "disabled";
++		};
++
+ 		ufshci: ufshci@11270000 {
+ 			compatible = "mediatek,mt6785-ufshci";
+ 			reg = <0 0x11270000 0 0x2300>;
+-- 
+2.56.0
+
