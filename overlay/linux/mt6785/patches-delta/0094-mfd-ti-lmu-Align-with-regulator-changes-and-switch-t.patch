@@ -1,4 +1,4 @@
-From 73bc4081b6b756bbbe6352b3ddc89c0a4624c3ea Mon Sep 17 00:00:00 2001
+From d28ed5d0533752d827dd360c860e4a66995eb9b4 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 24 Aug 2025 13:04:12 +0200
 Subject: [PATCH 094/115] mfd: ti-lmu: Align with regulator changes and switch

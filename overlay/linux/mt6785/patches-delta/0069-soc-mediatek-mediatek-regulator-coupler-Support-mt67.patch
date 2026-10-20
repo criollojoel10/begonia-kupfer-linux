@@ -1,4 +1,4 @@
-From d220a518bc13afea6aa9a2ed2eb899faf158975c Mon Sep 17 00:00:00 2001
+From becfd58beaed764b12585ef19c6ab21ab741e976 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sat, 21 Jun 2025 23:52:56 +0200
 Subject: [PATCH 069/115] soc: mediatek: mediatek-regulator-coupler: Support

@@ -1,4 +1,4 @@
-From 12155724534b9dc894286b2556852afbc4fb76ff Mon Sep 17 00:00:00 2001
+From c0db08a288fac87d19acd5294f4191290f20f241 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 13:54:21 +0200
 Subject: [PATCH 076/115] arm64: dts: mediatek: mt6785: Add MMC support

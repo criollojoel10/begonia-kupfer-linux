@@ -1,4 +1,4 @@
-From 9b786d4888ee85db92c8ebb8782142f1753f2e99 Mon Sep 17 00:00:00 2001
+From 13544a20c3a8f033746f492827b350db49f89c78 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 11 Jan 2026 17:15:10 +0100
 Subject: [PATCH 038/115] Revert "i2c: mediatek: mt65xx: add optional

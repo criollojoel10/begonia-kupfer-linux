@@ -1,4 +1,4 @@
-From d654969e370d8dbf33218c2ec26fa66a59880975 Mon Sep 17 00:00:00 2001
+From 78eb1b722a116192ff42335ada461cff6e4e4614 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 6 Jul 2025 20:19:12 +0200
 Subject: [PATCH 112/115] drm/mediatek: dsi: Clear DSI_INTSTA before requesting

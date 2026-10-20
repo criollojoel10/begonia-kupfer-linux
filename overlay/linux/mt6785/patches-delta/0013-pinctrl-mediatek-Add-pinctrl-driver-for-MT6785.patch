@@ -1,4 +1,4 @@
-From 3d993dc384294109afea8e4e1cd345003ba67063 Mon Sep 17 00:00:00 2001
+From 6141e138420fa5b439f6627d83a6a11f2998b276 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 27 Apr 2025 19:58:04 +0200
 Subject: [PATCH 013/115] pinctrl: mediatek: Add pinctrl driver for MT6785

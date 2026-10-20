@@ -1,4 +1,4 @@
-From 5d43486bbe8240e95cfa4c9bacef41c7e30d6735 Mon Sep 17 00:00:00 2001
+From 31ce7c3c5f6b50b0c3ffd5f1c11fe4bbc4cd1540 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sat, 12 Jul 2025 19:34:32 +0200
 Subject: [PATCH 100/115] arm64: dts: mediatek: mt6785-xiaomi-begonia: Enable

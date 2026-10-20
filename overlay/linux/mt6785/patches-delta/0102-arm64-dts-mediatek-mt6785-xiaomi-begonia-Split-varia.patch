@@ -1,4 +1,4 @@
-From d27c33ee5909895ea3ff2ca830e1398ac318f1a8 Mon Sep 17 00:00:00 2001
+From 754f91f20da14903830065a3d3f5a43b2f08b0dd Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 17 Jun 2026 15:33:16 +0200
 Subject: [PATCH 102/115] arm64: dts: mediatek: mt6785-xiaomi-begonia: Split

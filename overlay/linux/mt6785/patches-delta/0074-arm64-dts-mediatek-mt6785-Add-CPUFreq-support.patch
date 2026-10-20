@@ -1,4 +1,4 @@
-From 5c8a1d49c29ec5e87b0ad0cfbcbc6d5407610295 Mon Sep 17 00:00:00 2001
+From fc679f1451b84a655bb45cce549bea83a83d3b7b Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 13:32:56 +0200
 Subject: [PATCH 074/115] arm64: dts: mediatek: mt6785: Add CPUFreq support

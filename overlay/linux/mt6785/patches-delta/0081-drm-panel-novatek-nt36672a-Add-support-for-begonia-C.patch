@@ -1,4 +1,4 @@
-From a8c20d3882f752a8b9307dfc28d201cf4144d47d Mon Sep 17 00:00:00 2001
+From d19860d159c8eb8154db0c89f4267b717aed8502 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Tue, 1 Jul 2025 15:46:46 +0200
 Subject: [PATCH 081/115] drm/panel: novatek-nt36672a: Add support for begonia

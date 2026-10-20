@@ -1,4 +1,4 @@
-From 914d87783229743482d5c64478177ab2d8cf1013 Mon Sep 17 00:00:00 2001
+From b29840ed4605800cb94d0212c27505f6c70d3c05 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 7 Jul 2025 00:25:50 +0200
 Subject: [PATCH 023/115] arm64: dts: mediatek: mt6785: Add mmsys support

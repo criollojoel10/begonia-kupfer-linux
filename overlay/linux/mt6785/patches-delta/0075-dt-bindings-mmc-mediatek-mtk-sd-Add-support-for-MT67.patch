@@ -1,4 +1,4 @@
-From 9a0160e8e351de01d8b14975b9b76e89ecd7852e Mon Sep 17 00:00:00 2001
+From 70f0da4c4c19fe5df53b40ac2fa78ce21743bffe Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 16:48:59 +0200
 Subject: [PATCH 075/115] dt-bindings: mmc: mediatek,mtk-sd: Add support for

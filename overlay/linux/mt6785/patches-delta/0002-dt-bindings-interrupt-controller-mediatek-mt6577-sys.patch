@@ -1,4 +1,4 @@
-From c44a92486f4c8b050e06010f42a5823bb5e55419 Mon Sep 17 00:00:00 2001
+From 13eeb5a9ad58ac61a14ddbee1b132b6c49303943 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 17:04:37 +0200
 Subject: [PATCH 002/115] dt-bindings: interrupt-controller:

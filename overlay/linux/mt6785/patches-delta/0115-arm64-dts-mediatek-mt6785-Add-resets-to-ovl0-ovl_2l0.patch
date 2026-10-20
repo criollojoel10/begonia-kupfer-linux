@@ -1,4 +1,4 @@
-From 456205a71b2ef8c7f9197234baca6360458fb8b3 Mon Sep 17 00:00:00 2001
+From ca0b27af5093af5d4f5c3279ca708d40a43ff4a5 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Tue, 5 Aug 2025 15:42:39 +0200
 Subject: [PATCH 115/115] arm64: dts: mediatek: mt6785: Add resets to

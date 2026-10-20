@@ -1,4 +1,4 @@
-From 2b08b28458da043e94c7e1d3c572218671ab846f Mon Sep 17 00:00:00 2001
+From 28eb63a7be8d26b8b8554f84cb3fcdc20e348674 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 16:47:56 +0200
 Subject: [PATCH 071/115] dt-bindings: interconnect: mediatek,cci: Add support

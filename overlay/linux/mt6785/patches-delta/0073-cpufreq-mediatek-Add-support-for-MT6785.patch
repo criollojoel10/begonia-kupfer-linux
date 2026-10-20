@@ -1,4 +1,4 @@
-From e7dbe132b2f2b994aba38b488ca315ddc1cae71b Mon Sep 17 00:00:00 2001
+From 92b3583844016b271bd6cd328cbbbd21e95943ab Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 22 Jun 2025 23:00:49 +0200
 Subject: [PATCH 073/115] cpufreq: mediatek: Add support for MT6785

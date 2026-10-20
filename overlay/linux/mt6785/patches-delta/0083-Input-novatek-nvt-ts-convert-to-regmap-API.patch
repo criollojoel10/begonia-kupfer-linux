@@ -1,4 +1,4 @@
-From 95a05dd9c935d5c915db7e79398a3564f9c77921 Mon Sep 17 00:00:00 2001
+From c2c3a075ea10a0907d2ad6ce20d258a26bbe46ed Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Thu, 26 Jun 2025 13:11:53 +0200
 Subject: [PATCH 083/115] Input: novatek-nvt-ts - convert to regmap API

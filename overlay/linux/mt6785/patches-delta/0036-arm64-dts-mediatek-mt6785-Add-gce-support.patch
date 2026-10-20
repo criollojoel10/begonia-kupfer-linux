@@ -1,4 +1,4 @@
-From 96cb0c6cc0744ce1b307ee8470777e97ff94ecb7 Mon Sep 17 00:00:00 2001
+From 997f0d844d2ec5c25366ebc8bc6092c1f1afff49 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 7 Jul 2025 11:13:51 +0200
 Subject: [PATCH 036/115] arm64: dts: mediatek: mt6785: Add gce support

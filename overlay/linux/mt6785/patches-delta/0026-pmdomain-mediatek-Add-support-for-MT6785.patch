@@ -1,4 +1,4 @@
-From 72dafe0422736a2911dfbe975743f37d2c57b356 Mon Sep 17 00:00:00 2001
+From 959b61e3eac859ecf0ee6b90d7ed7246004a7de4 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 23 Jun 2025 19:14:01 +0200
 Subject: [PATCH 026/115] pmdomain: mediatek: Add support for MT6785

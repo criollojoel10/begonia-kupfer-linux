@@ -1,4 +1,4 @@
-From 613a087bb82e1243163934b9c681119f039efcd7 Mon Sep 17 00:00:00 2001
+From 3d5881e45682fe96f476591b4eedb0c6727fc126 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Tue, 1 Jul 2025 13:40:00 +0200
 Subject: [PATCH 087/115] Input: novatek-nvt-ts - add support for panel

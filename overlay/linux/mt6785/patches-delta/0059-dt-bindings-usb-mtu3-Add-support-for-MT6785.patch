@@ -1,4 +1,4 @@
-From e72d59e0e926ed5d6e70cdbb31b88da729022487 Mon Sep 17 00:00:00 2001
+From f49860fc8fd87dd46196651b74557d6dd7768a86 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 17:07:52 +0200
 Subject: [PATCH 059/115] dt-bindings: usb: mtu3: Add support for MT6785

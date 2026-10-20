@@ -1,4 +1,4 @@
-From 364686063fd55d018315f916088c4424df481762 Mon Sep 17 00:00:00 2001
+From fdb1e93222c16458cfb03fa936ae9d1c232c7253 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 7 Jul 2025 13:05:00 +0200
 Subject: [PATCH 039/115] arm64: dts: mediatek: mt6785: Add i2c controllers

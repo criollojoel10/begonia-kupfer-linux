@@ -1,4 +1,4 @@
-From d42bb8276ac3020e5d3a6ff7e04901761b9708f7 Mon Sep 17 00:00:00 2001
+From 0ccc3f484b0dcc2fbdd1549f5127d712a236a3aa Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 23 Jun 2025 19:35:06 +0200
 Subject: [PATCH 024/115] dt-bindings: power: mediatek: Add support for MT6785

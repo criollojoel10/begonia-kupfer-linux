@@ -1,4 +1,4 @@
-From c81c4e5e1ede21c32032ffcc52a00786e8605cfb Mon Sep 17 00:00:00 2001
+From 93ff3829416785397148edd5ea611e1c9273c10a Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 7 Jul 2025 00:26:42 +0200
 Subject: [PATCH 031/115] arm64: dts: mediatek: mt6785: Add smi support

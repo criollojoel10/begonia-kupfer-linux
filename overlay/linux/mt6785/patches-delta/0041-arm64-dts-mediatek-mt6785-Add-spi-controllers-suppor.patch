@@ -1,4 +1,4 @@
-From b33757d0bcf604c2ec74ddf86f037a164dea1817 Mon Sep 17 00:00:00 2001
+From 48816ef0983215565719c1d27d5c36daa265b1ca Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 7 Jul 2025 13:10:08 +0200
 Subject: [PATCH 041/115] arm64: dts: mediatek: mt6785: Add spi controllers

@@ -1,4 +1,4 @@
-From 415a9a16daf44ded229d2b799e6388d439983dc9 Mon Sep 17 00:00:00 2001
+From ba6b1cfb8873a239b1cb46495a855f56d83e3ae8 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 22 Jun 2025 16:32:10 +0200
 Subject: [PATCH 049/115] scsi: ufs: mediatek: Add reference clock control mode
@@ -14,7 +14,7 @@ Signed-off-by: Dinolek <git@dinolek.me>
  2 files changed, 36 insertions(+), 5 deletions(-)
 
 diff --git a/drivers/ufs/host/ufs-mediatek.c b/drivers/ufs/host/ufs-mediatek.c
-index a2defbe3b..cb260b29d 100644
+index 3991a5126..6b16eaa02 100644
 --- a/drivers/ufs/host/ufs-mediatek.c
 +++ b/drivers/ufs/host/ufs-mediatek.c
 @@ -48,9 +48,13 @@ static const struct ufs_dev_quirk ufs_mtk_dev_fixups[] = {
@@ -50,7 +50,7 @@ index a2defbe3b..cb260b29d 100644
  	if (on) {
  		ufshcd_writel(hba, REFCLK_REQUEST, REG_UFS_REFCLK_CTRL);
  	} else {
-@@ -1227,7 +1241,6 @@ static void ufs_mtk_init_mcq_irq(struct ufs_hba *hba)
+@@ -1215,7 +1229,6 @@ static void ufs_mtk_init_mcq_irq(struct ufs_hba *hba)
   */
  static int ufs_mtk_init(struct ufs_hba *hba)
  {
@@ -58,7 +58,7 @@ index a2defbe3b..cb260b29d 100644
  	struct device *dev = hba->dev;
  	struct ufs_mtk_host *host;
  	struct Scsi_Host *shost = hba->host;
-@@ -1244,8 +1257,8 @@ static int ufs_mtk_init(struct ufs_hba *hba)
+@@ -1232,8 +1245,8 @@ static int ufs_mtk_init(struct ufs_hba *hba)
  	host->hba = hba;
  	ufshcd_set_variant(hba, host);
  

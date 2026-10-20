@@ -1,4 +1,4 @@
-From 77ee7e0d47a64bc734706899ac7b5442796f9420 Mon Sep 17 00:00:00 2001
+From f71c067552b6eccc772c27604975a5a1bb15c59c Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Thu, 19 Jun 2025 21:12:03 +0200
 Subject: [PATCH 030/115] memory: mtk-smi: mt6785: Add SMI Support

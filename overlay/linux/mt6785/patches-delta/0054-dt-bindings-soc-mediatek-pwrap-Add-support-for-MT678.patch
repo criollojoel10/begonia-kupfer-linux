@@ -1,4 +1,4 @@
-From 4e18ef443bd1278cee05c94687151d28cfd77dc5 Mon Sep 17 00:00:00 2001
+From 442af496b01e92868f13ffeca439cd03510c40dd Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 19:46:57 +0200
 Subject: [PATCH 054/115] dt-bindings: soc: mediatek: pwrap: Add support for

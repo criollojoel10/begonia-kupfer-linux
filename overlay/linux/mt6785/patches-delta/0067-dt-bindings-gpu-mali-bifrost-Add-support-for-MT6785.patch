@@ -1,4 +1,4 @@
-From 6b5226c303ed28fa13507b050d9abb4cbbb7c428 Mon Sep 17 00:00:00 2001
+From 76f80935dfd16c31e56a6eb124dc7cb07d8e94fd Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 28 Apr 2025 01:57:38 +0200
 Subject: [PATCH 067/115] dt-bindings: gpu: mali-bifrost: Add support for

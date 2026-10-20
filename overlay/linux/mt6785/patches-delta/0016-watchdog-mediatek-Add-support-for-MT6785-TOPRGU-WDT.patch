@@ -1,4 +1,4 @@
-From 271d7d50ad0eb039a576021e0e3ff1f1dfe21a29 Mon Sep 17 00:00:00 2001
+From 27c7313feeed6691f9dcde42454821eedd787fbd Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 6 Jul 2025 20:08:41 +0200
 Subject: [PATCH 016/115] watchdog: mediatek: Add support for MT6785 TOPRGU/WDT

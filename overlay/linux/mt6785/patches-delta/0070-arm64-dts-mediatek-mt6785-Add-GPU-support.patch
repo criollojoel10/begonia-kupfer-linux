@@ -1,4 +1,4 @@
-From f21ff5e0ea7f70a544f79b4af6ccff2d7f8e9019 Mon Sep 17 00:00:00 2001
+From 5fd196cb81ea5660e35fe47462300a82bae8fa1d Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Tue, 8 Jul 2025 18:48:01 +0200
 Subject: [PATCH 070/115] arm64: dts: mediatek: mt6785: Add GPU support

@@ -1,4 +1,4 @@
-From 33ec6cb229dcf222a5bb300bd39916a03409fb3b Mon Sep 17 00:00:00 2001
+From 9811ac59797f0dad129676f5d445bbe3fa048027 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 13:31:46 +0200
 Subject: [PATCH 072/115] arm64: dts: mediatek: mt6785: Add CCI support

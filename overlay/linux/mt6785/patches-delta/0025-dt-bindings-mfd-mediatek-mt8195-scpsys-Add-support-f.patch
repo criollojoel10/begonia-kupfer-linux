@@ -1,4 +1,4 @@
-From 38225b859605cea73a537c1718f35ea7f74838b6 Mon Sep 17 00:00:00 2001
+From 686d1743f7da16b2abe74e29ac2aebfc4c3d68be Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Fri, 11 Jul 2025 13:50:26 +0200
 Subject: [PATCH 025/115] dt-bindings: mfd: mediatek,mt8195-scpsys: Add support

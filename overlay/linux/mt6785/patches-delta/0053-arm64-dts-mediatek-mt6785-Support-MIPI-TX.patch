@@ -1,4 +1,4 @@
-From 0f3afae06fed02028ce53d751f152188da9eb003 Mon Sep 17 00:00:00 2001
+From 37d7edbcc9b19d41e0ff7ae83ecf94609b10f6e3 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 7 Jul 2025 17:10:52 +0200
 Subject: [PATCH 053/115] arm64: dts: mediatek: mt6785: Support MIPI TX

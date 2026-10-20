@@ -1,4 +1,4 @@
-From 66240761c8a97d7d6483540a77382e3eace1c10b Mon Sep 17 00:00:00 2001
+From 0b4d3a1452a01a9177dba5b4e53d4f09fa9a41cc Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 17:06:39 +0200
 Subject: [PATCH 004/115] dt-bindings: serial: mediatek,uart: Add support for

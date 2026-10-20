@@ -1,4 +1,4 @@
-From d9d8210ae7f94a5b6f7ce7ddc5510a309f451397 Mon Sep 17 00:00:00 2001
+From d566ca2af177295d42787115cb29c32176e9115f Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Thu, 10 Jul 2025 12:37:36 +0200
 Subject: [PATCH 082/115] dt-bindings: input: novatek,nvt-ts: Add firmware and

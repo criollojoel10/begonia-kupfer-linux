@@ -2,7 +2,7 @@ _mode=cross
 _kernelname=mt6785
 pkgbase="linux-$_kernelname"
 _desc="MediaTek MT6785 (begonia) kernel"
-pkgver=7.2.11
+pkgver=7.2.6
 pkgrel=1
 _arches=specific
 arch=(aarch64)
@@ -31,7 +31,7 @@ makedepends=(
 )
 options=(!strip)
 
-# Base: **mainline stable v7.2.11** (cdn.kernel.org) + tres series de parches
+# Base: **mainline stable v7.2.6** (cdn.kernel.org) + tres series de parches
 # que viven en este repo (ver prepare()): delta mt6785 rebasado a 7.2.11,
 # conn/WiFi rebasado encima, y las adaptaciones de API. El fork mt6785-mainline
 # no tiene tag 7.2 (su ultimo es 7.1-r0), de ahi que el delta vaya como serie.
@@ -56,7 +56,7 @@ source=(
 # Los dos primeros son remotos: su sha se imprime en el log del workflow
 # (ruta 7.1-r0 y commit de pmaports quedan fijados, así que son reproducibles).
 sha256sums=(
-    fd0fc479f983a8c05313f13e9c36330fe6651cf725396748c40d5cd93fa1e6a4
+    039aef84f2b0994aeda3f4fcfc3d02ec9d7a9bbb9020ea264c43f446c860f606
     SKIP
     SKIP
     SKIP

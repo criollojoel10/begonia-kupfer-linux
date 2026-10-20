@@ -1,4 +1,4 @@
-From 12f4420b34630300bde52e5d6a79419fcc8571cf Mon Sep 17 00:00:00 2001
+From 1e8a8184b1b0bb630b4903ff107c31e2daf94400 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 17:03:37 +0200
 Subject: [PATCH 003/115] dt-bindings: timer: mediatek: Add support for MT6785

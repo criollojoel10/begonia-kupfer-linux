@@ -1,4 +1,4 @@
-From 4e8f123ac1ed6941caea7838deea7005b0e553ab Mon Sep 17 00:00:00 2001
+From 76d70ee25935fa8c5177c47050be2e48d937c057 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 6 Jul 2025 23:10:49 +0200
 Subject: [PATCH 011/115] arm64: dts: mediatek: mt6785: Add clocks support

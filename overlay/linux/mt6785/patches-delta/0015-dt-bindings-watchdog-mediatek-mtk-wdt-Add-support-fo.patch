@@ -1,4 +1,4 @@
-From d675585d663bf2c72050d45956733c1267e5f8d8 Mon Sep 17 00:00:00 2001
+From 34ab8d2dc9728a9b4d3b623d59e428a10b539f88 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 16:50:52 +0200
 Subject: [PATCH 015/115] dt-bindings: watchdog: mediatek,mtk-wdt: Add support

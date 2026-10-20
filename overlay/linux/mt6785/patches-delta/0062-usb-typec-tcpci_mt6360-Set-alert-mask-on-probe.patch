@@ -1,4 +1,4 @@
-From aa384ae0674af007340c562e327566d268f4957e Mon Sep 17 00:00:00 2001
+From 5fee76ac2671512584ab7885d236dcbcccf2912d Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Tue, 5 Aug 2025 16:51:19 +0200
 Subject: [PATCH 062/115] usb: typec: tcpci_mt6360: Set alert mask on probe

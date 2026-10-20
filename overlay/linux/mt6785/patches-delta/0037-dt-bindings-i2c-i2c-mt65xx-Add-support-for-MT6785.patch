@@ -1,4 +1,4 @@
-From 2f653935d5b99b56d04e70a16f63b52799357b59 Mon Sep 17 00:00:00 2001
+From 67fef9b22384dab8e51eac743b6d7ac865590e96 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 16:55:13 +0200
 Subject: [PATCH 037/115] dt-bindings: i2c: i2c-mt65xx: Add support for MT6785

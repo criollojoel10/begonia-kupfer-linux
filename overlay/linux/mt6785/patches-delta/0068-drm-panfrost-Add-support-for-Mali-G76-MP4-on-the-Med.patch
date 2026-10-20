@@ -1,4 +1,4 @@
-From 4e6279ef8230ee515b069a1dde542e49a0ca5b43 Mon Sep 17 00:00:00 2001
+From 99f54fa08825188fbc4b0e6da6596ecb2b5ab32d Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 28 Apr 2025 02:04:11 +0200
 Subject: [PATCH 068/115] drm/panfrost: Add support for Mali G76 MP4 on the

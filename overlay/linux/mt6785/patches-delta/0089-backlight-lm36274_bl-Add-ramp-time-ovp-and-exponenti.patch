@@ -1,4 +1,4 @@
-From 8b988958bfc3ea6645b122d1dfc4258a5e2e7c3d Mon Sep 17 00:00:00 2001
+From 5cf5c47614d8917320d4cbfed14263ed95de26b9 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Thu, 10 Jul 2025 16:55:31 +0200
 Subject: [PATCH 089/115] backlight: lm36274_bl: Add ramp time, ovp and

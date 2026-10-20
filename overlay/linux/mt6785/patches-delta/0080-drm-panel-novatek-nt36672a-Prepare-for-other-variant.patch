@@ -1,4 +1,4 @@
-From 3ef06878b9d7fa179daec7872947d868d25245d7 Mon Sep 17 00:00:00 2001
+From 529c6296dec246d73cc1ba15d5583a1996f04bc0 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Tue, 1 Jul 2025 15:42:39 +0200
 Subject: [PATCH 080/115] drm/panel: novatek-nt36672a: Prepare for other

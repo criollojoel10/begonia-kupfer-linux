@@ -1,4 +1,4 @@
-From 1fc33127baa83a08204f28bf3c4e288ea9b0615e Mon Sep 17 00:00:00 2001
+From f911ddbc7db1ac864278f6c07ccc72ecbf7e5d2e Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Tue, 8 Jul 2025 01:06:06 +0200
 Subject: [PATCH 064/115] arm64: dts: mediatek: mt6785: Add usb support

@@ -1,4 +1,4 @@
-From 5e94e0aa66df14683fc4972a0792cfba0f0ff799 Mon Sep 17 00:00:00 2001
+From bf39daeb46bcabef775f80be6ecf6220ebafb0c1 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 6 Jul 2025 23:25:21 +0200
 Subject: [PATCH 017/115] arm64: dts: mediatek: mt6785: Add watchdog support

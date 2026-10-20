@@ -1,4 +1,4 @@
-From c391b6a3249e74d64cc99331155f4fa6c04202ea Mon Sep 17 00:00:00 2001
+From b0fea829318bfb6b57583ef52304a1b381a1dcb9 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 17:05:39 +0200
 Subject: [PATCH 044/115] dt-bindings: pwm: mediatek,pwm-disp: Add support for

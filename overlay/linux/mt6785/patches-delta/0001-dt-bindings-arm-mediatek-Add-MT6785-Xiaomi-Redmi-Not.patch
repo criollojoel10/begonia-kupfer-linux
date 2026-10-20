@@ -1,4 +1,4 @@
-From cb46770252fc89a5c9951ff1513e81d982e00f4f Mon Sep 17 00:00:00 2001
+From 047ba79bebbc2fff9bd58ffaea8203606adbc52c Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Thu, 12 Jun 2025 21:06:31 +0200
 Subject: [PATCH 001/115] dt-bindings: arm: mediatek: Add MT6785 Xiaomi Redmi

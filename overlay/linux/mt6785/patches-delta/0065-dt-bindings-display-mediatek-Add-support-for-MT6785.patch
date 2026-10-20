@@ -1,4 +1,4 @@
-From deca2d4c918f30c468c9923bd997ef1c259c4682 Mon Sep 17 00:00:00 2001
+From 5f78bb7df0fbee84ab250c87cb079765aefbd4a1 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 15:58:28 +0200
 Subject: [PATCH 065/115] dt-bindings: display: mediatek: Add support for

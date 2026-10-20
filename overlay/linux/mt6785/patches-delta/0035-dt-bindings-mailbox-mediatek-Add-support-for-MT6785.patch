@@ -1,4 +1,4 @@
-From 358ecb06e4c88a1c29dd926b84fc569054c26ba0 Mon Sep 17 00:00:00 2001
+From 7776a39c1f748c19ea0173f835d0d41023f117c1 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Tue, 1 Jul 2025 15:38:17 +0200
 Subject: [PATCH 035/115] dt-bindings: mailbox: mediatek: Add support for

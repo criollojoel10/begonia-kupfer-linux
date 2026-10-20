@@ -1,4 +1,4 @@
-From 2cfd0c5339fcfe96d7b640a40302b179ea2d1e52 Mon Sep 17 00:00:00 2001
+From ee09e4a800af8c086c335b6229fd7311ecde0261 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 28 Apr 2025 01:29:00 +0200
 Subject: [PATCH 019/115] dt-bindings: soc: mediatek: mutex: Add support for

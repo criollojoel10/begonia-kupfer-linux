@@ -1,4 +1,4 @@
-From 5ac023bdb7ed8c5ba76a5879f909768183c2a6e2 Mon Sep 17 00:00:00 2001
+From 1fd3487238369231a7ccc59ce44c4de8d6bdaf31 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 17:10:04 +0200
 Subject: [PATCH 058/115] dt-bindings: usb: mtk-xhci: Add support for MT6785

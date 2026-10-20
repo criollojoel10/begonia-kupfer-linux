@@ -1,4 +1,4 @@
-From 3d59f404227281840b4cd9f003fcab7e14a420c9 Mon Sep 17 00:00:00 2001
+From 7cbd8c032952a7a1cf58fbe339056a06decc6d14 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 22 Jun 2025 16:33:07 +0200
 Subject: [PATCH 050/115] scsi: ufs: mediatek: Add support for MT6785
@@ -11,7 +11,7 @@ Signed-off-by: Dinolek <git@dinolek.me>
  1 file changed, 5 insertions(+)
 
 diff --git a/drivers/ufs/host/ufs-mediatek.c b/drivers/ufs/host/ufs-mediatek.c
-index cb260b29d..e323e1877 100644
+index 6b16eaa02..ccaf612ec 100644
 --- a/drivers/ufs/host/ufs-mediatek.c
 +++ b/drivers/ufs/host/ufs-mediatek.c
 @@ -48,11 +48,16 @@ static const struct ufs_dev_quirk ufs_mtk_dev_fixups[] = {

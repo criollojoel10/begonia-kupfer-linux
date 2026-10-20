@@ -1,4 +1,4 @@
-From eb32dba0f351f0f5aabfe7d41a2a1013d37a539c Mon Sep 17 00:00:00 2001
+From 2221b5d9cc56c3011a265251a405a8f153e10219 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 27 Apr 2025 19:53:28 +0200
 Subject: [PATCH 012/115] dt-bindings: pinctrl: mediatek: Add support for

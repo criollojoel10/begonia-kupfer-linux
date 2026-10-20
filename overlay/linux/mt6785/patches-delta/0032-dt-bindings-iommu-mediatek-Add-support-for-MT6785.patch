@@ -1,4 +1,4 @@
-From 2aa680f7aa19601bcc5a754c756ccd15b12e4585 Mon Sep 17 00:00:00 2001
+From 7de5ed3e181097f2c289d99d49aa39f74f343bb1 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sat, 21 Jun 2025 15:35:30 +0200
 Subject: [PATCH 032/115] dt-bindings: iommu: mediatek: Add support for MT6785

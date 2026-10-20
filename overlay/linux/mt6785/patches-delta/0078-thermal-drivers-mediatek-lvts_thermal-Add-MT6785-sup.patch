@@ -1,4 +1,4 @@
-From 7677ba992f7c71ef4eb924742cd6fc47e3ec2ca4 Mon Sep 17 00:00:00 2001
+From 1eb799d75d7544be980fa164ce2841407e984811 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 28 Apr 2025 01:47:51 +0200
 Subject: [PATCH 078/115] thermal/drivers/mediatek/lvts_thermal: Add MT6785

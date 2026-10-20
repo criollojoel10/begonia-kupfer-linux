@@ -1,4 +1,4 @@
-From f82ee058ace3de372e289531e7b2d9206d95b9a4 Mon Sep 17 00:00:00 2001
+From bb9b97b8cd99c875a836ce782121e5b8e879baea Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 6 Jul 2025 20:15:05 +0200
 Subject: [PATCH 060/115] wip: phy: mediatek: tphy: Support phone products

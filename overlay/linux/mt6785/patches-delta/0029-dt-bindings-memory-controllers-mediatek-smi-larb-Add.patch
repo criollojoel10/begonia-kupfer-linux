@@ -1,4 +1,4 @@
-From 86095d16f7aa7b60b231271d2eb4b4b6e2990aea Mon Sep 17 00:00:00 2001
+From b6d42544537d56e02bf3adf4808fa62e85df7b35 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Thu, 19 Jun 2025 21:19:31 +0200
 Subject: [PATCH 029/115] dt-bindings: memory-controllers: mediatek,smi-larb:

@@ -1,4 +1,4 @@
-From e750974085c7634d97a1f548df724e481d9f143d Mon Sep 17 00:00:00 2001
+From 39886a47a4d849d22b5c287132241db90f8db9f1 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 17:11:16 +0200
 Subject: [PATCH 042/115] dt-bindings: pwm: mediatek,mt2712: Add support for

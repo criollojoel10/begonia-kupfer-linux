@@ -1,4 +1,4 @@
-From 680db6d4da78b669943c16aea63e2dfadb5aa16d Mon Sep 17 00:00:00 2001
+From e8dba87347630874acb88fa6677d68058490d94b Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 17:13:00 +0200
 Subject: [PATCH 048/115] dt-bindings: phy: mediatek: ufs-phy: Add support for

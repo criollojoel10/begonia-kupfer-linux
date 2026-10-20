@@ -1,4 +1,4 @@
-From c034507c44b75a4392afa13f2d4ae5d6a35bd094 Mon Sep 17 00:00:00 2001
+From 8fdb5b7d42c0e794aefb55757ea7645bc94708c8 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 11 Jan 2026 17:36:55 +0100
 Subject: [PATCH 063/115] usb: typec: tcpci_mt6360: Add optional vbus supply

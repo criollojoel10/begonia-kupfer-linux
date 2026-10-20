@@ -1,4 +1,4 @@
-From 7802175060d8db990d4b903667cd66ef5ca0a5df Mon Sep 17 00:00:00 2001
+From fe6617cca6b78177e75a056d23cbb5ceb58065c8 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 28 Apr 2025 01:07:25 +0200
 Subject: [PATCH 009/115] clk: mediatek: Add main clocks drivers for MT6785

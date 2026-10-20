@@ -1,4 +1,4 @@
-From 540124c082c739510a733c7eda08ff0e1fa4bf82 Mon Sep 17 00:00:00 2001
+From 6ac8a4e653f011ec78702499f6730aaccaf61089 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 19:41:27 +0200
 Subject: [PATCH 055/115] soc: mediatek: pwrap: Add support for MT6785

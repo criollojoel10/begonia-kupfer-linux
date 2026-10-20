@@ -1,4 +1,4 @@
-From c28c9c948b220ef37259a1b358d2bb4df77e3da7 Mon Sep 17 00:00:00 2001
+From 0f04db3cb5e786edc6b6da11de73ce3f7def8169 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 17:01:03 +0200
 Subject: [PATCH 040/115] spi: dt-bindings: mediatek,spi-mt65xx: Add MT6785

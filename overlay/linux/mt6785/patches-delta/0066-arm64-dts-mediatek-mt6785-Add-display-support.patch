@@ -1,4 +1,4 @@
-From c570f6969603809ed1f83ca558bfa6fc5db54b07 Mon Sep 17 00:00:00 2001
+From 2849664c7aaf2942b8ab17a21a7fa7706a379af7 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Tue, 8 Jul 2025 18:37:06 +0200
 Subject: [PATCH 066/115] arm64: dts: mediatek: mt6785: Add display support

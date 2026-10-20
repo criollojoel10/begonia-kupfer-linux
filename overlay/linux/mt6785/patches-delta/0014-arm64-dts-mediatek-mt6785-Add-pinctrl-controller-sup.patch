@@ -1,4 +1,4 @@
-From da2771a6b0fec9ba8b96dd57bef49e1836f66331 Mon Sep 17 00:00:00 2001
+From 035220ae905e164d968b8c4c2acc765cd9056a06 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 6 Jul 2025 23:31:43 +0200
 Subject: [PATCH 014/115] arm64: dts: mediatek: mt6785: Add pinctrl controller

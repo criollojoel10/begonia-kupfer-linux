@@ -1,4 +1,4 @@
-From 13bbe0f8e24fc4c2686e664deb6f0206c0c677d0 Mon Sep 17 00:00:00 2001
+From 13ebdf36ba56defe8d9a23012fb413f85bdc9c4e Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 6 Jul 2025 22:46:10 +0200
 Subject: [PATCH 005/115] arm64: dts: mediatek: add basic support for MT6785

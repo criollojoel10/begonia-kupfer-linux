@@ -1,4 +1,4 @@
-From 8511535db9d111dd1068bb0ba4835cdacbdd11ba Mon Sep 17 00:00:00 2001
+From 4e42a0e88745f0028eb5b2c67679257f8ea2b1be Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 7 Jul 2025 18:15:46 +0200
 Subject: [PATCH 056/115] arm64: dts: mediatek: mt6785: Add PMIC Wrapper

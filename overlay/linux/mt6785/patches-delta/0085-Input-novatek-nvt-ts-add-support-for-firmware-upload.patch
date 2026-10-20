@@ -1,4 +1,4 @@
-From e8419e267f71f6368b65fdfadce205bde30913c9 Mon Sep 17 00:00:00 2001
+From 6986033154aacbf2d4ff241c8bf9e403d15d8a3f Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Tue, 1 Jul 2025 13:22:34 +0200
 Subject: [PATCH 085/115] Input: novatek-nvt-ts - add support for firmware

@@ -1,4 +1,4 @@
-From e49e18dc764875a97e67b1668caaa6d22a9f935c Mon Sep 17 00:00:00 2001
+From 8a0c79bb889e17e3926bbaac7307ce5c598500de Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 17:08:53 +0200
 Subject: [PATCH 057/115] dt-bindings: phy: mediatek: tphy: Add support for

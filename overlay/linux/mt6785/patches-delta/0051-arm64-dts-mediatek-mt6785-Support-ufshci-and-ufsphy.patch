@@ -1,4 +1,4 @@
-From a6b56687f4c0baff1d66ca21aad06b97681d3e83 Mon Sep 17 00:00:00 2001
+From 06ea2ab1a4c77c8c7eacca0c5681b20cf006f9fa Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 7 Jul 2025 16:35:42 +0200
 Subject: [PATCH 051/115] arm64: dts: mediatek: mt6785: Support ufshci and

@@ -1,4 +1,4 @@
-From 6579c5da073348ed2acd0db1b2028dac4bb0d404 Mon Sep 17 00:00:00 2001
+From a78229435002bcaa3c59331bb4e3d0c8b471ae0e Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 7 Jul 2025 14:24:29 +0200
 Subject: [PATCH 045/115] arm64: dts: mediatek: mt6785: Add display pwm support

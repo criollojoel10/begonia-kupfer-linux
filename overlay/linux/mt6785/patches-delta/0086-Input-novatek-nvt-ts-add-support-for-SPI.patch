@@ -1,4 +1,4 @@
-From 55d0354caf106aca64483981fd89537784f7e34d Mon Sep 17 00:00:00 2001
+From a1464bed537a769e2a7e8f3d98e91bd916da2ed3 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Tue, 1 Jul 2025 13:32:04 +0200
 Subject: [PATCH 086/115] Input: novatek-nvt-ts - add support for SPI

@@ -1,4 +1,4 @@
-From c42c7ca389e2aa7091bf28ae476f3eb1b3f18a57 Mon Sep 17 00:00:00 2001
+From 3d064ed207ee6f1f4df93b4aa94386e33f0f9587 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Tue, 1 Jul 2025 12:04:42 +0200
 Subject: [PATCH 084/115] Input: novatek-nvt-ts - simplify with dev_err_probe()

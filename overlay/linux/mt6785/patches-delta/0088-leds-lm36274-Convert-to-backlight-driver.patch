@@ -1,4 +1,4 @@
-From 74fd7b53f90012d6f5e941aeee563b2e36a83cef Mon Sep 17 00:00:00 2001
+From 7235990897a071a2ccf0c656dccdb3099e9dcef9 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Thu, 10 Jul 2025 16:37:54 +0200
 Subject: [PATCH 088/115] leds: lm36274: Convert to backlight driver

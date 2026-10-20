@@ -1,4 +1,4 @@
-From d66ea2d6cb89e15d94c3f07ac2ad362cde147fa4 Mon Sep 17 00:00:00 2001
+From 4a1ad05f26819427e633ef8fda40df2f172c7221 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 6 Jul 2025 22:46:32 +0200
 Subject: [PATCH 006/115] arm64: dts: mediatek: Add basic support for Xiaomi

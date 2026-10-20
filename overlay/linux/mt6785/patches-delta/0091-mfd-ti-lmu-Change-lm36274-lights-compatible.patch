@@ -1,4 +1,4 @@
-From f64e9349fe364e21c3e6ee69ba163509a81d9dce Mon Sep 17 00:00:00 2001
+From a08f03b3a55fa291823fd18d830acf76b1c16c5d Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Thu, 10 Jul 2025 17:00:53 +0200
 Subject: [PATCH 091/115] mfd: ti-lmu: Change lm36274 lights compatible

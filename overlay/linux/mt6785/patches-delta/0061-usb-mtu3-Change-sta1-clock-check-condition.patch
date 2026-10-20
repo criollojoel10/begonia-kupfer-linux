@@ -1,4 +1,4 @@
-From acf19f7d1f4caf5e203d26c63f9daa45f9f7087e Mon Sep 17 00:00:00 2001
+From 89bcb739c680c2b32a0207e5961ea184b183c5ed Mon Sep 17 00:00:00 2001
 From: Jiaqin Wang <jiaqin.wang@mediatek.com>
 Date: Fri, 29 Jan 2021 00:05:23 +0800
 Subject: [PATCH 061/115] usb: mtu3: Change sta1 clock check condition

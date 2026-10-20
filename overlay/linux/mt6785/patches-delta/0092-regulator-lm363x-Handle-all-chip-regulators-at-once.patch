@@ -1,4 +1,4 @@
-From 9be1f7919768344585cb412c25109f7ad5364834 Mon Sep 17 00:00:00 2001
+From 16c4cc1ac37e493a01054ce289a64c5869ea6a90 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 24 Aug 2025 12:40:50 +0200
 Subject: [PATCH 092/115] regulator: lm363x: Handle all chip regulators at once

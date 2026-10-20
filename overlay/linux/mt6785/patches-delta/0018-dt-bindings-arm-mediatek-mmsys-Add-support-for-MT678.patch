@@ -1,4 +1,4 @@
-From bcb0438d5f2f8daab173e2cb0966d0b2cc370773 Mon Sep 17 00:00:00 2001
+From eae3b13b6a7b54053af9be7434e48d2c28917046 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Thu, 19 Jun 2025 17:27:11 +0200
 Subject: [PATCH 018/115] dt-bindings: arm: mediatek: mmsys: Add support for

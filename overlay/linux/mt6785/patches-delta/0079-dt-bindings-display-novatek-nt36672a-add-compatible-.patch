@@ -1,4 +1,4 @@
-From 366f59732ee2526fe36f34fa57623e94bc969599 Mon Sep 17 00:00:00 2001
+From fed37450663db31b5767ecb6f055ebd14a70732b Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Tue, 1 Jul 2025 15:59:03 +0200
 Subject: [PATCH 079/115] dt-bindings: display: novatek,nt36672a: add

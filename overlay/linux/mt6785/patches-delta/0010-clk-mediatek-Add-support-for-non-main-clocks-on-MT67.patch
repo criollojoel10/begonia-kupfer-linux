@@ -1,4 +1,4 @@
-From f27dc45fbd4ef10589df4a673a4f02e429416622 Mon Sep 17 00:00:00 2001
+From a5462c93900439ca6eb2ac0bb6de43cb2a87c94f Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 28 Apr 2025 01:10:04 +0200
 Subject: [PATCH 010/115] clk: mediatek: Add support for non-main clocks on

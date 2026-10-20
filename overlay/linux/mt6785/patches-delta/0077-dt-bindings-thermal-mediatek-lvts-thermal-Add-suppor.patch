@@ -1,4 +1,4 @@
-From cd769dab4ee32a7a74e6aa2716b6ea55c05a0b60 Mon Sep 17 00:00:00 2001
+From e52b726ac4c14922870d5a1c27d91a32e34378b8 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 28 Apr 2025 01:43:42 +0200
 Subject: [PATCH 077/115] dt-bindings: thermal: mediatek: lvts-thermal: Add

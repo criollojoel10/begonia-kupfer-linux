@@ -1,4 +1,4 @@
-From 7f21e0aff230a84c600813be496594ce95493b4a Mon Sep 17 00:00:00 2001
+From 2e94ca1bac18d87d97706a8c2a02df6a85c7d7ef Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sun, 22 Jun 2025 19:50:24 +0200
 Subject: [PATCH 090/115] mfd: ti-lmu: Explicitly enable "Normal mode" for

@@ -1,4 +1,4 @@
-From 68dcb001c7922f76784210729d8304a52a140d7e Mon Sep 17 00:00:00 2001
+From 93d47d9cfc88436bc2ee7566ee24e77260a7e40c Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Mon, 28 Apr 2025 01:22:33 +0200
 Subject: [PATCH 020/115] soc: mediatek: Add mutex support for MT6785

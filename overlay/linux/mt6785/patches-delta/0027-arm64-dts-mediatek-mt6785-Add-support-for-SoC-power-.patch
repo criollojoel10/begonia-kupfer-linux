@@ -1,4 +1,4 @@
-From 8a4e5c26abc34a09c2ac2547d6100ed8a4622bd1 Mon Sep 17 00:00:00 2001
+From 9ca157ccc3b8226c287cdcd47f307f2ac5bff05a Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Wed, 9 Jul 2025 15:14:06 +0200
 Subject: [PATCH 027/115] arm64: dts: mediatek: mt6785: Add support for SoC

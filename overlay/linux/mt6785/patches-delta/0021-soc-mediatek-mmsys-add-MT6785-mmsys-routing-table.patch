@@ -1,4 +1,4 @@
-From 4f2896e263dd4d356de2c9ecff8fb8b0079bbc9e Mon Sep 17 00:00:00 2001
+From 2c9823da4b3788b7bd91107172cf6195458ee125 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Sat, 21 Jun 2025 23:47:08 +0200
 Subject: [PATCH 021/115] soc: mediatek: mmsys: add MT6785 mmsys routing table

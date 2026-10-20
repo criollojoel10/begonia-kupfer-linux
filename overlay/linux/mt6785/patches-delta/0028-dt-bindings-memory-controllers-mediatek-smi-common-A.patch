@@ -1,4 +1,4 @@
-From aa79e4c242f69dd12f81e28e6996792020cd863b Mon Sep 17 00:00:00 2001
+From 3bba470d438aec937549cd5b7d04510eeffcaad3 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Thu, 19 Jun 2025 21:16:58 +0200
 Subject: [PATCH 028/115] dt-bindings: memory-controllers: mediatek,smi-common:

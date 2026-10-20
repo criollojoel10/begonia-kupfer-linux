@@ -1,4 +1,4 @@
-From 5c27c1b45d2b067b3d17d7526926f422148c0c86 Mon Sep 17 00:00:00 2001
+From a712e9263f61a6cf87ee87720f61282dc558ef80 Mon Sep 17 00:00:00 2001
 From: Dinolek <git@dinolek.me>
 Date: Fri, 4 Jul 2025 22:15:08 +0200
 Subject: [PATCH 046/115] dt-bindings: ufs: mediatek: Correct compatible and
