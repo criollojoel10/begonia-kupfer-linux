@@ -206,23 +206,30 @@ jobs:
       - name: Verify modulos objetivo (conn/WiFi + netfilter)
         run: |
           set -Eeuo pipefail
+          # OJO: nada de `printf "$LIST" | grep -q`: grep -q cierra el pipe al
+          # primer match, printf muere por SIGPIPE y con pipefail el pipeline
+          # cuenta como fallo (run 39347842777 marco "falta" con el paquete OK).
           PKG="${{ steps.art.outputs.pkg }}"
-          LIST=$(tar -tJf "$PKG")
+          tar -tJf "$PKG" > /tmp/pkglist.txt
+          echo "entradas en el paquete: $(wc -l < /tmp/pkglist.txt)"
           FAIL=0
           for m in wlan_gen4m wmt_drv mtk-vendor-btif xt_connmark; do
-            if printf '%s\n' "$LIST" | grep -q "/$m\.ko$"; then
+            if grep -q "/$m\.ko$" /tmp/pkglist.txt; then
               echo "OK: $m.ko"
             else
               echo "::error::falta $m.ko en el paquete"
               FAIL=1
             fi
           done
-          printf '%s\n' "$LIST" | grep -q 'mt6785-xiaomi-begonia-csot.dtb' \
+          grep -q 'mt6785-xiaomi-begonia-csot.dtb' /tmp/pkglist.txt \
             || { echo "::error::falta el DTB csot"; FAIL=1; }
-          printf '%s\n' "$LIST" | grep -q 'mt6785-xiaomi-begonia\.dtb' \
+          grep -qE 'mt6785-xiaomi-begonia\.dtb$' /tmp/pkglist.txt \
             || { echo "::error::falta el alias de DTB"; FAIL=1; }
+          echo "--- modulos conn/wifi presentes ---"
+          grep -E "/(wlan_gen4m|wmt_drv|mtk-vendor-btif|xt_connmark)\.ko$" /tmp/pkglist.txt || true
           [ "$FAIL" = 0 ] || exit 1
       - name: Upload artifacts
+        if: ${{ always() && steps.art.outputs.pkg != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: kernel-mt6785-72-${{ github.run_number }}
