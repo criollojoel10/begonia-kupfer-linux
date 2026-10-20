@@ -144,3 +144,15 @@ CONFIG_NETFILTER_XT_CONNMARK=m
 CONFIG_NETFILTER_XT_TARGET_CONNMARK=m
 CONFIG_NETFILTER_XT_MATCH_CONNMARK=m
 CONFIG_NETFILTER_XT_TARGET_MARK=m
+
+
+# ---------------------------------------------------------------------------
+# Diagnostico de arranque (2026-10-20): el 7.2.11 arranca (logo) pero no monta
+# la raiz: sin journal, sin RNDIS y sin WiFi => se cuelga en el initramfs. No
+# hay UART accesible en begonia, asi que se manda la consola a ramoops: el
+# kernel escribe ahi aunque no haya display, y tras un cuelgue el siguiente
+# arranque puede leerla con `cat /sys/fs/pstore/console-ramoops-0`.
+CONFIG_PSTORE=y
+CONFIG_PSTORE_CONSOLE=y
+CONFIG_PSTORE_RAM=y
+CONFIG_PSTORE_DEFAULT_KMSG_BYTES=2097152
