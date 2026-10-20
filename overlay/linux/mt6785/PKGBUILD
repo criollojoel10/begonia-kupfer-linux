@@ -84,9 +84,8 @@ prepare() {
     #    zz-conn-7.1-api.patch    adaptacion de APIs del port a 7.1
     #    zz-conn-7.2-api.patch    adaptacion a 7.2 (strscpy, alarmtimer, ROC)
     local _p
-    for _p in "$srcdir/000-meow-btf.patch" "$startdir"/patches-delta/*.patch \
-              "$startdir"/patches-conn/*.patch "$srcdir/010-dts-conn-7.2.patch" \
-              "$srcdir/zz-conn-7.1-api.patch" "$srcdir/zz-conn-7.2-api.patch"; do
+    # BISECT: solo delta (sin conn, sin DT del conn, sin parches de API).
+    for _p in "$srcdir/000-meow-btf.patch" "$startdir"/patches-delta/*.patch; do
         [ -e "$_p" ] || { error "falta el parche $_p"; return 1; }
         msg2 "aplicando $(basename "$_p")"
         patch -p1 -N --no-backup-if-mismatch <"$_p"
